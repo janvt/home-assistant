@@ -1,0 +1,1322 @@
+substitutions:
+
+  # Device customization
+  # Personalización del dispositivo
+
+  name: m5stack-dial
+  friendly_name: M5Stack Dial
+  background_color: 'fab02b'
+  background_image: https://aguacatec.es/wp-content/uploads/2025/02/mravocado_background_white.jpg
+  background_image_saver: https://aguacatec.es/wp-content/uploads/2025/02/mravocado_bg_off.jpg
+  background_image_device: https://aguacatec.es/wp-content/uploads/2025/02/mravocado_bg_device.jpeg
+
+  # Icons
+  # Iconos
+
+  icon_1: mdi:led-strip-variant
+  icon_2: mdi:thermostat
+  icon_3: mdi:robot-vacuum
+  icon_4: mdi:printer
+  icon_5: mdi:printer-3d-nozzle
+  icon_6: mdi:fan
+  icon_7: mdi:air-humidifier
+  icon_8: mdi:ceiling-light
+
+  # Sounds
+  # Sonidos
+
+  menu_sound: 'beep:d=64,o=5,b=255:c7'
+  alarm_sound: 'xmen:d=4,o=6,b=200:16f#5,16g5,16b5,16d,c#,8b5,8f#5,p,16f#5,16g5,16b5,16d,c#,8b5,8g5,p,16f#5,16g5,16b5,16d,c#,8b5,8d,2p,8c#,8b5,2p'
+
+
+  # Example of Lights
+  # Ejemplo de Luces
+
+  desk_led: light.tira_led_escritorio
+  lamp: light.lampara
+
+  # Example of Thermostat
+  # Ejemplo de Termostatos
+
+  climate: climate.salon
+  aircon: climate.aircon
+
+  # Example of Vacuum
+  # Ejemplo de Aspirador
+
+  vacuum: vacuum.robot_aspirador
+
+  # Example of Switches
+  # Ejemplo de Enchufes
+
+  printer: switch.regleta_l3
+  printer3d: switch.regleta_l4
+
+  # Example of dehumidifier
+  # Ejemplo de Deshumidificador
+
+  dehumidifier: humidifier.deshumidificador
+
+  # NFC/RFID Tags
+  # Etiquetas NFC/RFID
+
+  #  tag1: C3-DB-4F-28
+  #  tag2: 03-55-E5-13
+
+  # Other settings
+  # Otros ajustes
+
+  allowed_characters: " ¿?¡!#%'()+,-./:°0123456789ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyzáéíóú"
+
+################################################################################################################
+
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    then:
+      - pcf8563.read_time:
+      - display.page.show: home
+  platformio_options:
+    board_build.flash_mode: dio
+
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "M5Stack-Dial Fallback Hotspot"
+    password: "Aosad564JQR"
+
+api:
+  encryption:
+    key: yebq6cNtxKB+O8Xhwmyx3ecb8hFWsFvFl/lrwl8dgP4=
+  services:
+    - service: play_sound
+      variables:
+        song: string
+        volume: int
+      then:
+        - lambda: "id(script_rtttl_play).execute(song, volume);"
+script:
+  - id: script_rtttl_play
+    parameters:
+      song: string
+      volume: int
+    mode: single
+    then:
+      - lambda: |-
+          float volume_f = (volume>0) ? ((float)clamp(volume, 0, 100))/100.0f : 1.0f;
+          id(buzzer).set_max_power(volume_f);
+      - rtttl.play:
+          rtttl: !lambda 'return (song.find('':'') == std::string::npos) ? ("song:d=16,o=5,b=100:" + song).c_str() : song.c_str();'
+
+ota:
+  - platform: esphome
+    password: "0935e9dsasdfgdb3d8934c"
+
+logger:
+
+captive_portal:
+
+binary_sensor:
+  - platform: gpio
+    name: "Front Button"
+    id: front_button
+    pin:
+      number: GPIO42
+      inverted: true
+    internal: true
+    on_press:
+      then:
+        - if:
+            condition:
+              switch.is_on: menu_sounds
+            then:
+              - rtttl.play: ${menu_sound}
+        - if:
+            condition:
+              light.is_on: backlight
+            then:
+              - if:
+                  condition:
+                    display.is_displaying_page: device_control
+                  then:
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 1;
+                        then:
+                          - homeassistant.action:
+                              service: light.toggle
+                              data:
+                                entity_id: ${desk_led}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 2;
+                        then:
+                          - homeassistant.action:
+                              service: climate.toggle
+                              data:
+                                entity_id: ${climate}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 3;
+                        then:
+                          - if:
+                              condition:
+                                lambda: 'return id(device_vacuum).state == "cleaning";'
+                              then:
+                                - homeassistant.action:
+                                    service: vacuum.pause
+                                    data:
+                                      entity_id: ${vacuum}
+                              else:
+                                - homeassistant.action:
+                                    service: vacuum.start
+                                    data:
+                                      entity_id: ${vacuum}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 4;
+                        then:
+                          - homeassistant.action:
+                              service: switch.toggle
+                              data:
+                                entity_id: ${printer}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 5;
+                        then:
+                          - homeassistant.action:
+                              service: switch.toggle
+                              data:
+                                entity_id: ${printer3d}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 6;
+                        then:
+                          - homeassistant.action:
+                              service: climate.toggle
+                              data:
+                                entity_id: ${aircon}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 7;
+                        then:
+                          - homeassistant.action:
+                              service: humidifier.toggle
+                              data:
+                                entity_id: ${dehumidifier}
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) == 8;
+                        then:
+                          - homeassistant.action:
+                              service: light.toggle
+                              data:
+                                entity_id: ${lamp}
+              - if:
+                  condition:
+                    display.is_displaying_page: locked_screen
+                  then:
+                    - switch.turn_on: mravocado_display
+                    - light.turn_on:
+                        id: backlight
+                        brightness: 100%
+                    - display.page.show: home
+              - if:
+                  condition:
+                    display.is_displaying_page: home
+                  then:
+                    - if:
+                        condition:
+                          lambda: |-
+                            return id(device) > 0;
+                        then:
+                          - light.turn_on:
+                              id: backlight
+                              brightness: 100%
+                          - display.page.show: device_control
+            else:
+              - switch.turn_on: mravocado_display
+              - light.turn_on:
+                  id: backlight
+                  brightness: 100%
+              - display.page.show: home
+        - lambda: |-
+            id(inactivity_time) = 0;
+
+  - platform: gpio
+    name: Hold Button
+    pin: GPIO46
+    internal: True
+
+  - platform: touchscreen
+    name: "Home Button"
+    internal: true
+    x_min: 0
+    x_max: 240
+    y_min: 0
+    y_max: 80
+    page_id: device_control
+    on_press:
+      - display.page.show: home
+      - if:
+          condition:
+            switch.is_on: menu_sounds
+          then:
+            - rtttl.play: ${menu_sound}
+      - lambda: |-
+          id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    name: "Device Button"
+    internal: true
+    x_min: 81
+    x_max: 160
+    y_min: 80
+    y_max: 240
+    page_id: device_control
+    on_press:
+      - if:
+          condition:
+            switch.is_on: menu_sounds
+          then:
+            - rtttl.play: ${menu_sound}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 1;
+          then:
+            - homeassistant.action:
+                service: light.toggle
+                data:
+                  entity_id: ${desk_led}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 2;
+          then:
+            - homeassistant.action:
+                service: climate.toggle
+                data:
+                  entity_id: ${climate}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 3;
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(device_vacuum).state == "cleaning";'
+                then:
+                  - homeassistant.action:
+                      service: vacuum.pause
+                      data:
+                        entity_id: ${vacuum}
+                else:
+                  - homeassistant.action:
+                      service: vacuum.start
+                      data:
+                        entity_id: ${vacuum}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 4;
+          then:
+            - homeassistant.action:
+                service: switch.toggle
+                data:
+                  entity_id: ${printer}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 5;
+          then:
+            - homeassistant.action:
+                service: switch.toggle
+                data:
+                  entity_id: ${printer3d}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 6;
+          then:
+            - homeassistant.action:
+                service: climate.toggle
+                data:
+                  entity_id: ${aircon}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 7;
+          then:
+            - homeassistant.action:
+                service: humidifier.toggle
+                data:
+                  entity_id: ${dehumidifier}
+      - if:
+          condition:
+            lambda: |-
+              return id(device) == 8;
+          then:
+            - homeassistant.action:
+                service: light.toggle
+                data:
+                  entity_id: ${lamp}
+      - lambda: |-
+          id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    name: "Minus Button"
+    internal: true
+    x_min: 0
+    x_max: 80
+    y_min: 80
+    y_max: 240
+    page_id: device_control
+    on_press:
+      - if:
+          condition:
+            switch.is_on: menu_sounds
+          then:
+            - rtttl.play: ${menu_sound}
+      - if:
+          condition:
+            display.is_displaying_page: device_control
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 1;
+                then:
+                  - homeassistant.action:
+                      service: light.turn_on
+                      data:
+                        entity_id: ${desk_led}
+                        brightness_step_pct: '-10'
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 2;
+                then:
+                  - homeassistant.action:
+                      service: climate.set_temperature
+                      data:
+                        entity_id: ${climate}
+                      data_template:
+                        temperature: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(thermostat_temperature).state - 1.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 6;
+                then:
+                  - homeassistant.action:
+                      service: climate.set_temperature
+                      data:
+                        entity_id: ${aircon}
+                      data_template:
+                        temperature: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(aircon_temperature).state - 1.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 7;
+                then:
+                  - homeassistant.action:
+                      service: humidifier.set_humidity
+                      data:
+                        entity_id: ${dehumidifier}
+                      data_template:
+                        humidity: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(dehumidifier_humidity).state - 5.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 8;
+                then:
+                  - homeassistant.action:
+                      service: light.turn_on
+                      data:
+                        entity_id: ${lamp}
+                        brightness_step_pct: '-10'
+      - lambda: |-
+          id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    name: "Plus Button"
+    internal: true
+    x_min: 161
+    x_max: 240
+    y_min: 80
+    y_max: 240
+    page_id: device_control
+    on_press:
+      - if:
+          condition:
+            switch.is_on: menu_sounds
+          then:
+            - rtttl.play: ${menu_sound}
+      - if:
+          condition:
+            display.is_displaying_page: device_control
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 1;
+                then:
+                  - homeassistant.action:
+                      service: light.turn_on
+                      data:
+                        entity_id: ${desk_led}
+                        brightness_step_pct: '10'
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 2;
+                then:
+                  - homeassistant.action:
+                      service: climate.set_temperature
+                      data:
+                        entity_id: ${climate}
+                      data_template:
+                        temperature: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(thermostat_temperature).state + 1.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 3;
+                then:
+                  - homeassistant.action:
+                      service: vacuum.return_to_base
+                      data:
+                        entity_id: ${vacuum}
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 6;
+                then:
+                  - homeassistant.action:
+                      service: climate.set_temperature
+                      data:
+                        entity_id: ${aircon}
+                      data_template:
+                        temperature: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(aircon_temperature).state + 1.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 7;
+                then:
+                  - homeassistant.action:
+                      service: humidifier.set_humidity
+                      data:
+                        entity_id: ${dehumidifier}
+                      data_template:
+                        humidity: '{{ my_variable | float }}'
+                      variables:
+                        my_variable: |-
+                          return id(dehumidifier_humidity).state + 5.0;
+            - if:
+                condition:
+                  lambda: |-
+                    return id(device) == 8;
+                then:
+                  - homeassistant.action:
+                      service: light.turn_on
+                      data:
+                        entity_id: ${lamp}
+                        brightness_step_pct: '10'
+      - lambda: |-
+          id(inactivity_time) = 0;
+
+#  - platform: rc522
+#    uid: ${tag1}
+#    name: "NFC Tag"
+#    on_press:
+#    - homeassistant.action:
+#        service: light.toggle
+#        data:
+#          entity_id: ${desk_led}
+
+button:
+  - platform: template
+    name: "Alarm"
+    id: alarm_sound
+    icon: "mdi:bell-ring"
+    on_press:
+      - rtttl.play: ${alarm_sound}
+      - switch.turn_on: screen_saver
+      - lambda: |-
+          id(inactivity_time) = 0;
+
+color:
+  - id: background_color
+    hex: ${background_color}
+  - id: icon_on
+    hex: 'f28800'
+  - id: icon_off
+    hex: 'e7aa77'
+  - id: icon_big_on
+    hex: 'ffebbf'
+  - id: icon_big_off
+    hex: 'f78f1d'
+  - id: dark_orange
+    hex: 'd2750b'
+  - id: light_orange
+    hex: 'f9c699'
+
+font:
+  - file: "gfonts://Space Grotesk"
+    id: clock_time
+    size: 40
+    glyphs: ${allowed_characters}
+  - file: "gfonts://Space Grotesk"
+    id: secondary
+    size: 18
+    glyphs: ${allowed_characters}
+
+globals:
+  - id: inactivity_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: device
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+i2c:
+  - id: internal_i2c
+    sda: GPIO11
+    scl: GPIO12
+    scan: False
+
+image:
+  - file: ${background_image}
+    id: background_image
+    resize: 240x240
+    type: RGB565
+    transparency: chroma_key
+
+  - file: ${background_image_saver}
+    id: background_image_saver
+    resize: 240x240
+    type: RGB565
+    transparency: chroma_key
+  - file: ${background_image_device}
+    id: background_image_device
+    resize: 240x240
+    type: RGB565
+    transparency: chroma_key
+
+  - file: mdi:home
+    id: icon_home
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:plus-thick
+    id: plus
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:minus-thick
+    id: minus
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:home-map-marker
+    id: vacuum_dock
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:play-box
+    id: play_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:pause-box
+    id: pause_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_1}
+    id: icon_1
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_1}
+    id: icon_1_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_2}
+    id: icon_2
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_2}
+    id: icon_2_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_3}
+    id: icon_3
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_3}
+    id: icon_3_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_4}
+    id: icon_4
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_4}
+    id: icon_4_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_5}
+    id: icon_5
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_5}
+    id: icon_5_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_6}
+    id: icon_6
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_6}
+    id: icon_6_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_7}
+    id: icon_7
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_7}
+    id: icon_7_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+  - file: ${icon_8}
+    id: icon_8
+    resize: 33x33
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_8}
+    id: icon_8_big
+    resize: 100x100
+    type: BINARY
+    transparency: chroma_key
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(inactivity_time) += 1;
+
+          if (id(auto_lock).state) {
+            if (id(inactivity_time) > id(screen_saver_time).state && id(inactivity_time) < id(auto_lock_time_out).state ) {
+                id(screen_saver).turn_on();
+            } 
+            if (id(inactivity_time) > id(auto_lock_time_out).state) {
+                id(backlight_pwm).turn_off();
+                id(mravocado_display).turn_off();
+                id(screen_saver).turn_off();
+            }
+          }
+
+          else {
+            if (id(inactivity_time) > id(screen_saver_time).state) {
+                id(screen_saver).turn_on();
+            } 
+          }
+
+light:
+  - platform: monochromatic
+    name: "Backlight"
+    output: backlight_pwm
+    id: backlight
+    default_transition_length: 0s
+    restore_mode: ALWAYS_ON
+    internal: True
+
+number:
+  - platform: template
+    name: "Auto Lock"
+    id: auto_lock_time_out
+    icon: "mdi:timer-sand"
+    optimistic: true
+    min_value: 20
+    max_value: 300
+    step: 10
+    unit_of_measurement: "s"
+    restore_value: true
+  - platform: template
+    name: "Screen Saver"
+    id: screen_saver_time
+    icon: "mdi:screen-rotation-lock"
+    optimistic: true
+    min_value: 10
+    max_value: 300
+    step: 10
+    unit_of_measurement: "s"
+    restore_value: true
+
+output:
+  - platform: ledc
+    pin: GPIO3
+    id: buzzer
+  - platform: ledc
+    pin: GPIO9
+    id: backlight_pwm
+
+#rc522_i2c:
+#  - i2c_id: internal_i2c
+#    id: tag_reader
+#    address: 0x28
+#    on_tag:
+#      then:
+#        - rtttl.play: "success:d=24,o=5,b=100:c,g,b"
+#        - homeassistant.tag_scanned: !lambda 'return x;'
+
+rtttl:
+  output: buzzer
+
+sensor:
+  - platform: rotary_encoder
+    id: encoder
+    pin_a: GPIO40
+    pin_b: GPIO41
+    on_clockwise:
+      then:
+        - if:
+            condition:
+              switch.is_on: menu_sounds
+            then:
+              - rtttl.play: ${menu_sound}
+        - if:
+            condition:
+              display.is_displaying_page: home
+            then:
+              - lambda: |-
+                  if (id(device) == 8) {
+                    id(device) = 1;
+                  }
+                  else {
+                    id(device) += 1;
+                  }
+        - if:
+            condition:
+              display.is_displaying_page: device_control
+            then:
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 1;
+                  then:
+                    - homeassistant.action:
+                        service: light.turn_on
+                        data:
+                          entity_id: ${desk_led}
+                          brightness_step_pct: '10'
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 2;
+                  then:
+                    - homeassistant.action:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: ${climate}
+                        data_template:
+                          temperature: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(thermostat_temperature).state + 1.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 3;
+                  then:
+                    - homeassistant.action:
+                        service: vacuum.return_to_base
+                        data:
+                          entity_id: ${vacuum}
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 6;
+                  then:
+                    - homeassistant.action:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: ${aircon}
+                        data_template:
+                          temperature: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(aircon_temperature).state + 1.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 7;
+                  then:
+                    - homeassistant.action:
+                        service: humidifier.set_humidity
+                        data:
+                          entity_id: ${dehumidifier}
+                        data_template:
+                          humidity: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(dehumidifier_humidity).state + 5.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 8;
+                  then:
+                    - homeassistant.action:
+                        service: light.turn_on
+                        data:
+                          entity_id: ${lamp}
+                          brightness_step_pct: '10'
+        - lambda: |-
+            id(inactivity_time) = 0;
+    on_anticlockwise:
+      then:
+        - if:
+            condition:
+              switch.is_on: menu_sounds
+            then:
+              - rtttl.play: ${menu_sound}
+        - if:
+            condition:
+              display.is_displaying_page: home
+            then:
+              - lambda: |-
+                  if (id(device) == 1) {
+                    id(device) = 8;
+                  }
+                  if (id(device) == 0) {
+                    id(device) = 8;
+                  }
+                  else {
+                    id(device) -= 1;
+                  }
+        - if:
+            condition:
+              display.is_displaying_page: device_control
+            then:
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 1;
+                  then:
+                    - homeassistant.action:
+                        service: light.turn_on
+                        data:
+                          entity_id: ${desk_led}
+                          brightness_step_pct: '-10'
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 2;
+                  then:
+                    - homeassistant.action:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: ${climate}
+                        data_template:
+                          temperature: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(thermostat_temperature).state - 1.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 3;
+                  then:
+                    - if:
+                        condition:
+                          lambda: 'return id(device_vacuum).state == "cleaning";'
+                        then:
+                          - homeassistant.action:
+                              service: vacuum.pause
+                              data:
+                                entity_id: ${vacuum}
+                        else:
+                          - homeassistant.action:
+                              service: vacuum.start
+                              data:
+                                entity_id: ${vacuum}
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 6;
+                  then:
+                    - homeassistant.action:
+                        service: climate.set_temperature
+                        data:
+                          entity_id: ${aircon}
+                        data_template:
+                          temperature: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(aircon_temperature).state - 1.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 7;
+                  then:
+                    - homeassistant.action:
+                        service: humidifier.set_humidity
+                        data:
+                          entity_id: ${dehumidifier}
+                        data_template:
+                          humidity: '{{ my_variable | float }}'
+                        variables:
+                          my_variable: |-
+                            return id(dehumidifier_humidity).state - 5.0;
+              - if:
+                  condition:
+                    lambda: |-
+                      return id(device) == 8;
+                  then:
+                    - homeassistant.action:
+                        service: light.turn_on
+                        data:
+                          entity_id: ${lamp}
+                          brightness_step_pct: '-10'
+        - lambda: |-
+            id(inactivity_time) = 0;
+
+  - platform: homeassistant
+    id: desk_led_brightness
+    entity_id: ${desk_led}
+    attribute: brightness
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x; }
+
+  - platform: homeassistant
+    id: thermostat_temperature
+    entity_id: ${climate}
+    attribute: temperature
+    internal: true
+
+  - platform: homeassistant
+    id: aircon_temperature
+    entity_id: ${aircon}
+    attribute: temperature
+    internal: true
+
+  - platform: homeassistant
+    id: dehumidifier_humidity
+    entity_id: ${dehumidifier}
+    attribute: humidity
+    internal: true
+
+  - platform: homeassistant
+    id: lamp_brightness
+    entity_id: ${lamp}
+    attribute: brightness
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x; }
+
+spi:
+  id: spi_bus
+  mosi_pin: GPIO5
+  clk_pin: GPIO6
+
+switch:
+  - platform: template
+    name: "Auto Lock"
+    id: auto_lock
+    icon: "mdi:lock-clock"
+    optimistic: true
+    restore_mode: 'restore_default_off'
+  - platform: template
+    name: "Display"
+    id: mravocado_display
+    icon: "mdi:fit-to-screen"
+    optimistic: true
+    restore_mode: 'always_on'
+    on_turn_on:
+      - light.turn_on:
+          id: backlight
+          brightness: 100%
+      - lambda: |-
+          id(inactivity_time) = 0;
+    on_turn_off:
+      - light.turn_off: backlight
+      - display.page.show: home
+      - lambda: |-
+          id(device) = 0;
+  - platform: template
+    name: "Screen Saver"
+    id: screen_saver
+    icon: "mdi:screen-rotation-lock"
+    optimistic: true
+    restore_mode: 'always_off'
+    internal: true
+    on_turn_on:
+      - light.turn_on:
+          id: backlight
+          brightness: 50%
+      - display.page.show: locked_screen
+      - lambda: |-
+          id(device) = 0;
+
+  - platform: template
+    name: "Menu Sounds"
+    id: menu_sounds
+    icon: "mdi:playlist-music"
+    optimistic: true
+    restore_mode: 'restore_default_on'
+
+text_sensor:
+
+  - platform: homeassistant
+    id: device_desk_led
+    entity_id: ${desk_led}
+    internal: true
+  - platform: homeassistant
+    id: device_thermostat
+    entity_id: ${climate}
+    internal: true
+  - platform: homeassistant
+    id: device_vacuum
+    entity_id: ${vacuum}
+    internal: true
+  - platform: homeassistant
+    id: device_printer
+    entity_id: ${printer}
+    internal: true
+  - platform: homeassistant
+    id: device_printer3d
+    entity_id: ${printer3d}
+    internal: true
+  - platform: homeassistant
+    id: device_dehumidifier
+    entity_id: ${dehumidifier}
+    internal: true
+  - platform: homeassistant
+    id: device_aircon
+    entity_id: ${aircon}
+    internal: true
+  - platform: homeassistant
+    id: device_lamp
+    entity_id: ${lamp}
+    internal: true
+
+time:
+  # RTC
+  - platform: pcf8563
+    id: rtctime
+    i2c_id: internal_i2c
+    address: 0x51
+    update_interval: never
+  - platform: homeassistant
+    id: esptime
+    on_time_sync:
+      then:
+        - pcf8563.write_time:
+
+touchscreen:
+  - platform: ft5x06
+    id: touchscreen_mravocado
+    i2c_id: internal_i2c
+    address: 0x38
+
+display:
+  - platform: ili9xxx
+    id: round_display
+    model: GC9A01A
+    cs_pin: GPIO7
+    reset_pin: GPIO8
+    update_interval: 0.05s
+    dc_pin: GPIO4
+    invert_colors: true
+    buffer_size: 25%
+    pages:
+      - id: locked_screen
+        lambda: |-
+          it.fill(id(background_color));
+          it.image(0, 0, id(background_image_saver));
+
+          it.strftime(120, 40, id(clock_time), TextAlign::CENTER, "%H:%M", id(esptime).now());
+          it.strftime(120, 200, id(secondary), TextAlign::CENTER, "%d/%m/%y", id(esptime).now());
+      - id: home
+        lambda: |-
+          it.fill(id(background_color));
+          it.image(0, 0, id(background_image));
+
+          if (id(device) == 1) { it.image(103, 4, id(icon_1), id(icon_on)); }
+          else { it.image(103, 4, id(icon_1), id(icon_off)); }
+
+          if (id(device) == 2) { it.image(175, 35, id(icon_2), id(icon_on)); }
+          else { it.image(175, 35, id(icon_2), id(icon_off)); }
+
+          if (id(device) == 3) { it.image(205, 105, id(icon_3), id(icon_on)); }
+          else { it.image(205, 105, id(icon_3), id(icon_off)); }
+
+          if (id(device) == 4) { it.image(175, 175, id(icon_4), id(icon_on)); }
+          else { it.image(175, 175, id(icon_4), id(icon_off)); }
+
+          if (id(device) == 5) { it.image(103, 205, id(icon_5), id(icon_on)); }
+          else { it.image(103, 205, id(icon_5), id(icon_off)); }
+
+          if (id(device) == 6) { it.image(30, 175, id(icon_6), id(icon_on)); }
+          else { it.image(30, 175, id(icon_6), id(icon_off)); }
+
+          if (id(device) == 7) { it.image(5, 105, id(icon_7), id(icon_on)); }
+          else { it.image(5, 105, id(icon_7), id(icon_off)); }
+
+          if (id(device) == 8) { it.image(30, 35, id(icon_8), id(icon_on)); }
+          else { it.image(30, 35, id(icon_8), id(icon_off)); }
+
+      - id: device_control
+        lambda: |-
+          it.fill(id(background_color));
+          it.image(0, 0, id(background_image_device));
+
+          it.image(98, 10, id(icon_home), id(light_orange));
+
+          if (id(device) == 1) {
+
+            if (id(device_desk_led).state == "on") { it.image(70, 80, id(icon_1_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_1_big), id(icon_big_off)); }
+
+            it.image(25, 115, id(minus), id(light_orange));
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%.0f %%", ((id(desk_led_brightness).state / 255) * 100));
+            it.image(185, 115, id(plus), id(light_orange));
+          }
+
+          if (id(device) == 2) {
+
+            if (id(device_thermostat).state == "heat") { it.image(70, 80, id(icon_2_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_2_big), id(icon_big_off)); }
+
+            it.image(25, 115, id(minus), id(light_orange));
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%.1f°C", id(thermostat_temperature).state);
+            it.image(185, 115, id(plus), id(light_orange));
+          }
+
+          if (id(device) == 3) {
+
+            if (id(device_vacuum).state == "cleaning") { it.image(70, 80, id(icon_3_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_3_big), id(icon_big_off)); }
+
+
+            if (id(device_vacuum).state == "cleaning") {
+            it.image(25, 115, id(pause_icon), id(light_orange));
+            }
+            else {
+            it.image(25, 115, id(play_icon), id(light_orange));
+            }
+
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%s", id(device_vacuum).state.c_str());
+            it.image(185, 115, id(vacuum_dock), id(light_orange));
+          }
+
+          if (id(device) == 4) {
+
+            if (id(device_printer).state == "on") { it.image(70, 80, id(icon_4_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_4_big), id(icon_big_off)); }
+
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%s", id(device_printer).state.c_str());
+          }
+
+          if (id(device) == 5) {
+
+            if (id(device_printer3d).state == "on") { it.image(70, 80, id(icon_5_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_5_big), id(icon_big_off)); }
+
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%s", id(device_printer3d).state.c_str());
+          }
+
+          if (id(device) == 6) {
+
+            if (id(device_aircon).state == "cool") { it.image(70, 80, id(icon_6_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_6_big), id(icon_big_off)); }
+
+            it.image(25, 115, id(minus), id(light_orange));
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%.1f°C", id(aircon_temperature).state);
+            it.image(185, 115, id(plus), id(light_orange));
+          }
+
+          if (id(device) == 7) {
+
+            if (id(device_dehumidifier).state == "on") { it.image(70, 80, id(icon_7_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_7_big), id(icon_big_off)); }
+
+            it.image(25, 115, id(minus), id(light_orange));
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%.1f°C", id(dehumidifier_humidity).state);
+            it.image(185, 115, id(plus), id(light_orange));
+          }
+
+          if (id(device) == 8) {
+
+            if (id(device_lamp).state == "on") { it.image(70, 80, id(icon_8_big), id(icon_big_on)); }
+            else { it.image(70, 80, id(icon_8_big), id(icon_big_off)); }
+
+            it.image(25, 115, id(minus), id(light_orange));
+            it.printf(120, 210, id(secondary), TextAlign::CENTER, "%.0f %%", ((id(lamp_brightness).state / 255) * 100));
+            it.image(185, 115, id(plus), id(light_orange));
+          }
+
