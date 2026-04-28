@@ -42,7 +42,7 @@ esphome:
           if (id(flip_screen).state) {
             id(round_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
           }
-      - display.page.show: volume_control
+      - script.execute: show_current_page
   platformio_options:
     board_build.flash_mode: dio
 
@@ -75,6 +75,29 @@ api:
 ota:
   - platform: esphome
 
+script:
+  - id: show_current_page
+    then:
+      - lambda: |-
+          switch(id(current_page)) {
+            case 0: id(round_display).show_page(id(volume_control)); break;
+            case 1: id(round_display).show_page(id(volume_control_2)); break;
+            case 2: id(round_display).show_page(id(eq_control)); break;
+            case 3: id(round_display).show_page(id(light_control)); break;
+          }
+
+  - id: navigate
+    parameters:
+      delta: int
+    then:
+      - lambda: |-
+          // Negate delta when screen is flipped (touch coords are mirrored)
+          int d = id(flip_screen).state ? -delta : delta;
+          // + 4 before modulo prevents negative results in C++ (-1 % 4 = -1, not 3)
+          id(current_page) = (id(current_page) + d + 4) % 4;
+          id(inactivity_time) = 0;
+      - script.execute: show_current_page
+
 logger:
 
 captive_portal:
@@ -106,14 +129,7 @@ binary_sensor:
                     - light.turn_on:
                         id: backlight
                         brightness: 100%
-                    - lambda: |-
-                        // Show the page matching current_page
-                        switch(id(current_page)) {
-                          case 0: id(round_display).show_page(id(volume_control)); break;
-                          case 1: id(round_display).show_page(id(volume_control_2)); break;
-                          case 2: id(round_display).show_page(id(eq_control)); break;
-                          case 3: id(round_display).show_page(id(light_control)); break;
-                        }
+                    - script.execute: show_current_page
                   else:
                     - if:
                         condition:
@@ -146,13 +162,7 @@ binary_sensor:
               - light.turn_on:
                   id: backlight
                   brightness: 100%
-              - lambda: |-
-                  switch(id(current_page)) {
-                    case 0: id(round_display).show_page(id(volume_control)); break;
-                    case 1: id(round_display).show_page(id(volume_control_2)); break;
-                    case 2: id(round_display).show_page(id(eq_control)); break;
-                    case 3: id(round_display).show_page(id(light_control)); break;
-                  }
+              - script.execute: show_current_page
         - lambda: |-
             id(inactivity_time) = 0;
 
@@ -195,16 +205,9 @@ binary_sensor:
     y_max: 220
     on_press:
       then:
-        - lambda: |-
-            int total_pages = 4;
-            id(current_page) = (id(current_page) - 1 + total_pages) % total_pages;
-            switch(id(current_page)) {
-              case 0: id(round_display).show_page(id(volume_control)); break;
-              case 1: id(round_display).show_page(id(volume_control_2)); break;
-              case 2: id(round_display).show_page(id(eq_control)); break;
-              case 3: id(round_display).show_page(id(light_control)); break;
-            }
-            id(inactivity_time) = 0;
+        - script.execute:
+            id: navigate
+            delta: -1
         - if:
             condition:
               switch.is_on: menu_sounds
@@ -222,16 +225,9 @@ binary_sensor:
     y_max: 220
     on_press:
       then:
-        - lambda: |-
-            int total_pages = 4;
-            id(current_page) = (id(current_page) + 1) % total_pages;
-            switch(id(current_page)) {
-              case 0: id(round_display).show_page(id(volume_control)); break;
-              case 1: id(round_display).show_page(id(volume_control_2)); break;
-              case 2: id(round_display).show_page(id(eq_control)); break;
-              case 3: id(round_display).show_page(id(light_control)); break;
-            }
-            id(inactivity_time) = 0;
+        - script.execute:
+            id: navigate
+            delta: 1
         - if:
             condition:
               switch.is_on: menu_sounds
