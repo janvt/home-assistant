@@ -107,6 +107,7 @@ script:
             case 3: id(round_display).show_page(id(light_control)); break;
             case 4: id(round_display).show_page(id(actions_screen)); break;
           }
+      - component.update: round_display
 
   - id: navigate
     parameters:
@@ -207,12 +208,14 @@ script:
                     return (int)(id(light_brightness) * 100);
       - lambda: |-
           id(inactivity_time) = 0;
+      - component.update: round_display
 
   - id: clear_action_highlight
     then:
       - delay: 500ms
       - lambda: |-
           id(actions_last_tapped) = -1;
+      - component.update: round_display
 
   - id: fire_action
     parameters:
