@@ -19,6 +19,10 @@ substitutions:
   scene_vinyl: scene.vinyl
   scene_chill: scene.chill
 
+  # HA input_select that tracks which scene is currently active.
+  # See ha-scene-tracker.yaml for the helper + automation definitions.
+  active_scene_helper: input_select.active_scene
+
   # Line In / TV source names
   # line_in_source: what HA reports in the 'source' attribute when playing from line-in
   # line_in_select: display label shown on screen
@@ -496,6 +500,10 @@ globals:
     type: int
     restore_value: no
     initial_value: '-1'
+  - id: last_active_scene
+    type: int
+    restore_value: no
+    initial_value: '0'
 
 i2c:
   - id: internal_i2c
@@ -927,6 +935,17 @@ text_sensor:
     entity_id: ${media_player}
     attribute: group_members
     internal: true
+  - platform: homeassistant
+    id: active_scene_state
+    entity_id: ${active_scene_helper}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            ESP_LOGI("scene", "Active scene changed: '%s'", x.c_str());
+            if (x == "vinyl")      id(last_active_scene) = 2;
+            else if (x == "chill") id(last_active_scene) = 3;
+            else                   id(last_active_scene) = 0;
 
 time:
   # RTC
@@ -1258,16 +1277,20 @@ display:
             it.printf(155, 97, id(small_font), tr_color, TextAlign::CENTER, is_grouped ? "Ungroup" : "Group");
           }
 
-          // Bottom-left: Vinyl (purple)  (x=95)
+          // Bottom-left: Vinyl
           {
-            auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) : id(color_dim);
+            bool vinyl_active = (id(last_active_scene) == 2);
+            auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) :
+                            (vinyl_active ? id(color_eq) : id(color_dim));
             it.image(67, 135, id(vinyl_icon), bl_color);
             it.printf(85, 177, id(small_font), bl_color, TextAlign::CENTER, "Vinyl");
           }
 
-          // Bottom-right: Chill (blue)  (x=145)
+          // Bottom-right: Chill
           {
-            auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) : id(color_dim);
+            bool chill_active = (id(last_active_scene) == 3);
+            auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) :
+                            (chill_active ? id(color_accent) : id(color_dim));
             it.image(137, 135, id(chill_icon), br_color);
             it.printf(155, 177, id(small_font), br_color, TextAlign::CENTER, "Chill");
           }

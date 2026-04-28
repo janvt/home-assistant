@@ -1,0 +1,141 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# M5Stack Dial — Active Scene Tracker
+#
+# PURPOSE
+#   A single input_select helper acts as the source of truth for "which scene
+#   is currently active".  One automation per scene keeps it updated.
+#   The M5Stack Dial reads this helper and highlights the active scene button.
+#
+# TO ADD A NEW SCENE
+#   1. Add its name (lowercase) to the options list below
+#   2. Copy one of the automation blocks and change the entity_id and option
+#   3. Add a corresponding button on the dial (see m5-dial-volume.yaml)
+#
+# HOW TO RESET TO NONE
+#   Call  input_select.select_option  with option: none  from any automation,
+#   script, or the HA UI to clear the active scene indicator on the dial.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Add to configuration.yaml (or your input_select.yaml if split):
+input_select:
+  active_scene:
+    name: Active Scene
+    options:
+      - none    # Always keep "none" as the first option
+      - vinyl
+      - chill
+      - cleaning
+      - pain_cave
+      - work
+      - work_s
+      - sleep
+    initial: none
+    icon: mdi:palette
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Add each block below to your automations.yaml file.
+- id: 'scene_vinyl_active'
+  alias: "Mark Vinyl scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.vinyl
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: vinyl
+  mode: single
+
+- id: 'scene_chill_active'
+  alias: "Mark Chill scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.chill
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: chill
+  mode: single
+
+- id: 'scene_cleaning_active'
+  alias: "Mark Cleaning scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.cleaning
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: cleaning
+  mode: single
+
+- id: 'scene_pain_cave_active'
+  alias: "Mark Pain Cave scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.pain_cave
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: pain_cave
+  mode: single
+
+- id: 'scene_work_active'
+  alias: "Mark Work scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.work
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: work
+  mode: single
+
+- id: 'scene_work_s_active'
+  alias: "Mark Work S scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.work_s
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: work_s
+  mode: single
+
+- id: 'scene_sleep_active'
+  alias: "Mark Sleep scene active"
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id: scene.sleep
+  conditions: []
+  actions:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.active_scene
+    data:
+      option: sleep
+  mode: single
