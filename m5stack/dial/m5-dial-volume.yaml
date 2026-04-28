@@ -7,7 +7,9 @@ substitutions:
 
   # Media player entities to control
   media_player: media_player.living_room
+  media_player_name: 'Living Room'
   media_player_2: media_player.unnamed_room
+  media_player_2_name: 'Madagascar'
 
   # Bass/EQ control (number entity exposed by your media player integration)
   bass_entity: number.living_room_sub_gain
@@ -656,22 +658,22 @@ image:
     transparency: chroma_key
   - file: mdi:audio-input-rca
     id: line_in_icon
-    resize: 36x36
+    resize: 44x44
     type: BINARY
     transparency: chroma_key
   - file: mdi:speaker-multiple
     id: group_icon
-    resize: 36x36
+    resize: 44x44
     type: BINARY
     transparency: chroma_key
   - file: mdi:record
     id: vinyl_icon
-    resize: 36x36
+    resize: 44x44
     type: BINARY
     transparency: chroma_key
   - file: mdi:candle
     id: chill_icon
-    resize: 36x36
+    resize: 44x44
     type: BINARY
     transparency: chroma_key
 
@@ -957,7 +959,7 @@ display:
           } else {
             it.printf(72, 153, id(secondary), lr_color, TextAlign::CENTER, "%d%%", vol_lr);
           }
-          it.printf(72, 171, id(small_font), id(color_dim), TextAlign::CENTER, "Living Rm");
+          it.printf(72, 171, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_name}");
 
           // Madagascar (right column, centre x=168)
           bool muted_mdg = id(is_muted_2);
@@ -969,7 +971,7 @@ display:
           } else {
             it.printf(168, 153, id(secondary), mdg_color, TextAlign::CENTER, "%d%%", vol_mdg);
           }
-          it.printf(168, 171, id(small_font), id(color_dim), TextAlign::CENTER, "Madagascar");
+          it.printf(168, 171, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_2_name}");
 
           // Source (bottom-left) and group status (bottom-right)
           {
@@ -1001,7 +1003,7 @@ display:
           }
 
           // Page label
-          it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Living Room");
+          it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_name}");
 
           if (is_muted) {
             it.printf(120, 125, id(volume_font), id(color_muted), TextAlign::CENTER, "MUTE");
@@ -1048,7 +1050,7 @@ display:
             it.image(100, 55, id(speaker_icon), id(color_accent));
           }
 
-          it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Madagascar");
+          it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_2_name}");
 
           if (is_muted) {
             it.printf(120, 125, id(volume_font), id(color_muted), TextAlign::CENTER, "MUTE");
@@ -1090,6 +1092,7 @@ display:
 
           it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Bass");
           it.printf(120, 125, id(volume_font), id(color_white), TextAlign::CENTER, "%.0f", id(bass_level));
+          it.printf(120, 170, id(small_font), id(color_eq), TextAlign::CENTER, "dB");
 
           // Bass arc (-12 to +12 range)
           draw_arc(it, (id(bass_level) + 12.0f) / 24.0f, id(color_eq), id(color_arc_bg));
@@ -1132,13 +1135,17 @@ display:
           // Page title
           it.printf(120, 25, id(small_font), id(color_dim), TextAlign::CENTER, "Actions");
 
+          // Subtle cross divider
+          it.line(60, 120, 180, 120, id(color_dim));
+          it.line(120, 60, 120, 180, id(color_dim));
+
           // Top-left: Line In / TV toggle  (center of left column: x=95)
           {
             bool on_line_in = id(media_player_source).has_state() && id(media_player_source).state == "${line_in_source}";
             bool on_tv = id(media_player_source).has_state() && id(media_player_source).state == "${tv_source}";
             auto tl_color = (id(actions_last_tapped) == 0) ? id(color_warm) :
                             (on_line_in ? id(color_warm) : (on_tv ? id(color_accent) : id(color_dim)));
-            it.image(67, 68, id(line_in_icon), tl_color);
+            it.image(63, 64, id(line_in_icon), tl_color);
           }
 
           // Top-right: Group toggle
@@ -1147,7 +1154,7 @@ display:
                 id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
             auto tr_color = (id(actions_last_tapped) == 1) ? id(color_playing) :
                             (is_grouped ? id(color_playing) : id(color_dim));
-            it.image(137, 68, id(group_icon), tr_color);
+            it.image(133, 64, id(group_icon), tr_color);
           }
 
           // Bottom-left: Vinyl
@@ -1155,7 +1162,7 @@ display:
             bool vinyl_active = (id(last_active_scene) == 2);
             auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) :
                             (vinyl_active ? id(color_eq) : id(color_dim));
-            it.image(67, 148, id(vinyl_icon), bl_color);
+            it.image(63, 136, id(vinyl_icon), bl_color);
           }
 
           // Bottom-right: Chill
@@ -1163,7 +1170,7 @@ display:
             bool chill_active = (id(last_active_scene) == 3);
             auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) :
                             (chill_active ? id(color_accent) : id(color_dim));
-            it.image(137, 148, id(chill_icon), br_color);
+            it.image(133, 136, id(chill_icon), br_color);
           }
 
           draw_chrome(it, id(current_page), 5, id(color_white), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
