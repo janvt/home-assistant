@@ -40,7 +40,7 @@ substitutions:
   icon_mute: mdi:volume-mute
 
   # Other settings
-  allowed_characters: " ¿?¡!#%'()+,-./:°0123456789ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyzáéíóú"
+  allowed_characters: " ¿?¡!#%'()+,-./:°0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzáéíóú"
 
 ################################################################################################################
 
