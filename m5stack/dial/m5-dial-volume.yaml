@@ -46,6 +46,8 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  includes:
+    - m5dial_helpers.h
   on_boot:
     then:
       - delay: 500ms
@@ -115,6 +117,83 @@ script:
           id(current_page) = (id(current_page) + d + 5) % 5;
           id(inactivity_time) = 0;
       - script.execute: show_current_page
+
+  - id: adjust_value
+    # direction: +1 (clockwise) or -1 (anticlockwise)
+    parameters:
+      direction: int
+    then:
+      - if:
+          condition:
+            display.is_displaying_page: locked_screen
+          then:
+            - switch.turn_on: dial_display
+            - light.turn_on:
+                id: backlight
+                brightness: 100%
+            - display.page.show: volume_control
+      - if:
+          condition:
+            display.is_displaying_page: volume_control
+          then:
+            - lambda: |-
+                id(volume_level) = std::min(1.0f, std::max(0.0f, id(volume_level) + direction * 0.02f));
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level);
+      - if:
+          condition:
+            display.is_displaying_page: volume_control_2
+          then:
+            - lambda: |-
+                id(volume_level_2) = std::min(1.0f, std::max(0.0f, id(volume_level_2) + direction * 0.02f));
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player_2}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level_2);
+      - if:
+          condition:
+            display.is_displaying_page: eq_control
+          then:
+            - lambda: |-
+                id(bass_level) = std::min(12.0f, std::max(-12.0f, id(bass_level) + direction * 1.0f));
+            - homeassistant.action:
+                service: number.set_value
+                data:
+                  entity_id: ${bass_entity}
+                data_template:
+                  value: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(bass_level);
+      - if:
+          condition:
+            display.is_displaying_page: light_control
+          then:
+            - lambda: |-
+                id(light_brightness) = std::min(1.0f, std::max(0.0f, id(light_brightness) + direction * 0.02f));
+            - homeassistant.action:
+                service: light.turn_on
+                data:
+                  entity_id: ${light_entity}
+                data_template:
+                  brightness_pct: '{{ my_variable | int }}'
+                variables:
+                  my_variable: |-
+                    return (int)(id(light_brightness) * 100);
+      - lambda: |-
+          id(inactivity_time) = 0;
 
   - id: clear_action_highlight
     then:
@@ -238,20 +317,20 @@ binary_sensor:
                         condition:
                           display.is_displaying_page: volume_control
                         then:
-                          - homeassistant.action:
-                              service: media_player.volume_mute
-                              data:
-                                entity_id: ${media_player}
-                                is_volume_muted: !lambda 'return !(id(media_player_muted).state == "on");'
+                            - homeassistant.action:
+                                service: media_player.volume_mute
+                                data:
+                                  entity_id: ${media_player}
+                                  is_volume_muted: !lambda 'return !id(is_muted_1);'
                     - if:
                         condition:
                           display.is_displaying_page: volume_control_2
                         then:
-                          - homeassistant.action:
-                              service: media_player.volume_mute
-                              data:
-                                entity_id: ${media_player_2}
-                                is_volume_muted: !lambda 'return !(id(media_player_muted_2).state == "on");'
+                            - homeassistant.action:
+                                service: media_player.volume_mute
+                                data:
+                                  entity_id: ${media_player_2}
+                                  is_volume_muted: !lambda 'return !id(is_muted_2);'
                     - if:
                         condition:
                           display.is_displaying_page: light_control
@@ -504,6 +583,14 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
+  - id: is_muted_1
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: is_muted_2
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 i2c:
   - id: internal_i2c
@@ -634,150 +721,14 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       then:
-        - if:
-            condition:
-              display.is_displaying_page: locked_screen
-            then:
-              - switch.turn_on: dial_display
-              - light.turn_on:
-                  id: backlight
-                  brightness: 100%
-              - display.page.show: volume_control
-        - if:
-            condition:
-              display.is_displaying_page: volume_control
-            then:
-              - lambda: |-
-                  id(volume_level) = std::min(1.0f, id(volume_level) + 0.02f);
-              - homeassistant.action:
-                  service: media_player.volume_set
-                  data:
-                    entity_id: ${media_player}
-                  data_template:
-                    volume_level: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(volume_level);
-        - if:
-            condition:
-              display.is_displaying_page: volume_control_2
-            then:
-              - lambda: |-
-                  id(volume_level_2) = std::min(1.0f, id(volume_level_2) + 0.02f);
-              - homeassistant.action:
-                  service: media_player.volume_set
-                  data:
-                    entity_id: ${media_player_2}
-                  data_template:
-                    volume_level: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(volume_level_2);
-        - if:
-            condition:
-              display.is_displaying_page: eq_control
-            then:
-              - lambda: |-
-                  id(bass_level) = std::min(12.0f, id(bass_level) + 1.0f);
-              - homeassistant.action:
-                  service: number.set_value
-                  data:
-                    entity_id: ${bass_entity}
-                  data_template:
-                    value: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(bass_level);
-        - if:
-            condition:
-              display.is_displaying_page: light_control
-            then:
-              - lambda: |-
-                  id(light_brightness) = std::min(1.0f, id(light_brightness) + 0.02f);
-              - homeassistant.action:
-                  service: light.turn_on
-                  data:
-                    entity_id: ${light_entity}
-                  data_template:
-                    brightness_pct: '{{ my_variable | int }}'
-                  variables:
-                    my_variable: |-
-                      return (int)(id(light_brightness) * 100);
-        - lambda: |-
-            id(inactivity_time) = 0;
+        - script.execute:
+            id: adjust_value
+            direction: 1
     on_anticlockwise:
       then:
-        - if:
-            condition:
-              display.is_displaying_page: locked_screen
-            then:
-              - switch.turn_on: dial_display
-              - light.turn_on:
-                  id: backlight
-                  brightness: 100%
-              - display.page.show: volume_control
-        - if:
-            condition:
-              display.is_displaying_page: volume_control
-            then:
-              - lambda: |-
-                  id(volume_level) = std::max(0.0f, id(volume_level) - 0.02f);
-              - homeassistant.action:
-                  service: media_player.volume_set
-                  data:
-                    entity_id: ${media_player}
-                  data_template:
-                    volume_level: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(volume_level);
-        - if:
-            condition:
-              display.is_displaying_page: volume_control_2
-            then:
-              - lambda: |-
-                  id(volume_level_2) = std::max(0.0f, id(volume_level_2) - 0.02f);
-              - homeassistant.action:
-                  service: media_player.volume_set
-                  data:
-                    entity_id: ${media_player_2}
-                  data_template:
-                    volume_level: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(volume_level_2);
-        - if:
-            condition:
-              display.is_displaying_page: eq_control
-            then:
-              - lambda: |-
-                  id(bass_level) = std::max(-12.0f, id(bass_level) - 1.0f);
-              - homeassistant.action:
-                  service: number.set_value
-                  data:
-                    entity_id: ${bass_entity}
-                  data_template:
-                    value: '{{ my_variable | float }}'
-                  variables:
-                    my_variable: |-
-                      return id(bass_level);
-        - if:
-            condition:
-              display.is_displaying_page: light_control
-            then:
-              - lambda: |-
-                  id(light_brightness) = std::max(0.0f, id(light_brightness) - 0.02f);
-              - homeassistant.action:
-                  service: light.turn_on
-                  data:
-                    entity_id: ${light_entity}
-                  data_template:
-                    brightness_pct: '{{ my_variable | int }}'
-                  variables:
-                    my_variable: |-
-                      return (int)(id(light_brightness) * 100);
-        - lambda: |-
-            id(inactivity_time) = 0;
+        - script.execute:
+            id: adjust_value
+            direction: -1
 
   - platform: homeassistant
     id: media_player_volume
@@ -892,6 +843,10 @@ text_sensor:
     entity_id: ${media_player}
     attribute: is_volume_muted
     internal: true
+    on_value:
+      then:
+        - lambda: |-
+            id(is_muted_1) = (x == "True" || x == "true" || x == "on");
   - platform: homeassistant
     id: media_player_title
     entity_id: ${media_player}
@@ -911,6 +866,10 @@ text_sensor:
     entity_id: ${media_player_2}
     attribute: is_volume_muted
     internal: true
+    on_value:
+      then:
+        - lambda: |-
+            id(is_muted_2) = (x == "True" || x == "true" || x == "on");
   - platform: homeassistant
     id: media_player_title_2
     entity_id: ${media_player_2}
@@ -989,8 +948,7 @@ display:
           }
 
           // Living Room (left column, centre x=72)
-          bool muted_lr = id(media_player_muted).has_state() &&
-            (id(media_player_muted).state == "True" || id(media_player_muted).state == "true" || id(media_player_muted).state == "on");
+          bool muted_lr = id(is_muted_1);
           int vol_lr = (int)(id(volume_level) * 100);
           auto lr_color = muted_lr ? id(color_muted) : id(color_accent);
           it.image(52, 105, muted_lr ? id(mute_icon) : id(speaker_icon), lr_color);
@@ -1002,8 +960,7 @@ display:
           it.printf(72, 171, id(small_font), id(color_dim), TextAlign::CENTER, "Living Rm");
 
           // Madagascar (right column, centre x=168)
-          bool muted_mdg = id(media_player_muted_2).has_state() &&
-            (id(media_player_muted_2).state == "True" || id(media_player_muted_2).state == "true" || id(media_player_muted_2).state == "on");
+          bool muted_mdg = id(is_muted_2);
           int vol_mdg = (int)(id(volume_level_2) * 100);
           auto mdg_color = muted_mdg ? id(color_muted) : id(color_accent);
           it.image(148, 105, muted_mdg ? id(mute_icon) : id(speaker_icon), mdg_color);
@@ -1035,8 +992,7 @@ display:
           it.fill(id(background_color));
 
           int vol_pct = (int)(id(volume_level) * 100);
-          bool is_muted = id(media_player_muted).has_state() &&
-            (id(media_player_muted).state == "True" || id(media_player_muted).state == "true" || id(media_player_muted).state == "on");
+          bool is_muted = id(is_muted_1);
 
           if (is_muted) {
             it.image(100, 55, id(mute_icon), id(color_muted));
@@ -1054,18 +1010,7 @@ display:
           }
 
           // Volume arc
-          float angle_start = 150.0;
-          float angle_range = 240.0;
-          float vol_angle = angle_start + (angle_range * id(volume_level));
-          for (float a = angle_start; a < angle_start + angle_range; a += 3.0) {
-            float rad = a * 3.14159 / 180.0;
-            float cos_a = cos(rad);
-            float sin_a = sin(rad);
-            auto color = (a < vol_angle && !is_muted) ? id(color_accent) : id(color_arc_bg);
-            for (int r = 104; r <= 108; r++) {
-              it.draw_pixel_at(120 + (int)(r * cos_a), 120 + (int)(r * sin_a), color);
-            }
-          }
+          draw_arc(it, is_muted ? 0.0f : id(volume_level), id(color_accent), id(color_arc_bg));
 
           // Media info
           if (id(media_player_state).has_state()) {
@@ -1088,24 +1033,14 @@ display:
             it.printf(120, 215, id(small_font), id(color_dim), TextAlign::CENTER, "%s", artist.c_str());
           }
 
-          // Page dots (5 pages, current_page = 0)
-          for (int i = 0; i < 5; i++) {
-            int dx = 102 + i * 10 - 1;
-            auto dot_color = (i == id(current_page)) ? id(color_accent) : id(color_dim);
-            it.filled_circle(dx, 232, 3, dot_color);
-          }
-
-          // Navigation chevrons
-          it.image(20, 108, id(chevron_left_icon), id(color_dim));
-          it.image(196, 108, id(chevron_right_icon), id(color_dim));
+          draw_chrome(it, id(current_page), 5, id(color_accent), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
 
       - id: volume_control_2
         lambda: |-
           it.fill(id(background_color));
 
           int vol_pct = (int)(id(volume_level_2) * 100);
-          bool is_muted = id(media_player_muted_2).has_state() &&
-            (id(media_player_muted_2).state == "True" || id(media_player_muted_2).state == "true" || id(media_player_muted_2).state == "on");
+          bool is_muted = id(is_muted_2);
 
           if (is_muted) {
             it.image(100, 55, id(mute_icon), id(color_muted));
@@ -1122,18 +1057,7 @@ display:
           }
 
           // Volume arc
-          float angle_start = 150.0;
-          float angle_range = 240.0;
-          float vol_angle = angle_start + (angle_range * id(volume_level_2));
-          for (float a = angle_start; a < angle_start + angle_range; a += 3.0) {
-            float rad = a * 3.14159 / 180.0;
-            float cos_a = cos(rad);
-            float sin_a = sin(rad);
-            auto color = (a < vol_angle && !is_muted) ? id(color_accent) : id(color_arc_bg);
-            for (int r = 104; r <= 108; r++) {
-              it.draw_pixel_at(120 + (int)(r * cos_a), 120 + (int)(r * sin_a), color);
-            }
-          }
+          draw_arc(it, is_muted ? 0.0f : id(volume_level_2), id(color_accent), id(color_arc_bg));
 
           // Media info
           if (id(media_player_state_2).has_state()) {
@@ -1156,16 +1080,7 @@ display:
             it.printf(120, 215, id(small_font), id(color_dim), TextAlign::CENTER, "%s", artist.c_str());
           }
 
-          // Page dots
-          for (int i = 0; i < 5; i++) {
-            int dx = 102 + i * 10 - 1;
-            auto dot_color = (i == id(current_page)) ? id(color_accent) : id(color_dim);
-            it.filled_circle(dx, 232, 3, dot_color);
-          }
-
-          // Navigation chevrons
-          it.image(20, 108, id(chevron_left_icon), id(color_dim));
-          it.image(196, 108, id(chevron_right_icon), id(color_dim));
+          draw_chrome(it, id(current_page), 5, id(color_accent), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
 
       - id: eq_control
         lambda: |-
@@ -1177,30 +1092,10 @@ display:
           it.printf(120, 125, id(volume_font), id(color_white), TextAlign::CENTER, "%.0f", id(bass_level));
 
           // Bass arc (-12 to +12 range)
-          float angle_start = 150.0;
-          float angle_range = 240.0;
-          float eq_angle = angle_start + (angle_range * ((id(bass_level) + 12.0f) / 24.0f));
-          for (float a = angle_start; a < angle_start + angle_range; a += 3.0) {
-            float rad = a * 3.14159 / 180.0;
-            float cos_a = cos(rad);
-            float sin_a = sin(rad);
-            auto color = (a < eq_angle) ? id(color_eq) : id(color_arc_bg);
-            for (int r = 104; r <= 108; r++) {
-              it.draw_pixel_at(120 + (int)(r * cos_a), 120 + (int)(r * sin_a), color);
-            }
-          }
+          draw_arc(it, (id(bass_level) + 12.0f) / 24.0f, id(color_eq), id(color_arc_bg));
 
 
-          // Page dots
-          for (int i = 0; i < 5; i++) {
-            int dx = 102 + i * 10 - 1;
-            auto dot_color = (i == id(current_page)) ? id(color_eq) : id(color_dim);
-            it.filled_circle(dx, 232, 3, dot_color);
-          }
-
-          // Navigation chevrons
-          it.image(20, 108, id(chevron_left_icon), id(color_dim));
-          it.image(196, 108, id(chevron_right_icon), id(color_dim));
+          draw_chrome(it, id(current_page), 5, id(color_eq), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
 
       - id: light_control
         lambda: |-
@@ -1224,31 +1119,11 @@ display:
           }
 
           // Brightness arc
-          float angle_start = 150.0;
-          float angle_range = 240.0;
-          float bright_angle = angle_start + (angle_range * id(light_brightness));
-          for (float a = angle_start; a < angle_start + angle_range; a += 3.0) {
-            float rad = a * 3.14159 / 180.0;
-            float cos_a = cos(rad);
-            float sin_a = sin(rad);
-            auto color = (a < bright_angle && is_on) ? id(color_warm) : id(color_arc_bg);
-            for (int r = 104; r <= 108; r++) {
-              it.draw_pixel_at(120 + (int)(r * cos_a), 120 + (int)(r * sin_a), color);
-            }
-          }
+          draw_arc(it, is_on ? id(light_brightness) : 0.0f, id(color_warm), id(color_arc_bg));
 
           it.printf(120, 200, id(small_font), id(color_dim), TextAlign::CENTER, "Press to toggle");
 
-          // Page dots
-          for (int i = 0; i < 5; i++) {
-            int dx = 102 + i * 10 - 1;
-            auto dot_color = (i == id(current_page)) ? id(color_warm) : id(color_dim);
-            it.filled_circle(dx, 232, 3, dot_color);
-          }
-
-          // Navigation chevrons
-          it.image(20, 108, id(chevron_left_icon), id(color_dim));
-          it.image(196, 108, id(chevron_right_icon), id(color_dim));
+          draw_chrome(it, id(current_page), 5, id(color_warm), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
 
       - id: actions_screen
         lambda: |-
@@ -1263,18 +1138,16 @@ display:
             bool on_tv = id(media_player_source).has_state() && id(media_player_source).state == "${tv_source}";
             auto tl_color = (id(actions_last_tapped) == 0) ? id(color_warm) :
                             (on_line_in ? id(color_warm) : (on_tv ? id(color_accent) : id(color_dim)));
-            it.image(67, 55, id(line_in_icon), tl_color);
-            it.printf(85, 97, id(small_font), tl_color, TextAlign::CENTER, on_tv ? "TV" : "${line_in_select}");
+            it.image(67, 68, id(line_in_icon), tl_color);
           }
 
-          // Top-right: Group toggle  (center of right column: x=145)
+          // Top-right: Group toggle
           {
             bool is_grouped = id(media_player_group_members).has_state() &&
                 id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
             auto tr_color = (id(actions_last_tapped) == 1) ? id(color_playing) :
                             (is_grouped ? id(color_playing) : id(color_dim));
-            it.image(137, 55, id(group_icon), tr_color);
-            it.printf(155, 97, id(small_font), tr_color, TextAlign::CENTER, is_grouped ? "Ungroup" : "Group");
+            it.image(137, 68, id(group_icon), tr_color);
           }
 
           // Bottom-left: Vinyl
@@ -1282,8 +1155,7 @@ display:
             bool vinyl_active = (id(last_active_scene) == 2);
             auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) :
                             (vinyl_active ? id(color_eq) : id(color_dim));
-            it.image(67, 135, id(vinyl_icon), bl_color);
-            it.printf(85, 177, id(small_font), bl_color, TextAlign::CENTER, "Vinyl");
+            it.image(67, 148, id(vinyl_icon), bl_color);
           }
 
           // Bottom-right: Chill
@@ -1291,17 +1163,7 @@ display:
             bool chill_active = (id(last_active_scene) == 3);
             auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) :
                             (chill_active ? id(color_accent) : id(color_dim));
-            it.image(137, 135, id(chill_icon), br_color);
-            it.printf(155, 177, id(small_font), br_color, TextAlign::CENTER, "Chill");
+            it.image(137, 148, id(chill_icon), br_color);
           }
 
-          // Page dots (5 pages, current_page = 4)
-          for (int i = 0; i < 5; i++) {
-            int dx = 102 + i * 10 - 1;
-            auto dot_color = (i == id(current_page)) ? id(color_white) : id(color_dim);
-            it.filled_circle(dx, 232, 3, dot_color);
-          }
-
-          // Navigation chevrons
-          it.image(20, 108, id(chevron_left_icon), id(color_dim));
-          it.image(196, 108, id(chevron_right_icon), id(color_dim));
+          draw_chrome(it, id(current_page), 5, id(color_white), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
