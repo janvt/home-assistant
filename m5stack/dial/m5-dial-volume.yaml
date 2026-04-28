@@ -293,6 +293,31 @@ binary_sensor:
   # Touch zones for page navigation (left/right edges of screen)
   - platform: touchscreen
     touchscreen_id: touchscreen_dial
+    name: "Touch Wake"
+    id: touch_wake
+    internal: true
+    x_min: 70
+    x_max: 170
+    y_min: 20
+    y_max: 220
+    on_press:
+      then:
+        - if:
+            condition:
+              or:
+                - display.is_displaying_page: locked_screen
+                - light.is_off: backlight
+            then:
+              - switch.turn_on: dial_display
+              - light.turn_on:
+                  id: backlight
+                  brightness: 100%
+              - script.execute: show_current_page
+              - lambda: |-
+                  id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    touchscreen_id: touchscreen_dial
     name: "Nav Left"
     id: nav_left
     internal: true
@@ -558,22 +583,8 @@ interval:
     then:
       - lambda: |-
           id(inactivity_time) += 1;
-
-          if (id(auto_lock).state) {
-            if (id(inactivity_time) > id(screen_saver_time).state && id(inactivity_time) < id(auto_lock_time_out).state ) {
-                id(screen_saver).turn_on();
-            }
-            if (id(inactivity_time) > id(auto_lock_time_out).state) {
-                id(backlight_pwm).turn_off();
-                id(dial_display).turn_off();
-                id(screen_saver).turn_off();
-            }
-          }
-
-          else {
-            if (id(inactivity_time) > id(screen_saver_time).state) {
-                id(screen_saver).turn_on();
-            }
+          if (id(inactivity_time) > id(screen_saver_time).state) {
+            id(screen_saver).turn_on();
           }
 
 light:
@@ -587,16 +598,6 @@ light:
 
 number:
   - platform: template
-    name: "Auto Lock"
-    id: auto_lock_time_out
-    icon: "mdi:timer-sand"
-    optimistic: true
-    min_value: 20
-    max_value: 300
-    step: 10
-    unit_of_measurement: "s"
-    restore_value: true
-  - platform: template
     name: "Screen Saver"
     id: screen_saver_time
     icon: "mdi:screen-rotation-lock"
@@ -608,9 +609,6 @@ number:
     restore_value: true
 
 output:
-  - platform: ledc
-    pin: GPIO3
-    id: buzzer
   - platform: ledc
     pin: GPIO9
     id: backlight_pwm
@@ -829,12 +827,6 @@ spi:
   clk_pin: GPIO6
 
 switch:
-  - platform: template
-    name: "Auto Lock"
-    id: auto_lock
-    icon: "mdi:lock-clock"
-    optimistic: true
-    restore_mode: 'restore_default_off'
   - platform: template
     name: "Display"
     id: dial_display
