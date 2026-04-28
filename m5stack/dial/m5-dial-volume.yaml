@@ -112,13 +112,24 @@ script:
     parameters:
       delta: int
     then:
-      - lambda: |-
-          // Negate delta when screen is flipped (touch coords are mirrored)
-          int d = id(flip_screen).state ? -delta : delta;
-          // + 5 before modulo prevents negative results in C++ (-1 % 5 = -1, not 4)
-          id(current_page) = (id(current_page) + d + 5) % 5;
-          id(inactivity_time) = 0;
-      - script.execute: show_current_page
+      - if:
+          condition:
+            display.is_displaying_page: locked_screen
+          then:
+            - switch.turn_on: dial_display
+            - light.turn_on:
+                id: backlight
+                brightness: 100%
+            - script.execute: show_current_page
+            - lambda: id(inactivity_time) = 0;
+          else:
+            - lambda: |-
+                // Negate delta when screen is flipped (touch coords are mirrored)
+                int d = id(flip_screen).state ? -delta : delta;
+                // + 5 before modulo prevents negative results in C++ (-1 % 5 = -1, not 4)
+                id(current_page) = (id(current_page) + d + 5) % 5;
+                id(inactivity_time) = 0;
+            - script.execute: show_current_page
 
   - id: adjust_value
     # direction: +1 (clockwise) or -1 (anticlockwise)
@@ -682,7 +693,7 @@ interval:
     then:
       - lambda: |-
           id(inactivity_time) += 1;
-          if (id(inactivity_time) > id(screen_saver_time).state) {
+          if (id(inactivity_time) > id(screen_saver_time).state && !id(screen_saver).state) {
             id(screen_saver).turn_on();
           }
 
