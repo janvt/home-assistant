@@ -46,6 +46,8 @@ esphome:
     then:
       - delay: 500ms
       - pcf8563.read_time:
+      # Silence buzzer pin — keep GPIO3 low so the hardware buzzer stays quiet
+      - output.turn_off: buzzer_mute
       - light.turn_on:
           id: backlight
           brightness: 100%
@@ -609,6 +611,10 @@ number:
     restore_value: true
 
 output:
+  # GPIO3 is the hardware buzzer pin — defined here only to drive it low and keep it silent
+  - platform: gpio
+    pin: GPIO3
+    id: buzzer_mute
   - platform: ledc
     pin: GPIO9
     id: backlight_pwm
