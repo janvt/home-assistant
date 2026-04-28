@@ -151,7 +151,7 @@ script:
             display.is_displaying_page: volume_control
           then:
             - lambda: |-
-                id(volume_level) = std::min(1.0f, std::max(0.0f, id(volume_level) + direction * 0.02f));
+                id(volume_level) = std::min(1.0f, std::max(0.0f, id(volume_level) + direction * (id(volume_step).state / 100.0f)));
             - homeassistant.action:
                 service: media_player.volume_set
                 data:
@@ -166,7 +166,7 @@ script:
             display.is_displaying_page: volume_control_2
           then:
             - lambda: |-
-                id(volume_level_2) = std::min(1.0f, std::max(0.0f, id(volume_level_2) + direction * 0.02f));
+                id(volume_level_2) = std::min(1.0f, std::max(0.0f, id(volume_level_2) + direction * (id(volume_step).state / 100.0f)));
             - homeassistant.action:
                 service: media_player.volume_set
                 data:
@@ -181,7 +181,7 @@ script:
             display.is_displaying_page: eq_control
           then:
             - lambda: |-
-                id(bass_level) = std::min(12.0f, std::max(-12.0f, id(bass_level) + direction * 1.0f));
+                id(bass_level) = std::min(12.0f, std::max(-12.0f, id(bass_level) + direction * id(bass_step).state));
             - homeassistant.action:
                 service: number.set_value
                 data:
@@ -196,7 +196,7 @@ script:
             display.is_displaying_page: light_control
           then:
             - lambda: |-
-                id(light_brightness) = std::min(1.0f, std::max(0.0f, id(light_brightness) + direction * 0.02f));
+                id(light_brightness) = std::min(1.0f, std::max(0.0f, id(light_brightness) + direction * (id(light_step).state / 100.0f)));
             - homeassistant.action:
                 service: light.turn_on
                 data:
@@ -720,6 +720,46 @@ number:
     step: 10
     unit_of_measurement: "s"
     restore_value: true
+    mode: box
+
+  - platform: template
+    name: "Volume Step"
+    id: volume_step
+    icon: "mdi:knob"
+    optimistic: true
+    min_value: 1
+    max_value: 10
+    step: 1
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 2
+    mode: box
+
+  - platform: template
+    name: "Bass Step"
+    id: bass_step
+    icon: "mdi:equalizer"
+    optimistic: true
+    min_value: 0.5
+    max_value: 3.0
+    step: 0.5
+    unit_of_measurement: "dB"
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+
+  - platform: template
+    name: "Light Step"
+    id: light_step
+    icon: "mdi:lightbulb"
+    optimistic: true
+    min_value: 1
+    max_value: 10
+    step: 1
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 2
+    mode: box
 
 output:
   # GPIO3 is the hardware buzzer pin — defined here only to drive it low and keep it silent
