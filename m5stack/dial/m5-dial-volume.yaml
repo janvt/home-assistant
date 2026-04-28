@@ -815,6 +815,18 @@ number:
     unit_of_measurement: "%"
     restore_value: true
     initial_value: 100
+    on_value:
+      then:
+        - if:
+            condition:
+              and:
+                - light.is_on: backlight
+                - not:
+                    display.is_displaying_page: locked_screen
+            then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return x / 100.0f;'
 
   - platform: template
     name: "Brightness - Screensaver"
@@ -828,6 +840,15 @@ number:
     unit_of_measurement: "%"
     restore_value: true
     initial_value: 50
+    on_value:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: locked_screen
+            then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return x / 100.0f;'
 
 output:
   # GPIO3 is the hardware buzzer pin — defined here only to drive it low and keep it silent
