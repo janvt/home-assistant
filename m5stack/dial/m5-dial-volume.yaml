@@ -38,6 +38,10 @@ esphome:
       - light.turn_on:
           id: backlight
           brightness: 100%
+      - lambda: |-
+          if (id(flip_screen).state) {
+            id(round_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+          }
       - display.page.show: volume_control
   platformio_options:
     board_build.flash_mode: dio
@@ -686,6 +690,19 @@ switch:
     icon: "mdi:playlist-music"
     optimistic: true
     restore_mode: 'restore_default_on'
+
+  - platform: template
+    name: "Flip Screen"
+    id: flip_screen
+    icon: "mdi:screen-rotation"
+    optimistic: true
+    restore_mode: 'restore_default_off'
+    on_turn_on:
+      - lambda: |-
+          id(round_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+    on_turn_off:
+      - lambda: |-
+          id(round_display).set_rotation(display::DISPLAY_ROTATION_0_DEGREES);
 
 text_sensor:
   - platform: homeassistant
