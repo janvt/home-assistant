@@ -780,9 +780,9 @@ display:
             (id(media_player_muted).state == "True" || id(media_player_muted).state == "true" || id(media_player_muted).state == "on");
 
           if (is_muted) {
-            it.image(100, 60, id(mute_icon), id(color_muted));
+            it.image(100, 55, id(mute_icon), id(color_muted));
           } else {
-            it.image(100, 60, id(speaker_icon), id(color_accent));
+            it.image(100, 55, id(speaker_icon), id(color_accent));
           }
 
           // Page label
@@ -849,9 +849,9 @@ display:
             (id(media_player_muted_2).state == "True" || id(media_player_muted_2).state == "true" || id(media_player_muted_2).state == "on");
 
           if (is_muted) {
-            it.image(100, 60, id(mute_icon), id(color_muted));
+            it.image(100, 55, id(mute_icon), id(color_muted));
           } else {
-            it.image(100, 60, id(speaker_icon), id(color_accent));
+            it.image(100, 55, id(speaker_icon), id(color_accent));
           }
 
           it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Madagascar");
@@ -912,7 +912,7 @@ display:
         lambda: |-
           it.fill(id(background_color));
 
-          it.image(100, 60, id(eq_icon), id(color_eq));
+          it.image(100, 55, id(eq_icon), id(color_eq));
 
           it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Bass");
           it.printf(120, 125, id(volume_font), id(color_white), TextAlign::CENTER, "%.0f", id(bass_level));
@@ -951,9 +951,9 @@ display:
           int bright_pct = (int)(id(light_brightness) * 100);
 
           if (is_on) {
-            it.image(100, 60, id(light_icon), id(color_warm));
+            it.image(100, 55, id(light_icon), id(color_warm));
           } else {
-            it.image(100, 60, id(light_off_icon), id(color_dim));
+            it.image(100, 55, id(light_off_icon), id(color_dim));
           }
 
           it.printf(120, 40, id(small_font), id(color_dim), TextAlign::CENTER, "Light");
