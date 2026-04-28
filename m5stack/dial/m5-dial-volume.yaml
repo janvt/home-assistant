@@ -15,6 +15,20 @@ substitutions:
   # Light entity to control
   light_entity: light.reading_spot
 
+  # Scene entities
+  scene_vinyl: scene.vinyl
+  scene_chill: scene.chill
+
+  # Line In / TV source names
+  # line_in_source: what HA reports in the 'source' attribute when playing from line-in
+  # line_in_select: display label shown on screen
+  # line_in_media_id: direct Sonos Port stream URI — find via HA Developer Tools > Template:
+  #   {{ state_attr('media_player.turntable', 'uid') }}  → e.g. RINCON_000E58A1B2C301400
+  line_in_source: 'Line-in'
+  line_in_select: 'Turntable'
+  line_in_media_id: 'x-rincon-stream:RINCON_74CA60312D6601400:0'
+  tv_source: 'TV'
+
   # Icons
   icon_speaker: mdi:speaker
   icon_mute: mdi:volume-mute
@@ -84,6 +98,7 @@ script:
             case 1: id(round_display).show_page(id(volume_control_2)); break;
             case 2: id(round_display).show_page(id(eq_control)); break;
             case 3: id(round_display).show_page(id(light_control)); break;
+            case 4: id(round_display).show_page(id(actions_screen)); break;
           }
 
   - id: navigate
@@ -93,10 +108,100 @@ script:
       - lambda: |-
           // Negate delta when screen is flipped (touch coords are mirrored)
           int d = id(flip_screen).state ? -delta : delta;
-          // + 4 before modulo prevents negative results in C++ (-1 % 4 = -1, not 3)
-          id(current_page) = (id(current_page) + d + 4) % 4;
+          // + 5 before modulo prevents negative results in C++ (-1 % 5 = -1, not 4)
+          id(current_page) = (id(current_page) + d + 5) % 5;
           id(inactivity_time) = 0;
       - script.execute: show_current_page
+
+  - id: clear_action_highlight
+    then:
+      - delay: 500ms
+      - lambda: |-
+          id(actions_last_tapped) = -1;
+
+  - id: fire_action
+    parameters:
+      physical_quadrant: int
+    then:
+      # Compute visual quadrant: when flipped 180°, TL↔BR and TR↔BL (i.e. 3 - physical)
+      - lambda: |-
+          int visual = id(flip_screen).state ? (3 - physical_quadrant) : physical_quadrant;
+          id(actions_last_tapped) = visual;
+          ESP_LOGI("actions", "fire_action: physical=%d visual=%d flipped=%s",
+            physical_quadrant, visual, id(flip_screen).state ? "yes" : "no");
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 0;'
+          then:
+            # Line In / TV toggle
+            - lambda: |-
+                ESP_LOGI("actions", "Source toggle: current='%s' | line_in='${line_in_source}' | tv='${tv_source}' | has_state=%s",
+                  id(media_player_source).has_state() ? id(media_player_source).state.c_str() : "<none>",
+                  id(media_player_source).has_state() ? "yes" : "no");
+            - if:
+                condition:
+                  lambda: 'return id(media_player_source).has_state() && id(media_player_source).state == "${line_in_source}";'
+                then:
+                  - lambda: |-
+                      ESP_LOGI("actions", "Source toggle -> switching to TV ('${tv_source}')");
+                  - homeassistant.action:
+                      service: media_player.select_source
+                      data:
+                        entity_id: ${media_player}
+                        source: ${tv_source}
+                else:
+                  - lambda: |-
+                      ESP_LOGI("actions", "Source toggle -> switching to Line-In via URI ('${line_in_media_id}')");
+                  - homeassistant.action:
+                      service: media_player.play_media
+                      data:
+                        entity_id: ${media_player}
+                        media_content_id: ${line_in_media_id}
+                        media_content_type: music
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 1;'
+          then:
+            # Group / Ungroup toggle
+            - lambda: |-
+                ESP_LOGI("actions", "Action 1: group toggle (members='%s')",
+                  id(media_player_group_members).has_state() ? id(media_player_group_members).state.c_str() : "<unknown>");
+            - if:
+                condition:
+                  lambda: 'return id(media_player_group_members).has_state() && id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;'
+                then:
+                  - homeassistant.action:
+                      service: media_player.unjoin
+                      data:
+                        entity_id: ${media_player_2}
+                else:
+                  - homeassistant.action:
+                      service: media_player.join
+                      data:
+                        entity_id: ${media_player}
+                      data_template:
+                        group_members: '["${media_player_2}"]'
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 2;'
+          then:
+            - lambda: |-
+                ESP_LOGI("actions", "Action 2: Vinyl scene");
+            - homeassistant.action:
+                service: scene.turn_on
+                data:
+                  entity_id: ${scene_vinyl}
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 3;'
+          then:
+            - lambda: |-
+                ESP_LOGI("actions", "Action 3: Chill scene");
+            - homeassistant.action:
+                service: scene.turn_on
+                data:
+                  entity_id: ${scene_chill}
+      - script.execute: clear_action_highlight
 
 logger:
 
@@ -234,6 +339,91 @@ binary_sensor:
             then:
               - rtttl.play: ${menu_sound}
 
+  # Action screen quadrant touch zones
+  - platform: touchscreen
+    touchscreen_id: touchscreen_dial
+    name: "Action TL"
+    id: action_tl
+    internal: true
+    x_min: 70
+    x_max: 120
+    y_min: 0
+    y_max: 120
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 0
+              - lambda: |-
+                  id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    touchscreen_id: touchscreen_dial
+    name: "Action TR"
+    id: action_tr
+    internal: true
+    x_min: 120
+    x_max: 170
+    y_min: 0
+    y_max: 120
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 1
+              - lambda: |-
+                  id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    touchscreen_id: touchscreen_dial
+    name: "Action BL"
+    id: action_bl
+    internal: true
+    x_min: 70
+    x_max: 120
+    y_min: 120
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 2
+              - lambda: |-
+                  id(inactivity_time) = 0;
+
+  - platform: touchscreen
+    touchscreen_id: touchscreen_dial
+    name: "Action BR"
+    id: action_br
+    internal: true
+    x_min: 120
+    x_max: 170
+    y_min: 120
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 3
+              - lambda: |-
+                  id(inactivity_time) = 0;
+
 color:
   - id: background_color
     hex: ${background_color}
@@ -293,6 +483,10 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
+  - id: actions_last_tapped
+    type: int
+    restore_value: no
+    initial_value: '-1'
 
 i2c:
   - id: internal_i2c
@@ -354,6 +548,26 @@ image:
   - file: mdi:chevron-right
     id: chevron_right_icon
     resize: 24x24
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:audio-input-rca
+    id: line_in_icon
+    resize: 36x36
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:speaker-multiple
+    id: group_icon
+    resize: 36x36
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:record
+    id: vinyl_icon
+    resize: 36x36
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:candle
+    id: chill_icon
+    resize: 36x36
     type: BINARY
     transparency: chroma_key
 
@@ -743,6 +957,16 @@ text_sensor:
     id: light_state
     entity_id: ${light_entity}
     internal: true
+  - platform: homeassistant
+    id: media_player_source
+    entity_id: ${media_player}
+    attribute: source
+    internal: true
+  - platform: homeassistant
+    id: media_player_group_members
+    entity_id: ${media_player}
+    attribute: group_members
+    internal: true
 
 time:
   # RTC
@@ -842,9 +1066,9 @@ display:
             it.printf(120, 215, id(small_font), id(color_dim), TextAlign::CENTER, "%s", artist.c_str());
           }
 
-          // Page dots (4 pages, current_page = 0)
-          for (int i = 0; i < 4; i++) {
-            int dx = 108 + i * 10 - 1;
+          // Page dots (5 pages, current_page = 0)
+          for (int i = 0; i < 5; i++) {
+            int dx = 102 + i * 10 - 1;
             auto dot_color = (i == id(current_page)) ? id(color_accent) : id(color_dim);
             it.filled_circle(dx, 232, 3, dot_color);
           }
@@ -911,8 +1135,8 @@ display:
           }
 
           // Page dots
-          for (int i = 0; i < 4; i++) {
-            int dx = 108 + i * 10 - 1;
+          for (int i = 0; i < 5; i++) {
+            int dx = 102 + i * 10 - 1;
             auto dot_color = (i == id(current_page)) ? id(color_accent) : id(color_dim);
             it.filled_circle(dx, 232, 3, dot_color);
           }
@@ -946,8 +1170,8 @@ display:
 
 
           // Page dots
-          for (int i = 0; i < 4; i++) {
-            int dx = 108 + i * 10 - 1;
+          for (int i = 0; i < 5; i++) {
+            int dx = 102 + i * 10 - 1;
             auto dot_color = (i == id(current_page)) ? id(color_eq) : id(color_dim);
             it.filled_circle(dx, 232, 3, dot_color);
           }
@@ -994,8 +1218,8 @@ display:
           it.printf(120, 200, id(small_font), id(color_dim), TextAlign::CENTER, "Press to toggle");
 
           // Page dots
-          for (int i = 0; i < 4; i++) {
-            int dx = 108 + i * 10 - 1;
+          for (int i = 0; i < 5; i++) {
+            int dx = 102 + i * 10 - 1;
             auto dot_color = (i == id(current_page)) ? id(color_warm) : id(color_dim);
             it.filled_circle(dx, 232, 3, dot_color);
           }
@@ -1004,3 +1228,54 @@ display:
           it.image(20, 108, id(chevron_left_icon), id(color_dim));
           it.image(196, 108, id(chevron_right_icon), id(color_dim));
 
+      - id: actions_screen
+        lambda: |-
+          it.fill(id(background_color));
+
+          // Page title
+          it.printf(120, 25, id(small_font), id(color_dim), TextAlign::CENTER, "Actions");
+
+          // Top-left: Line In / TV toggle  (center of left column: x=95)
+          {
+            bool on_line_in = id(media_player_source).has_state() && id(media_player_source).state == "${line_in_source}";
+            bool on_tv = id(media_player_source).has_state() && id(media_player_source).state == "${tv_source}";
+            auto tl_color = (id(actions_last_tapped) == 0) ? id(color_warm) :
+                            (on_line_in ? id(color_warm) : (on_tv ? id(color_accent) : id(color_dim)));
+            it.image(67, 55, id(line_in_icon), tl_color);
+            it.printf(85, 97, id(small_font), tl_color, TextAlign::CENTER, on_tv ? "TV" : "${line_in_select}");
+          }
+
+          // Top-right: Group toggle  (center of right column: x=145)
+          {
+            bool is_grouped = id(media_player_group_members).has_state() &&
+                id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
+            auto tr_color = (id(actions_last_tapped) == 1) ? id(color_playing) :
+                            (is_grouped ? id(color_playing) : id(color_dim));
+            it.image(137, 55, id(group_icon), tr_color);
+            it.printf(155, 97, id(small_font), tr_color, TextAlign::CENTER, is_grouped ? "Ungroup" : "Group");
+          }
+
+          // Bottom-left: Vinyl (purple)  (x=95)
+          {
+            auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) : id(color_dim);
+            it.image(67, 135, id(vinyl_icon), bl_color);
+            it.printf(85, 177, id(small_font), bl_color, TextAlign::CENTER, "Vinyl");
+          }
+
+          // Bottom-right: Chill (blue)  (x=145)
+          {
+            auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) : id(color_dim);
+            it.image(137, 135, id(chill_icon), br_color);
+            it.printf(155, 177, id(small_font), br_color, TextAlign::CENTER, "Chill");
+          }
+
+          // Page dots (5 pages, current_page = 4)
+          for (int i = 0; i < 5; i++) {
+            int dx = 102 + i * 10 - 1;
+            auto dot_color = (i == id(current_page)) ? id(color_white) : id(color_dim);
+            it.filled_circle(dx, 232, 3, dot_color);
+          }
+
+          // Navigation chevrons
+          it.image(20, 108, id(chevron_left_icon), id(color_dim));
+          it.image(196, 108, id(chevron_right_icon), id(color_dim));
