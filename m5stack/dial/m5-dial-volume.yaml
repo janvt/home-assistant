@@ -33,9 +33,6 @@ substitutions:
   icon_speaker: mdi:speaker
   icon_mute: mdi:volume-mute
 
-  # Sounds
-  menu_sound: 'beep:d=32,o=5,b=255:c5'
-
   # Other settings
   allowed_characters: " ¿?¡!#%'()+,-./:°0123456789ABCDEFGHIJKLMNOPQRSTUVWYZabcdefghijklmnopqrstuvwxyzáéíóú"
 
@@ -219,11 +216,6 @@ binary_sensor:
       then:
         - if:
             condition:
-              switch.is_on: menu_sounds
-            then:
-              - rtttl.play: ${menu_sound}
-        - if:
-            condition:
               light.is_on: backlight
             then:
               - if:
@@ -313,11 +305,6 @@ binary_sensor:
         - script.execute:
             id: navigate
             delta: -1
-        - if:
-            condition:
-              switch.is_on: menu_sounds
-            then:
-              - rtttl.play: ${menu_sound}
 
   - platform: touchscreen
     touchscreen_id: touchscreen_dial
@@ -333,11 +320,6 @@ binary_sensor:
         - script.execute:
             id: navigate
             delta: 1
-        - if:
-            condition:
-              switch.is_on: menu_sounds
-            then:
-              - rtttl.play: ${menu_sound}
 
   # Action screen quadrant touch zones
   - platform: touchscreen
@@ -633,10 +615,6 @@ output:
     pin: GPIO9
     id: backlight_pwm
 
-rtttl:
-  id: buzzer_rtttl
-  output: buzzer
-
 sensor:
   - platform: rotary_encoder
     id: encoder
@@ -644,11 +622,6 @@ sensor:
     pin_b: GPIO41
     on_clockwise:
       then:
-        - if:
-            condition:
-              switch.is_on: menu_sounds
-            then:
-              - rtttl.play: ${menu_sound}
         - if:
             condition:
               display.is_displaying_page: locked_screen
@@ -722,11 +695,6 @@ sensor:
             id(inactivity_time) = 0;
     on_anticlockwise:
       then:
-        - if:
-            condition:
-              switch.is_on: menu_sounds
-            then:
-              - rtttl.play: ${menu_sound}
         - if:
             condition:
               display.is_displaying_page: locked_screen
@@ -894,12 +862,6 @@ switch:
           id: backlight
           brightness: 50%
       - display.page.show: locked_screen
-  - platform: template
-    name: "Menu Sounds"
-    id: menu_sounds
-    icon: "mdi:playlist-music"
-    optimistic: true
-    restore_mode: 'restore_default_on'
 
   - platform: template
     name: "Flip Screen"
