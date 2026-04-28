@@ -956,10 +956,53 @@ display:
       - id: locked_screen
         lambda: |-
           it.fill(id(background_color));
+
+          // Time (top, large)
           auto now = id(esptime).now();
           if (now.is_valid()) {
-            it.strftime(120, 100, id(volume_font), id(color_white), TextAlign::CENTER, "%H:%M", now);
-            it.strftime(120, 150, id(secondary), id(color_dim), TextAlign::CENTER, "%d/%m/%y", now);
+            it.strftime(120, 68, id(volume_font), id(color_white), TextAlign::CENTER, "%H:%M", now);
+          }
+
+          // Living Room (left column, centre x=72)
+          bool muted_lr = id(media_player_muted).has_state() &&
+            (id(media_player_muted).state == "True" || id(media_player_muted).state == "true" || id(media_player_muted).state == "on");
+          int vol_lr = (int)(id(volume_level) * 100);
+          auto lr_color = muted_lr ? id(color_muted) : id(color_accent);
+          it.image(52, 105, muted_lr ? id(mute_icon) : id(speaker_icon), lr_color);
+          if (muted_lr) {
+            it.printf(72, 153, id(small_font), lr_color, TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(72, 153, id(secondary), lr_color, TextAlign::CENTER, "%d%%", vol_lr);
+          }
+          it.printf(72, 171, id(small_font), id(color_dim), TextAlign::CENTER, "Living Rm");
+
+          // Madagascar (right column, centre x=168)
+          bool muted_mdg = id(media_player_muted_2).has_state() &&
+            (id(media_player_muted_2).state == "True" || id(media_player_muted_2).state == "true" || id(media_player_muted_2).state == "on");
+          int vol_mdg = (int)(id(volume_level_2) * 100);
+          auto mdg_color = muted_mdg ? id(color_muted) : id(color_accent);
+          it.image(148, 105, muted_mdg ? id(mute_icon) : id(speaker_icon), mdg_color);
+          if (muted_mdg) {
+            it.printf(168, 153, id(small_font), mdg_color, TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(168, 153, id(secondary), mdg_color, TextAlign::CENTER, "%d%%", vol_mdg);
+          }
+          it.printf(168, 171, id(small_font), id(color_dim), TextAlign::CENTER, "Madagascar");
+
+          // Source (bottom-left) and group status (bottom-right)
+          {
+            std::string src = id(media_player_source).has_state() ? id(media_player_source).state : "";
+            const char* src_label = (src == "${tv_source}") ? "TV" :
+                                    (src == "${line_in_source}") ? "${line_in_select}" : src.c_str();
+            auto src_color = (src == "${line_in_source}") ? id(color_warm) :
+                             (src == "${tv_source}") ? id(color_accent) : id(color_dim);
+            it.printf(72, 197, id(small_font), src_color, TextAlign::CENTER, "%s", src_label);
+
+            bool is_grouped = id(media_player_group_members).has_state() &&
+              id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
+            it.printf(168, 197, id(small_font),
+              is_grouped ? id(color_playing) : id(color_dim),
+              TextAlign::CENTER, is_grouped ? "Grouped" : "Solo");
           }
 
       - id: volume_control
