@@ -132,6 +132,65 @@ script:
                 id(inactivity_time) = 0;
             - script.execute: show_current_page
 
+  - id: send_value_to_ha
+    # Debounced: restarts on every encoder tick, fires 150ms after the last one.
+    # Keeps HA API calls low when spinning the dial quickly.
+    mode: restart
+    then:
+      - delay: !lambda 'return (uint32_t)id(debounce_delay).state;'
+      - if:
+          condition:
+            display.is_displaying_page: volume_control
+          then:
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level);
+      - if:
+          condition:
+            display.is_displaying_page: volume_control_2
+          then:
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player_2}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level_2);
+      - if:
+          condition:
+            display.is_displaying_page: eq_control
+          then:
+            - homeassistant.action:
+                service: number.set_value
+                data:
+                  entity_id: ${bass_entity}
+                data_template:
+                  value: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(bass_level);
+      - if:
+          condition:
+            display.is_displaying_page: light_control
+          then:
+            - homeassistant.action:
+                service: light.turn_on
+                data:
+                  entity_id: ${light_entity}
+                data_template:
+                  brightness_pct: '{{ my_variable | int }}'
+                variables:
+                  my_variable: |-
+                    return (int)(id(light_brightness) * 100);
+
   - id: adjust_value
     # direction: +1 (clockwise) or -1 (anticlockwise)
     parameters:
@@ -152,60 +211,25 @@ script:
           then:
             - lambda: |-
                 id(volume_level) = std::min(1.0f, std::max(0.0f, id(volume_level) + direction * (id(volume_step).state / 100.0f)));
-            - homeassistant.action:
-                service: media_player.volume_set
-                data:
-                  entity_id: ${media_player}
-                data_template:
-                  volume_level: '{{ my_variable | float }}'
-                variables:
-                  my_variable: |-
-                    return id(volume_level);
       - if:
           condition:
             display.is_displaying_page: volume_control_2
           then:
             - lambda: |-
                 id(volume_level_2) = std::min(1.0f, std::max(0.0f, id(volume_level_2) + direction * (id(volume_step).state / 100.0f)));
-            - homeassistant.action:
-                service: media_player.volume_set
-                data:
-                  entity_id: ${media_player_2}
-                data_template:
-                  volume_level: '{{ my_variable | float }}'
-                variables:
-                  my_variable: |-
-                    return id(volume_level_2);
       - if:
           condition:
             display.is_displaying_page: eq_control
           then:
             - lambda: |-
                 id(bass_level) = std::min(12.0f, std::max(-12.0f, id(bass_level) + direction * id(bass_step).state));
-            - homeassistant.action:
-                service: number.set_value
-                data:
-                  entity_id: ${bass_entity}
-                data_template:
-                  value: '{{ my_variable | float }}'
-                variables:
-                  my_variable: |-
-                    return id(bass_level);
       - if:
           condition:
             display.is_displaying_page: light_control
           then:
             - lambda: |-
                 id(light_brightness) = std::min(1.0f, std::max(0.0f, id(light_brightness) + direction * (id(light_step).state / 100.0f)));
-            - homeassistant.action:
-                service: light.turn_on
-                data:
-                  entity_id: ${light_entity}
-                data_template:
-                  brightness_pct: '{{ my_variable | int }}'
-                variables:
-                  my_variable: |-
-                    return (int)(id(light_brightness) * 100);
+      - script.execute: send_value_to_ha
       - lambda: |-
           id(inactivity_time) = 0;
       - component.update: round_display
@@ -759,6 +783,19 @@ number:
     unit_of_measurement: "%"
     restore_value: true
     initial_value: 2
+    mode: box
+
+  - platform: template
+    name: "Encoder Debounce"
+    id: debounce_delay
+    icon: "mdi:timer-outline"
+    optimistic: true
+    min_value: 50
+    max_value: 500
+    step: 25
+    unit_of_measurement: "ms"
+    restore_value: true
+    initial_value: 150
     mode: box
 
 output:
