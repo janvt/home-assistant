@@ -58,7 +58,7 @@ esphome:
       - output.turn_off: buzzer_mute
       - light.turn_on:
           id: backlight
-          brightness: 100%
+          brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
       - lambda: |-
           if (id(flip_screen).state) {
             id(round_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
@@ -120,7 +120,7 @@ script:
             - switch.turn_on: dial_display
             - light.turn_on:
                 id: backlight
-                brightness: 100%
+                brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
             - script.execute: show_current_page
             - lambda: id(inactivity_time) = 0;
           else:
@@ -203,7 +203,7 @@ script:
             - switch.turn_on: dial_display
             - light.turn_on:
                 id: backlight
-                brightness: 100%
+                brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
             - display.page.show: volume_control
       - if:
           condition:
@@ -350,7 +350,7 @@ binary_sensor:
                     - switch.turn_on: dial_display
                     - light.turn_on:
                         id: backlight
-                        brightness: 100%
+                        brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
                     - script.execute: show_current_page
                   else:
                     - if:
@@ -383,7 +383,7 @@ binary_sensor:
               - switch.turn_on: dial_display
               - light.turn_on:
                   id: backlight
-                  brightness: 100%
+                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
               - script.execute: show_current_page
         - lambda: |-
             id(inactivity_time) = 0;
@@ -436,7 +436,7 @@ binary_sensor:
               - switch.turn_on: dial_display
               - light.turn_on:
                   id: backlight
-                  brightness: 100%
+                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
               - script.execute: show_current_page
               - lambda: |-
                   id(inactivity_time) = 0;
@@ -735,9 +735,10 @@ light:
 
 number:
   - platform: template
-    name: "Screen Saver"
+    name: "Screen Saver Timeout"
     id: screen_saver_time
     icon: "mdi:screen-rotation-lock"
+    entity_category: config
     optimistic: true
     min_value: 10
     max_value: 300
@@ -747,9 +748,10 @@ number:
     mode: box
 
   - platform: template
-    name: "Volume Step"
+    name: "Step - Volume"
     id: volume_step
     icon: "mdi:knob"
+    entity_category: config
     optimistic: true
     min_value: 1
     max_value: 10
@@ -760,9 +762,10 @@ number:
     mode: box
 
   - platform: template
-    name: "Bass Step"
+    name: "Step - Bass"
     id: bass_step
     icon: "mdi:equalizer"
+    entity_category: config
     optimistic: true
     min_value: 0.5
     max_value: 3.0
@@ -773,9 +776,10 @@ number:
     mode: box
 
   - platform: template
-    name: "Light Step"
+    name: "Step - Light"
     id: light_step
     icon: "mdi:lightbulb"
+    entity_category: config
     optimistic: true
     min_value: 1
     max_value: 10
@@ -789,6 +793,7 @@ number:
     name: "Encoder Debounce"
     id: debounce_delay
     icon: "mdi:timer-outline"
+    entity_category: config
     optimistic: true
     min_value: 50
     max_value: 500
@@ -797,6 +802,32 @@ number:
     restore_value: true
     initial_value: 150
     mode: box
+
+  - platform: template
+    name: "Brightness - Screen"
+    id: screen_brightness
+    icon: "mdi:brightness-7"
+    entity_category: config
+    optimistic: true
+    min_value: 10
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 100
+
+  - platform: template
+    name: "Brightness - Screensaver"
+    id: screensaver_brightness
+    icon: "mdi:brightness-4"
+    entity_category: config
+    optimistic: true
+    min_value: 5
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 50
 
 output:
   # GPIO3 is the hardware buzzer pin — defined here only to drive it low and keep it silent
@@ -894,7 +925,7 @@ switch:
     on_turn_on:
       - light.turn_on:
           id: backlight
-          brightness: 100%
+          brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
       - lambda: |-
           id(inactivity_time) = 0;
     on_turn_off:
@@ -910,13 +941,14 @@ switch:
     on_turn_on:
       - light.turn_on:
           id: backlight
-          brightness: 50%
+          brightness: !lambda 'return id(screensaver_brightness).state / 100.0f;'
       - display.page.show: locked_screen
 
   - platform: template
     name: "Flip Screen"
     id: flip_screen
     icon: "mdi:screen-rotation"
+    entity_category: config
     optimistic: true
     restore_mode: 'restore_default_off'
     on_turn_on:
