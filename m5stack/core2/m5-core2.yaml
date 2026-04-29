@@ -1,0 +1,1283 @@
+substitutions:
+  # Device customization
+  name: m5stack-core2
+  friendly_name: M5Stack Core2 Volume
+  background_color: '1a1a2e'
+
+  # Media player entities to control
+  media_player: media_player.living_room
+  media_player_name: 'Living Room'
+  media_player_2: media_player.unnamed_room
+  media_player_2_name: 'Madagascar'
+
+  # Bass/EQ control (number entity exposed by your media player integration)
+  bass_entity: number.living_room_sub_gain
+
+  # Light entity to control
+  light_entity: light.reading_spot
+
+  # Scene entities
+  scene_vinyl: scene.vinyl
+  scene_chill: scene.chill
+
+  # HA input_select that tracks which scene is currently active.
+  # See ha-scene-tracker.yaml for the helper + automation definitions.
+  active_scene_helper: input_select.active_scene
+
+  # Line In / TV source names
+  # line_in_source: what HA reports in the 'source' attribute when playing from line-in
+  # line_in_select: display label shown on screen
+  # line_in_media_id: direct Sonos Port stream URI — find via HA Developer Tools > Template:
+  #   {{ state_attr('media_player.turntable', 'uid') }}  e.g. RINCON_000E58A1B2C301400
+  line_in_source: 'Line-in'
+  line_in_select: 'Turntable'
+  line_in_media_id: 'x-rincon-stream:RINCON_74CA60312D6601400:0'
+  tv_source: 'TV'
+
+  # Icons
+  icon_speaker: mdi:speaker
+  icon_mute: mdi:volume-mute
+
+  # Other settings
+  allowed_characters: " ?!#%'()+,-./:0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+################################################################################################################
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - m5core2_helpers.h
+  on_boot:
+    then:
+      - delay: 100ms
+      # ── AXP192 power-management init (no ESPHome component required) ────────
+      # Must run before backlight or display is used.
+      # Register 0x28: LDO2 (bits [7:4]) = 3.3 V (0xF), LDO3 (bits [3:0]) = 3.0 V (0xC)
+      # Register 0x12: enable DCDC1 (bit 0), LDO2 (bit 3), LDO3 (bit 2), EXTEN (bit 6)
+      - lambda: |-
+          { uint8_t d[] = {0x28, 0xFC}; id(internal_i2c)->write(0x34, d, 2); }
+          { uint8_t d[] = {0x12, 0x4D}; id(internal_i2c)->write(0x34, d, 2); }
+      - delay: 400ms
+      # BM8563 RTC is PCF8563-compatible — sync time on boot
+      - pcf8563.read_time:
+      - light.turn_on:
+          id: backlight
+          brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+      - lambda: |-
+          if (id(flip_screen).state) {
+            id(main_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+          }
+      - script.execute: show_current_page
+
+# M5Stack Core2: ESP32 (not S3), 16 MB flash
+esp32:
+  board: m5stack-core2
+  flash_size: 16MB
+  framework:
+    type: arduino
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 10.69.43.34
+    gateway: 10.69.43.1
+    subnet: 255.255.255.0
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "M5Stack-Core2-Volume Fallback"
+    password: !secret m5fallbackpassword
+api:
+  encryption:
+    key: !secret m5core2encryption
+ota:
+  - platform: esphome
+
+
+script:
+  - id: show_current_page
+    then:
+      - lambda: |-
+          switch(id(current_page)) {
+            case 0: id(main_display).show_page(id(volume_control)); break;
+            case 1: id(main_display).show_page(id(volume_control_2)); break;
+            case 2: id(main_display).show_page(id(eq_control)); break;
+            case 3: id(main_display).show_page(id(light_control)); break;
+            case 4: id(main_display).show_page(id(actions_screen)); break;
+          }
+      - component.update: main_display
+  - id: navigate
+    parameters:
+      delta: int
+    then:
+      - if:
+          condition:
+            display.is_displaying_page: locked_screen
+          then:
+            - switch.turn_on: dial_display
+            - light.turn_on:
+                id: backlight
+                brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+            - script.execute: show_current_page
+            - lambda: id(inactivity_time) = 0;
+          else:
+            - lambda: |-
+                // Negate delta when screen is flipped (touch coords are mirrored)
+                int d = id(flip_screen).state ? -delta : delta;
+                // + 5 before modulo prevents negative results in C++ (-1 % 5 = -1, not 4)
+                id(current_page) = (id(current_page) + d + 5) % 5;
+                id(inactivity_time) = 0;
+            - script.execute: show_current_page
+  - id: send_value_to_ha
+    # Debounced: restarts on every touch, fires after the last one.
+    # Keeps HA API calls low when tapping rapidly.
+    mode: restart
+    then:
+      - delay: !lambda 'return (uint32_t)id(debounce_delay).state;'
+      - if:
+          condition:
+            display.is_displaying_page: volume_control
+          then:
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level);
+      - if:
+          condition:
+            display.is_displaying_page: volume_control_2
+          then:
+            - homeassistant.action:
+                service: media_player.volume_set
+                data:
+                  entity_id: ${media_player_2}
+                data_template:
+                  volume_level: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(volume_level_2);
+      - if:
+          condition:
+            display.is_displaying_page: eq_control
+          then:
+            - homeassistant.action:
+                service: number.set_value
+                data:
+                  entity_id: ${bass_entity}
+                data_template:
+                  value: '{{ my_variable | float }}'
+                variables:
+                  my_variable: |-
+                    return id(bass_level);
+      - if:
+          condition:
+            display.is_displaying_page: light_control
+          then:
+            - homeassistant.action:
+                service: light.turn_on
+                data:
+                  entity_id: ${light_entity}
+                data_template:
+                  brightness_pct: '{{ my_variable | int }}'
+                variables:
+                  my_variable: |-
+                    return (int)(id(light_brightness) * 100);
+  - id: adjust_value
+    # direction: +1 (right-side tap) or -1 (left-side tap)
+    parameters:
+      direction: int
+    then:
+      - if:
+          condition:
+            display.is_displaying_page: locked_screen
+          then:
+            - switch.turn_on: dial_display
+            - light.turn_on:
+                id: backlight
+                brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+            - display.page.show: volume_control
+      - if:
+          condition:
+            display.is_displaying_page: volume_control
+          then:
+            - lambda: |-
+                id(volume_level) = std::min(1.0f, std::max(0.0f, id(volume_level) + direction * (id(volume_step).state / 100.0f)));
+      - if:
+          condition:
+            display.is_displaying_page: volume_control_2
+          then:
+            - lambda: |-
+                id(volume_level_2) = std::min(1.0f, std::max(0.0f, id(volume_level_2) + direction * (id(volume_step).state / 100.0f)));
+      - if:
+          condition:
+            display.is_displaying_page: eq_control
+          then:
+            - lambda: |-
+                id(bass_level) = std::min(12.0f, std::max(-12.0f, id(bass_level) + direction * id(bass_step).state));
+      - if:
+          condition:
+            display.is_displaying_page: light_control
+          then:
+            - lambda: |-
+                id(light_brightness) = std::min(1.0f, std::max(0.0f, id(light_brightness) + direction * (id(light_step).state / 100.0f)));
+      - script.execute: send_value_to_ha
+      - lambda: |-
+          id(inactivity_time) = 0;
+      - component.update: main_display
+  - id: clear_action_highlight
+    then:
+      - delay: 500ms
+      - lambda: |-
+          id(actions_last_tapped) = -1;
+      - component.update: main_display
+  - id: fire_action
+    parameters:
+      physical_quadrant: int
+    then:
+      # Compute visual quadrant: when flipped 180 deg, TL<->BR and TR<->BL (i.e. 3 - physical)
+      - lambda: |-
+          int visual = id(flip_screen).state ? (3 - physical_quadrant) : physical_quadrant;
+          id(actions_last_tapped) = visual;
+          ESP_LOGI("actions", "fire_action: physical=%d visual=%d flipped=%s",
+            physical_quadrant, visual, id(flip_screen).state ? "yes" : "no");
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 0;'
+          then:
+            # Line In / TV toggle
+            - lambda: |-
+                ESP_LOGI("actions", "Source toggle: current='%s' | line_in='${line_in_source}' | tv='${tv_source}' | has_state=%s",
+                  id(media_player_source).has_state() ? id(media_player_source).state.c_str() : "<none>",
+                  id(media_player_source).has_state() ? "yes" : "no");
+            - if:
+                condition:
+                  lambda: 'return id(media_player_source).has_state() && id(media_player_source).state == "${line_in_source}";'
+                then:
+                  - lambda: |-
+                      ESP_LOGI("actions", "Source toggle -> switching to TV ('${tv_source}')");
+                  - homeassistant.action:
+                      service: media_player.select_source
+                      data:
+                        entity_id: ${media_player}
+                        source: ${tv_source}
+                else:
+                  - lambda: |-
+                      ESP_LOGI("actions", "Source toggle -> switching to Line-In via URI ('${line_in_media_id}')");
+                  - homeassistant.action:
+                      service: media_player.play_media
+                      data:
+                        entity_id: ${media_player}
+                        media_content_id: ${line_in_media_id}
+                        media_content_type: music
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 1;'
+          then:
+            # Group / Ungroup toggle
+            - lambda: |-
+                ESP_LOGI("actions", "Action 1: group toggle (members='%s')",
+                  id(media_player_group_members).has_state() ? id(media_player_group_members).state.c_str() : "<unknown>");
+            - if:
+                condition:
+                  lambda: 'return id(media_player_group_members).has_state() && id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;'
+                then:
+                  - homeassistant.action:
+                      service: media_player.unjoin
+                      data:
+                        entity_id: ${media_player_2}
+                else:
+                  - homeassistant.action:
+                      service: media_player.join
+                      data:
+                        entity_id: ${media_player}
+                      data_template:
+                        group_members: '["${media_player_2}"]'
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 2;'
+          then:
+            - lambda: |-
+                ESP_LOGI("actions", "Action 2: Vinyl scene");
+            - homeassistant.action:
+                service: scene.turn_on
+                data:
+                  entity_id: ${scene_vinyl}
+      - if:
+          condition:
+            lambda: 'return id(actions_last_tapped) == 3;'
+          then:
+            - lambda: |-
+                ESP_LOGI("actions", "Action 3: Chill scene");
+            - homeassistant.action:
+                service: scene.turn_on
+                data:
+                  entity_id: ${scene_chill}
+      - script.execute: clear_action_highlight
+  # Double-press detection for Btn B.
+  # Waits 350 ms after the last press; >=2 presses -> play/pause, else -> context action.
+  - id: btn_b_timer
+    mode: restart
+    then:
+      - delay: 350ms
+      - lambda: |-
+          id(btn_b_double) = (id(btn_b_press_count) >= 2);
+          id(btn_b_press_count) = 0;
+      - if:
+          condition:
+            lambda: 'return id(btn_b_double);'
+          then:
+            # Double-press: play/pause for the active media player
+            - if:
+                condition:
+                  display.is_displaying_page: volume_control
+                then:
+                  - homeassistant.action:
+                      service: media_player.media_play_pause
+                      data:
+                        entity_id: ${media_player}
+            - if:
+                condition:
+                  display.is_displaying_page: volume_control_2
+                then:
+                  - homeassistant.action:
+                      service: media_player.media_play_pause
+                      data:
+                        entity_id: ${media_player_2}
+          else:
+            # Single press: wake screensaver or context action
+            - if:
+                condition:
+                  or:
+                    - display.is_displaying_page: locked_screen
+                    - light.is_off: backlight
+                then:
+                  - switch.turn_on: dial_display
+                  - light.turn_on:
+                      id: backlight
+                      brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+                  - script.execute: show_current_page
+                else:
+                  - if:
+                      condition:
+                        display.is_displaying_page: volume_control
+                      then:
+                        - homeassistant.action:
+                            service: media_player.volume_mute
+                            data:
+                              entity_id: ${media_player}
+                              is_volume_muted: !lambda 'return !id(is_muted_1);'
+                  - if:
+                      condition:
+                        display.is_displaying_page: volume_control_2
+                      then:
+                        - homeassistant.action:
+                            service: media_player.volume_mute
+                            data:
+                              entity_id: ${media_player_2}
+                              is_volume_muted: !lambda 'return !id(is_muted_2);'
+                  - if:
+                      condition:
+                        display.is_displaying_page: light_control
+                      then:
+                        - homeassistant.action:
+                            service: light.toggle
+                            data:
+                              entity_id: ${light_entity}
+      - lambda: |-
+          id(inactivity_time) = 0;
+logger:
+captive_portal:
+binary_sensor:
+  # Bottom capacitive buttons (reported by the FT6336U as y >= 240)
+  # A (left): navigate to previous page
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Btn A"
+    id: btn_a
+    internal: true
+    x_min: 0
+    x_max: 106
+    y_min: 240
+    y_max: 280
+    on_press:
+      then:
+        - script.execute:
+            id: navigate
+            delta: -1
+        - lambda: id(inactivity_time) = 0;
+  # B (center): mute/toggle (single press), play/pause (double press)
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Btn B"
+    id: btn_b
+    internal: true
+    x_min: 107
+    x_max: 213
+    y_min: 240
+    y_max: 280
+    on_press:
+      then:
+        - lambda: id(btn_b_press_count)++;
+        - script.execute: btn_b_timer
+  # C (right): navigate to next page
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Btn C"
+    id: btn_c
+    internal: true
+    x_min: 214
+    x_max: 320
+    y_min: 240
+    y_max: 280
+    on_press:
+      then:
+        - script.execute:
+            id: navigate
+            delta: 1
+        - lambda: id(inactivity_time) = 0;
+  # Screen touch zones
+  # Left half -> decrease value (anticlockwise equivalent) / wake screensaver
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Screen Left"
+    id: screen_left
+    internal: true
+    x_min: 0
+    x_max: 160
+    y_min: 0
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              or:
+                - display.is_displaying_page: locked_screen
+                - light.is_off: backlight
+            then:
+              - switch.turn_on: dial_display
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+              - script.execute: show_current_page
+              - lambda: id(inactivity_time) = 0;
+            else:
+              - if:
+                  condition:
+                    not:
+                      display.is_displaying_page: actions_screen
+                  then:
+                    - script.execute:
+                        id: adjust_value
+                        direction: -1
+  # Right half -> increase value (clockwise equivalent) / wake screensaver
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Screen Right"
+    id: screen_right
+    internal: true
+    x_min: 160
+    x_max: 320
+    y_min: 0
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              or:
+                - display.is_displaying_page: locked_screen
+                - light.is_off: backlight
+            then:
+              - switch.turn_on: dial_display
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+              - script.execute: show_current_page
+              - lambda: id(inactivity_time) = 0;
+            else:
+              - if:
+                  condition:
+                    not:
+                      display.is_displaying_page: actions_screen
+                  then:
+                    - script.execute:
+                        id: adjust_value
+                        direction: 1
+  # Actions screen quadrant touch zones
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Action TL"
+    id: action_tl
+    internal: true
+    x_min: 0
+    x_max: 160
+    y_min: 0
+    y_max: 120
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 0
+              - lambda: id(inactivity_time) = 0;
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Action TR"
+    id: action_tr
+    internal: true
+    x_min: 160
+    x_max: 320
+    y_min: 0
+    y_max: 120
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 1
+              - lambda: id(inactivity_time) = 0;
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Action BL"
+    id: action_bl
+    internal: true
+    x_min: 0
+    x_max: 160
+    y_min: 120
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 2
+              - lambda: id(inactivity_time) = 0;
+  - platform: touchscreen
+    touchscreen_id: touchscreen_core2
+    name: "Action BR"
+    id: action_br
+    internal: true
+    x_min: 160
+    x_max: 320
+    y_min: 120
+    y_max: 240
+    on_press:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: actions_screen
+            then:
+              - script.execute:
+                  id: fire_action
+                  physical_quadrant: 3
+              - lambda: id(inactivity_time) = 0;
+color:
+  - id: background_color
+    hex: ${background_color}
+  - id: color_white
+    hex: 'ffffff'
+  - id: color_dim
+    hex: '666666'
+  - id: color_accent
+    hex: '4fc3f7'
+  - id: color_muted
+    hex: '800020'
+  - id: color_playing
+    hex: '69f0ae'
+  - id: color_arc_bg
+    hex: '333355'
+  - id: color_warm
+    hex: 'ffb74d'
+  - id: color_eq
+    hex: 'ab47bc'
+font:
+  - file: "gfonts://Space Grotesk"
+    id: volume_font
+    size: 50
+    glyphs: ${allowed_characters}
+  - file: "gfonts://Space Grotesk"
+    id: secondary
+    size: 18
+    glyphs: ${allowed_characters}
+  - file: "gfonts://Space Grotesk"
+    id: small_font
+    size: 14
+    glyphs: ${allowed_characters}
+globals:
+  - id: inactivity_time
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: volume_level
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: volume_level_2
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: bass_level
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: light_brightness
+    type: float
+    restore_value: no
+    initial_value: '0.0'
+  - id: current_page
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: actions_last_tapped
+    type: int
+    restore_value: no
+    initial_value: '-1'
+  - id: last_active_scene
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: is_muted_1
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: is_muted_2
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  # Btn B double-press detection
+  - id: btn_b_press_count
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: btn_b_double
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+# I2C: SDA=GPIO21, SCL=GPIO22  (Core2 internal bus)
+i2c:
+  - id: internal_i2c
+    sda: GPIO21
+    scl: GPIO22
+    scan: false
+image:
+  - file: ${icon_speaker}
+    id: speaker_icon
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: ${icon_mute}
+    id: mute_icon
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:volume-plus
+    id: vol_plus_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:volume-minus
+    id: vol_minus_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:play
+    id: play_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:pause
+    id: pause_icon
+    resize: 30x30
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:equalizer
+    id: eq_icon
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:lightbulb
+    id: light_icon
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:lightbulb-off
+    id: light_off_icon
+    resize: 40x40
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:chevron-left
+    id: chevron_left_icon
+    resize: 24x24
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:chevron-right
+    id: chevron_right_icon
+    resize: 24x24
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:audio-input-rca
+    id: line_in_icon
+    resize: 44x44
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:speaker-multiple
+    id: group_icon
+    resize: 44x44
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:record
+    id: vinyl_icon
+    resize: 44x44
+    type: BINARY
+    transparency: chroma_key
+  - file: mdi:candle
+    id: chill_icon
+    resize: 44x44
+    type: BINARY
+    transparency: chroma_key
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(inactivity_time) += 1;
+          if (id(inactivity_time) > id(screen_saver_time).state && !id(screen_saver).state) {
+            id(screen_saver).turn_on();
+          }
+light:
+  - platform: monochromatic
+    name: "Backlight"
+    output: backlight_pwm
+    id: backlight
+    default_transition_length: 0s
+    restore_mode: ALWAYS_ON
+    internal: True
+number:
+  - platform: template
+    name: "Screen Saver Timeout"
+    id: screen_saver_time
+    icon: "mdi:screen-rotation-lock"
+    entity_category: config
+    optimistic: true
+    min_value: 10
+    max_value: 300
+    step: 10
+    unit_of_measurement: "s"
+    restore_value: true
+    initial_value: 60
+    mode: box
+  - platform: template
+    name: "Step - Volume"
+    id: volume_step
+    icon: "mdi:knob"
+    entity_category: config
+    optimistic: true
+    min_value: 1
+    max_value: 10
+    step: 1
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 2
+    mode: box
+  - platform: template
+    name: "Step - Bass"
+    id: bass_step
+    icon: "mdi:equalizer"
+    entity_category: config
+    optimistic: true
+    min_value: 0.5
+    max_value: 3.0
+    step: 0.5
+    unit_of_measurement: "dB"
+    restore_value: true
+    initial_value: 1.0
+    mode: box
+  - platform: template
+    name: "Step - Light"
+    id: light_step
+    icon: "mdi:lightbulb"
+    entity_category: config
+    optimistic: true
+    min_value: 1
+    max_value: 10
+    step: 1
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 2
+    mode: box
+  - platform: template
+    name: "Touch Debounce"
+    id: debounce_delay
+    icon: "mdi:timer-outline"
+    entity_category: config
+    optimistic: true
+    min_value: 50
+    max_value: 500
+    step: 25
+    unit_of_measurement: "ms"
+    restore_value: true
+    initial_value: 150
+    mode: box
+  - platform: template
+    name: "Brightness - Screen"
+    id: screen_brightness
+    icon: "mdi:brightness-7"
+    entity_category: config
+    optimistic: true
+    min_value: 10
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 100
+    on_value:
+      then:
+        - if:
+            condition:
+              and:
+                - light.is_on: backlight
+                - not:
+                    display.is_displaying_page: locked_screen
+            then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return x / 100.0f;'
+  - platform: template
+    name: "Brightness - Screensaver"
+    id: screensaver_brightness
+    icon: "mdi:brightness-4"
+    entity_category: config
+    optimistic: true
+    min_value: 5
+    max_value: 100
+    step: 5
+    unit_of_measurement: "%"
+    restore_value: true
+    initial_value: 50
+    on_value:
+      then:
+        - if:
+            condition:
+              display.is_displaying_page: locked_screen
+            then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: !lambda 'return x / 100.0f;'
+# Backlight via AXP192 — raw I2C writes (no axp192 component needed)
+# LDO3 controls the LCD backlight.  Register 0x28, bits [3:0]:
+#   voltage = 1.8 V + n * 0.1 V   (n = 0–15, so 1.8 V – 3.3 V)
+# We map brightness 0.0–1.0 → LDO3 0–12  (1.8 V – 3.0 V).
+# Bits [7:4] are LDO2 and are kept at 0xF (3.3 V, LCD power rail).
+output:
+  - platform: template
+    id: backlight_pwm
+    type: float
+    write_action:
+      - lambda: |-
+          uint8_t vol = (uint8_t)(state * 12.0f);
+          if (vol > 12) vol = 12;
+          uint8_t d[] = {0x28, (uint8_t)(0xF0 | (vol & 0x0F))};
+          id(internal_i2c)->write(0x34, d, 2);
+sensor:
+  # No rotary encoder on Core2 — value adjustment is done via screen touch zones.
+  - platform: homeassistant
+    id: media_player_volume
+    entity_id: ${media_player}
+    attribute: volume_level
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x; }
+    on_value:
+      then:
+        - lambda: |-
+            id(volume_level) = x;
+  - platform: homeassistant
+    id: media_player_volume_2
+    entity_id: ${media_player_2}
+    attribute: volume_level
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x; }
+    on_value:
+      then:
+        - lambda: |-
+            id(volume_level_2) = x;
+  - platform: homeassistant
+    id: bass_value
+    entity_id: ${bass_entity}
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x; }
+    on_value:
+      then:
+        - lambda: |-
+            id(bass_level) = x;
+  - platform: homeassistant
+    id: light_brightness_ha
+    entity_id: ${light_entity}
+    attribute: brightness
+    internal: true
+    filters:
+      - lambda: |-
+          if (isnan(x)) { return 0; }
+          else { return x / 255.0; }
+    on_value:
+      then:
+        - lambda: |-
+            id(light_brightness) = x;
+# SPI: MOSI=GPIO23, CLK=GPIO18  (Core2 display bus)
+spi:
+  id: spi_bus
+  mosi_pin: GPIO23
+  clk_pin: GPIO18
+switch:
+  - platform: template
+    name: "Display"
+    id: dial_display
+    icon: "mdi:fit-to-screen"
+    optimistic: true
+    restore_mode: 'always_on'
+    on_turn_on:
+      - light.turn_on:
+          id: backlight
+          brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+      - lambda: |-
+          id(inactivity_time) = 0;
+    on_turn_off:
+      - light.turn_off: backlight
+      - display.page.show: volume_control
+  - platform: template
+    name: "Screen Saver"
+    id: screen_saver
+    icon: "mdi:screen-rotation-lock"
+    optimistic: true
+    restore_mode: 'always_off'
+    internal: true
+    on_turn_on:
+      - light.turn_on:
+          id: backlight
+          brightness: !lambda 'return id(screensaver_brightness).state / 100.0f;'
+      - display.page.show: locked_screen
+  - platform: template
+    name: "Flip Screen"
+    id: flip_screen
+    icon: "mdi:screen-rotation"
+    entity_category: config
+    optimistic: true
+    restore_mode: 'restore_default_off'
+    on_turn_on:
+      - lambda: |-
+          id(main_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+    on_turn_off:
+      - lambda: |-
+          id(main_display).set_rotation(display::DISPLAY_ROTATION_0_DEGREES);
+text_sensor:
+  - platform: homeassistant
+    id: media_player_state
+    entity_id: ${media_player}
+    internal: true
+  - platform: homeassistant
+    id: media_player_muted
+    entity_id: ${media_player}
+    attribute: is_volume_muted
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            id(is_muted_1) = (x == "True" || x == "true" || x == "on");
+  - platform: homeassistant
+    id: media_player_title
+    entity_id: ${media_player}
+    attribute: media_title
+    internal: true
+  - platform: homeassistant
+    id: media_player_artist
+    entity_id: ${media_player}
+    attribute: media_artist
+    internal: true
+  - platform: homeassistant
+    id: media_player_state_2
+    entity_id: ${media_player_2}
+    internal: true
+  - platform: homeassistant
+    id: media_player_muted_2
+    entity_id: ${media_player_2}
+    attribute: is_volume_muted
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            id(is_muted_2) = (x == "True" || x == "true" || x == "on");
+  - platform: homeassistant
+    id: media_player_title_2
+    entity_id: ${media_player_2}
+    attribute: media_title
+    internal: true
+  - platform: homeassistant
+    id: media_player_artist_2
+    entity_id: ${media_player_2}
+    attribute: media_artist
+    internal: true
+  - platform: homeassistant
+    id: light_state
+    entity_id: ${light_entity}
+    internal: true
+  - platform: homeassistant
+    id: media_player_source
+    entity_id: ${media_player}
+    attribute: source
+    internal: true
+  - platform: homeassistant
+    id: media_player_group_members
+    entity_id: ${media_player}
+    attribute: group_members
+    internal: true
+  - platform: homeassistant
+    id: active_scene_state
+    entity_id: ${active_scene_helper}
+    internal: true
+    on_value:
+      then:
+        - lambda: |-
+            ESP_LOGI("scene", "Active scene changed: '%s'", x.c_str());
+            if (x == "vinyl")      id(last_active_scene) = 2;
+            else if (x == "chill") id(last_active_scene) = 3;
+            else                   id(last_active_scene) = 0;
+time:
+  # BM8563 RTC (PCF8563-compatible) at 0x51
+  - platform: pcf8563
+    id: rtctime
+    i2c_id: internal_i2c
+    address: 0x51
+    update_interval: never
+  - platform: homeassistant
+    id: esptime
+    on_time_sync:
+      then:
+        - pcf8563.write_time:
+# Touch controller: FT6336U (FT5x06-compatible), interrupt on GPIO39
+touchscreen:
+  - platform: ft5x06
+    id: touchscreen_core2
+    i2c_id: internal_i2c
+    address: 0x38
+    interrupt_pin: GPIO39
+# Display: ILI9342C 320x240 via SPI — CS=GPIO5, DC=GPIO15
+# Reset is managed by the AXP192 chip (no reset_pin needed here).
+display:
+  - platform: ili9xxx
+    model: M5STACK
+    id: main_display
+    cs_pin: GPIO5
+    dc_pin: GPIO15
+    update_interval: 1s
+    data_rate: 40MHz
+    invert_colors: false
+    pages:
+      # Screensaver / lock screen
+      - id: locked_screen
+        lambda: |-
+          it.fill(id(background_color));
+          // Time centred on the wider 320 px screen
+          auto now = id(esptime).now();
+          if (now.is_valid()) {
+            it.strftime(160, 68, id(volume_font), id(color_white), TextAlign::CENTER, "%H:%M", now);
+          }
+          // Left column: Living Room  (centre x=80)
+          bool muted_lr = id(is_muted_1);
+          int vol_lr = (int)(id(volume_level) * 100);
+          auto lr_color = muted_lr ? id(color_muted) : id(color_accent);
+          it.image(60, 105, muted_lr ? id(mute_icon) : id(speaker_icon), lr_color);
+          if (muted_lr) {
+            it.printf(80, 153, id(small_font), lr_color, TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(80, 153, id(secondary), lr_color, TextAlign::CENTER, "%d%%", vol_lr);
+          }
+          it.printf(80, 171, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_name}");
+          // Right column: Madagascar  (centre x=240)
+          bool muted_mdg = id(is_muted_2);
+          int vol_mdg = (int)(id(volume_level_2) * 100);
+          auto mdg_color = muted_mdg ? id(color_muted) : id(color_accent);
+          it.image(220, 105, muted_mdg ? id(mute_icon) : id(speaker_icon), mdg_color);
+          if (muted_mdg) {
+            it.printf(240, 153, id(small_font), mdg_color, TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(240, 153, id(secondary), mdg_color, TextAlign::CENTER, "%d%%", vol_mdg);
+          }
+          it.printf(240, 171, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_2_name}");
+          // Source (bottom-left) and group status (bottom-right)
+          {
+            std::string src = id(media_player_source).has_state() ? id(media_player_source).state : "";
+            const char* src_label = (src == "${tv_source}") ? "TV" :
+                                    (src == "${line_in_source}") ? "${line_in_select}" : src.c_str();
+            auto src_color = (src == "${line_in_source}") ? id(color_warm) :
+                             (src == "${tv_source}") ? id(color_accent) : id(color_dim);
+            it.printf(80, 197, id(small_font), src_color, TextAlign::CENTER, "%s", src_label);
+            bool is_grouped = id(media_player_group_members).has_state() &&
+              id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
+            it.printf(240, 197, id(small_font),
+              is_grouped ? id(color_playing) : id(color_dim),
+              TextAlign::CENTER, is_grouped ? "Grouped" : "Solo");
+          }
+      # Volume control page 1
+      - id: volume_control
+        lambda: |-
+          it.fill(id(background_color));
+          int vol_pct = (int)(id(volume_level) * 100);
+          bool is_muted = id(is_muted_1);
+          if (is_muted) {
+            it.image(140, 44, id(mute_icon), id(color_muted));
+          } else {
+            it.image(140, 44, id(speaker_icon), id(color_accent));
+          }
+          it.printf(160, 32, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_name}");
+          if (is_muted) {
+            it.printf(160, 120, id(volume_font), id(color_muted), TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(160, 120, id(volume_font), id(color_white), TextAlign::CENTER, "%d%%", vol_pct);
+          }
+          // Horizontal progress bar (draw_arc is repurposed in m5core2_helpers.h)
+          draw_arc(it, is_muted ? 0.0f : id(volume_level), id(color_accent), id(color_arc_bg));
+          // Media state indicator
+          if (id(media_player_state).has_state()) {
+            std::string state = id(media_player_state).state;
+            if (state == "playing") {
+              it.image(145, 178, id(play_icon), id(color_playing));
+            } else if (state == "paused") {
+              it.image(145, 178, id(pause_icon), id(color_dim));
+            }
+          }
+          if (id(media_player_title).has_state() && id(media_player_title).state.length() > 0) {
+            std::string title = id(media_player_title).state;
+            if (title.length() > 24) title = title.substr(0, 22) + "..";
+            it.printf(160, 206, id(small_font), id(color_white), TextAlign::CENTER, "%s", title.c_str());
+          }
+          if (id(media_player_artist).has_state() && id(media_player_artist).state.length() > 0) {
+            std::string artist = id(media_player_artist).state;
+            if (artist.length() > 26) artist = artist.substr(0, 24) + "..";
+            it.printf(160, 220, id(small_font), id(color_dim), TextAlign::CENTER, "%s", artist.c_str());
+          }
+          draw_chrome(it, id(current_page), 5, id(color_accent), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
+      # Volume control page 2
+      - id: volume_control_2
+        lambda: |-
+          it.fill(id(background_color));
+          int vol_pct = (int)(id(volume_level_2) * 100);
+          bool is_muted = id(is_muted_2);
+          if (is_muted) {
+            it.image(140, 44, id(mute_icon), id(color_muted));
+          } else {
+            it.image(140, 44, id(speaker_icon), id(color_accent));
+          }
+          it.printf(160, 32, id(small_font), id(color_dim), TextAlign::CENTER, "${media_player_2_name}");
+          if (is_muted) {
+            it.printf(160, 120, id(volume_font), id(color_muted), TextAlign::CENTER, "MUTE");
+          } else {
+            it.printf(160, 120, id(volume_font), id(color_white), TextAlign::CENTER, "%d%%", vol_pct);
+          }
+          draw_arc(it, is_muted ? 0.0f : id(volume_level_2), id(color_accent), id(color_arc_bg));
+          if (id(media_player_state_2).has_state()) {
+            std::string state = id(media_player_state_2).state;
+            if (state == "playing") {
+              it.image(145, 178, id(play_icon), id(color_playing));
+            } else if (state == "paused") {
+              it.image(145, 178, id(pause_icon), id(color_dim));
+            }
+          }
+          if (id(media_player_title_2).has_state() && id(media_player_title_2).state.length() > 0) {
+            std::string title = id(media_player_title_2).state;
+            if (title.length() > 24) title = title.substr(0, 22) + "..";
+            it.printf(160, 206, id(small_font), id(color_white), TextAlign::CENTER, "%s", title.c_str());
+          }
+          if (id(media_player_artist_2).has_state() && id(media_player_artist_2).state.length() > 0) {
+            std::string artist = id(media_player_artist_2).state;
+            if (artist.length() > 26) artist = artist.substr(0, 24) + "..";
+            it.printf(160, 220, id(small_font), id(color_dim), TextAlign::CENTER, "%s", artist.c_str());
+          }
+          draw_chrome(it, id(current_page), 5, id(color_accent), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
+      # EQ / Bass control
+      - id: eq_control
+        lambda: |-
+          it.fill(id(background_color));
+          it.image(140, 44, id(eq_icon), id(color_eq));
+          it.printf(160, 32, id(small_font), id(color_dim), TextAlign::CENTER, "Bass");
+          it.printf(160, 120, id(volume_font), id(color_white), TextAlign::CENTER, "%.0f", id(bass_level));
+          it.printf(160, 155, id(small_font), id(color_eq), TextAlign::CENTER, "dB");
+          // Bass progress bar (-12..+12 normalised to 0..1)
+          draw_arc(it, (id(bass_level) + 12.0f) / 24.0f, id(color_eq), id(color_arc_bg));
+          draw_chrome(it, id(current_page), 5, id(color_eq), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
+      # Light brightness control
+      - id: light_control
+        lambda: |-
+          it.fill(id(background_color));
+          bool is_on = id(light_state).has_state() && id(light_state).state == "on";
+          int bright_pct = (int)(id(light_brightness) * 100);
+          if (is_on) {
+            it.image(140, 44, id(light_icon), id(color_warm));
+          } else {
+            it.image(140, 44, id(light_off_icon), id(color_dim));
+          }
+          it.printf(160, 32, id(small_font), id(color_dim), TextAlign::CENTER, "Light");
+          if (is_on) {
+            it.printf(160, 120, id(volume_font), id(color_white), TextAlign::CENTER, "%d%%", bright_pct);
+          } else {
+            it.printf(160, 120, id(volume_font), id(color_dim), TextAlign::CENTER, "OFF");
+          }
+          draw_arc(it, is_on ? id(light_brightness) : 0.0f, id(color_warm), id(color_arc_bg));
+          it.printf(160, 206, id(small_font), id(color_dim), TextAlign::CENTER, "Btn B to toggle");
+          draw_chrome(it, id(current_page), 5, id(color_warm), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
+      # Actions screen
+      - id: actions_screen
+        lambda: |-
+          it.fill(id(background_color));
+          it.printf(160, 20, id(small_font), id(color_dim), TextAlign::CENTER, "Actions");
+          // Cross divider centred at (160, 120)
+          it.line(40,  120, 280, 120, id(color_dim));
+          it.line(160,  40, 160, 200, id(color_dim));
+          // Top-left: Line In / TV toggle  (icon centre ~80, 70)
+          {
+            bool on_line_in = id(media_player_source).has_state() && id(media_player_source).state == "${line_in_source}";
+            bool on_tv = id(media_player_source).has_state() && id(media_player_source).state == "${tv_source}";
+            auto tl_color = (id(actions_last_tapped) == 0) ? id(color_warm) :
+                            (on_line_in ? id(color_warm) : (on_tv ? id(color_accent) : id(color_dim)));
+            it.image(58, 48, id(line_in_icon), tl_color);
+          }
+          // Top-right: Group toggle  (icon centre ~240, 70)
+          {
+            bool is_grouped = id(media_player_group_members).has_state() &&
+                id(media_player_group_members).state.find("${media_player_2}") != std::string::npos;
+            auto tr_color = (id(actions_last_tapped) == 1) ? id(color_playing) :
+                            (is_grouped ? id(color_playing) : id(color_dim));
+            it.image(218, 48, id(group_icon), tr_color);
+          }
+          // Bottom-left: Vinyl  (icon centre ~80, 170)
+          {
+            bool vinyl_active = (id(last_active_scene) == 2);
+            auto bl_color = (id(actions_last_tapped) == 2) ? id(color_eq) :
+                            (vinyl_active ? id(color_eq) : id(color_dim));
+            it.image(58, 148, id(vinyl_icon), bl_color);
+          }
+          // Bottom-right: Chill  (icon centre ~240, 170)
+          {
+            bool chill_active = (id(last_active_scene) == 3);
+            auto br_color = (id(actions_last_tapped) == 3) ? id(color_accent) :
+                            (chill_active ? id(color_accent) : id(color_dim));
+            it.image(218, 148, id(chill_icon), br_color);
+          }
+          draw_chrome(it, id(current_page), 5, id(color_white), id(color_dim), id(chevron_left_icon), id(chevron_right_icon));
