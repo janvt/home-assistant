@@ -1,7 +1,7 @@
 substitutions:
   # Device customization
   name: m5stack-core2
-  friendly_name: M5Stack Core2 Volume
+  friendly_name: M5Stack Core
   background_color: '1a1a2e'
 
   # Media player entities to control
@@ -48,33 +48,38 @@ esphome:
   includes:
     - m5core2_helpers.h
   on_boot:
-    then:
-      - delay: 100ms
-      # ── AXP192 power-management init (no ESPHome component required) ────────
-      # Must run before backlight or display is used.
-      # Register 0x28: LDO2 (bits [7:4]) = 3.3 V (0xF), LDO3 (bits [3:0]) = 3.0 V (0xC)
-      # Register 0x12: enable DCDC1 (bit 0), LDO2 (bit 3), LDO3 (bit 2), EXTEN (bit 6)
-      - lambda: |-
-          { uint8_t d[] = {0x28, 0xFC}; id(internal_i2c)->write(0x34, d, 2); }
-          { uint8_t d[] = {0x12, 0x4D}; id(internal_i2c)->write(0x34, d, 2); }
-      - delay: 400ms
-      # BM8563 RTC is PCF8563-compatible — sync time on boot
-      - pcf8563.read_time:
-      - light.turn_on:
-          id: backlight
-          brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
-      - lambda: |-
-          if (id(flip_screen).state) {
-            id(main_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
-          }
-      - script.execute: show_current_page
+    # Priority 800: pulse GPIO33 (ILI9342C RESET, active-low) before mipi_spi
+    # component setup() at ~priority 600.  On Core Basic v2.7 the reset line is
+    # a direct ESP32 GPIO — no PMIC involved.
+    - priority: 800
+      then:
+        - lambda: |-
+            pinMode(33, OUTPUT);
+            digitalWrite(33, LOW);
+            delay(10);    // 10 ms reset pulse
+            digitalWrite(33, HIGH);
+            delay(120);   // ILI9342C requires 120 ms after reset before SPI commands
+    # Priority -100: all components running — apply user preferences.
+    - priority: -100
+      then:
+        - delay: 200ms
+        - light.turn_on:
+            id: backlight
+            brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
+        - lambda: |-
+            if (id(flip_screen).state) {
+              id(main_display).set_rotation(display::DISPLAY_ROTATION_180_DEGREES);
+            }
+        - script.execute: show_current_page
 
-# M5Stack Core2: ESP32 (not S3), 16 MB flash
+# M5Stack Core Basic v2.7: ESP32, 16 MB flash, no PSRAM
 esp32:
-  board: m5stack-core2
+  board: m5stack-grey
   flash_size: 16MB
   framework:
     type: arduino
+
+
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
@@ -86,12 +91,13 @@ wifi:
   ap:
     ssid: "M5Stack-Core2-Volume Fallback"
     password: !secret m5fallbackpassword
+
 api:
   encryption:
     key: !secret m5core2encryption
+
 ota:
   - platform: esphome
-
 
 script:
   - id: show_current_page
@@ -391,17 +397,16 @@ script:
 logger:
 captive_portal:
 binary_sensor:
-  # Bottom capacitive buttons (reported by the FT6336U as y >= 240)
+  # Physical buttons (active-low, external pull-ups on Core Basic v2.7)
   # A (left): navigate to previous page
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
+  - platform: gpio
+    pin:
+      number: GPIO39
+      inverted: true
+      mode: INPUT
     name: "Btn A"
     id: btn_a
     internal: true
-    x_min: 0
-    x_max: 106
-    y_min: 240
-    y_max: 280
     on_press:
       then:
         - script.execute:
@@ -409,179 +414,33 @@ binary_sensor:
             delta: -1
         - lambda: id(inactivity_time) = 0;
   # B (center): mute/toggle (single press), play/pause (double press)
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
+  - platform: gpio
+    pin:
+      number: GPIO38
+      inverted: true
+      mode: INPUT
     name: "Btn B"
     id: btn_b
     internal: true
-    x_min: 107
-    x_max: 213
-    y_min: 240
-    y_max: 280
     on_press:
       then:
         - lambda: id(btn_b_press_count)++;
         - script.execute: btn_b_timer
   # C (right): navigate to next page
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
+  - platform: gpio
+    pin:
+      number: GPIO37
+      inverted: true
+      mode: INPUT
     name: "Btn C"
     id: btn_c
     internal: true
-    x_min: 214
-    x_max: 320
-    y_min: 240
-    y_max: 280
     on_press:
       then:
         - script.execute:
             id: navigate
             delta: 1
         - lambda: id(inactivity_time) = 0;
-  # Screen touch zones
-  # Left half -> decrease value (anticlockwise equivalent) / wake screensaver
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Screen Left"
-    id: screen_left
-    internal: true
-    x_min: 0
-    x_max: 160
-    y_min: 0
-    y_max: 240
-    on_press:
-      then:
-        - if:
-            condition:
-              or:
-                - display.is_displaying_page: locked_screen
-                - light.is_off: backlight
-            then:
-              - switch.turn_on: dial_display
-              - light.turn_on:
-                  id: backlight
-                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
-              - script.execute: show_current_page
-              - lambda: id(inactivity_time) = 0;
-            else:
-              - if:
-                  condition:
-                    not:
-                      display.is_displaying_page: actions_screen
-                  then:
-                    - script.execute:
-                        id: adjust_value
-                        direction: -1
-  # Right half -> increase value (clockwise equivalent) / wake screensaver
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Screen Right"
-    id: screen_right
-    internal: true
-    x_min: 160
-    x_max: 320
-    y_min: 0
-    y_max: 240
-    on_press:
-      then:
-        - if:
-            condition:
-              or:
-                - display.is_displaying_page: locked_screen
-                - light.is_off: backlight
-            then:
-              - switch.turn_on: dial_display
-              - light.turn_on:
-                  id: backlight
-                  brightness: !lambda 'return id(screen_brightness).state / 100.0f;'
-              - script.execute: show_current_page
-              - lambda: id(inactivity_time) = 0;
-            else:
-              - if:
-                  condition:
-                    not:
-                      display.is_displaying_page: actions_screen
-                  then:
-                    - script.execute:
-                        id: adjust_value
-                        direction: 1
-  # Actions screen quadrant touch zones
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Action TL"
-    id: action_tl
-    internal: true
-    x_min: 0
-    x_max: 160
-    y_min: 0
-    y_max: 120
-    on_press:
-      then:
-        - if:
-            condition:
-              display.is_displaying_page: actions_screen
-            then:
-              - script.execute:
-                  id: fire_action
-                  physical_quadrant: 0
-              - lambda: id(inactivity_time) = 0;
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Action TR"
-    id: action_tr
-    internal: true
-    x_min: 160
-    x_max: 320
-    y_min: 0
-    y_max: 120
-    on_press:
-      then:
-        - if:
-            condition:
-              display.is_displaying_page: actions_screen
-            then:
-              - script.execute:
-                  id: fire_action
-                  physical_quadrant: 1
-              - lambda: id(inactivity_time) = 0;
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Action BL"
-    id: action_bl
-    internal: true
-    x_min: 0
-    x_max: 160
-    y_min: 120
-    y_max: 240
-    on_press:
-      then:
-        - if:
-            condition:
-              display.is_displaying_page: actions_screen
-            then:
-              - script.execute:
-                  id: fire_action
-                  physical_quadrant: 2
-              - lambda: id(inactivity_time) = 0;
-  - platform: touchscreen
-    touchscreen_id: touchscreen_core2
-    name: "Action BR"
-    id: action_br
-    internal: true
-    x_min: 160
-    x_max: 320
-    y_min: 120
-    y_max: 240
-    on_press:
-      then:
-        - if:
-            condition:
-              display.is_displaying_page: actions_screen
-            then:
-              - script.execute:
-                  id: fire_action
-                  physical_quadrant: 3
-              - lambda: id(inactivity_time) = 0;
 color:
   - id: background_color
     hex: ${background_color}
@@ -664,12 +523,19 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-# I2C: SDA=GPIO21, SCL=GPIO22  (Core2 internal bus)
+  # Set to true once the on_boot sequence has powered up AXP192 rails and
+  # BM8563 is accessible, so on_time_sync does not try to write to an
+  # unpowered RTC during early boot.
+  - id: bm8563_powered
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+# I2C: SDA=GPIO21, SCL=GPIO22  (Core Basic internal bus)
 i2c:
   - id: internal_i2c
     sda: GPIO21
     scl: GPIO22
-    scan: false
+    scan: false  # diagnostic done: 0x34/0x38/0x51 need AXP192 power-up (on_boot:800)
 image:
   - file: ${icon_speaker}
     id: speaker_icon
@@ -873,23 +739,19 @@ number:
               - light.turn_on:
                   id: backlight
                   brightness: !lambda 'return x / 100.0f;'
-# Backlight via AXP192 — raw I2C writes (no axp192 component needed)
-# LDO3 controls the LCD backlight.  Register 0x28, bits [3:0]:
-#   voltage = 1.8 V + n * 0.1 V   (n = 0–15, so 1.8 V – 3.3 V)
-# We map brightness 0.0–1.0 → LDO3 0–12  (1.8 V – 3.0 V).
-# Bits [7:4] are LDO2 and are kept at 0xF (3.3 V, LCD power rail).
+# Backlight: direct LEDC PWM on GPIO32 (Core Basic v2.7 wiring)
 output:
-  - platform: template
+  - platform: ledc
+    pin: GPIO32
     id: backlight_pwm
-    type: float
-    write_action:
-      - lambda: |-
-          uint8_t vol = (uint8_t)(state * 12.0f);
-          if (vol > 12) vol = 12;
-          uint8_t d[] = {0x28, (uint8_t)(0xF0 | (vol & 0x0F))};
-          id(internal_i2c)->write(0x34, d, 2);
 sensor:
-  # No rotary encoder on Core2 — value adjustment is done via screen touch zones.
+  - platform: mpu6886
+    address: 0x68
+    update_interval: 60s
+    temperature:
+      name: "IMU Temperature"
+      internal: true
+
   - platform: homeassistant
     id: media_player_volume
     entity_id: ${media_player}
@@ -941,11 +803,13 @@ sensor:
       then:
         - lambda: |-
             id(light_brightness) = x;
+
 # SPI: MOSI=GPIO23, CLK=GPIO18  (Core2 display bus)
 spi:
   id: spi_bus
   mosi_pin: GPIO23
   clk_pin: GPIO18
+
 switch:
   - platform: template
     name: "Display"
@@ -987,6 +851,7 @@ switch:
     on_turn_off:
       - lambda: |-
           id(main_display).set_rotation(display::DISPLAY_ROTATION_0_DEGREES);
+
 text_sensor:
   - platform: homeassistant
     id: media_player_state
@@ -1059,36 +924,22 @@ text_sensor:
             if (x == "vinyl")      id(last_active_scene) = 2;
             else if (x == "chill") id(last_active_scene) = 3;
             else                   id(last_active_scene) = 0;
+
 time:
-  # BM8563 RTC (PCF8563-compatible) at 0x51
-  - platform: pcf8563
-    id: rtctime
-    i2c_id: internal_i2c
-    address: 0x51
-    update_interval: never
   - platform: homeassistant
     id: esptime
-    on_time_sync:
-      then:
-        - pcf8563.write_time:
-# Touch controller: FT6336U (FT5x06-compatible), interrupt on GPIO39
-touchscreen:
-  - platform: ft5x06
-    id: touchscreen_core2
-    i2c_id: internal_i2c
-    address: 0x38
-    interrupt_pin: GPIO39
-# Display: ILI9342C 320x240 via SPI — CS=GPIO5, DC=GPIO15
-# Reset is managed by the AXP192 chip (no reset_pin needed here).
+# Touch controller removed — Core Basic v2.7 uses physical buttons (GPIO37/38/39)
+# Display: ILI9342C 320x240 via SPI
+# CS=GPIO14, DC=GPIO27 (Core Basic v2.7 wiring; Core2 uses GPIO5/15)
+# Reset is handled by the on_boot priority 800 block (GPIO33 direct pulse).
+# buffer_size 15% (~23 KB) — required without PSRAM; full 150 KB won't fit in heap.
 display:
-  - platform: ili9xxx
-    model: M5STACK
+  - platform: mipi_spi
+    model: M5CORE2
     id: main_display
-    cs_pin: GPIO5
-    dc_pin: GPIO15
-    update_interval: 1s
-    data_rate: 40MHz
-    invert_colors: false
+    cs_pin: GPIO14
+    dc_pin: GPIO27
+    buffer_size: 15%
     pages:
       # Screensaver / lock screen
       - id: locked_screen
