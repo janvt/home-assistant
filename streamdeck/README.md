@@ -107,13 +107,30 @@ special button, and `next-page` wraps (`% len(pages)`), so pressing key 8 cycles
 Home → Shades → Home. Add a third page later and the same key cycles through all
 of them. The dials swap with the page too, not just the buttons.
 
-## Button images
+## Button & dial images
 
-Buttons don't use the tool's built-in `icon_mdi` rendering (which can't shrink
-the glyph or place a label below it). Instead, [`generate_icons.py`](generate_icons.py)
-pre-renders a **PNG per button state** — a Mushroom-style rounded chip with a
-smaller icon and a label beneath — and each button's `icon:` field points at the
-right PNG, templated on state:
+Neither the buttons nor the dials use the tool's built-in rendering — it can't
+shrink the icon, put a label below it, or draw a decent gauge.
+[`generate_icons.py`](generate_icons.py) pre-renders every key and dial frame as
+a PNG, and each `icon:` field points at the right one, templated on state.
+
+`task icons` builds them all: **24 key images** (120×120) and **168 dial frames**
+(200×100 — 8 dials × 21 values). `icons/` is git-ignored (build artifact), so
+build it on each machine before start; the MDI webfont is fetched once into
+`.iconbuild/`.
+
+```bash
+task icons     # creates the venv on first run, then writes icons/ + icons/dials/
+```
+
+Tunables live at the top of the script (button `ICON_PX`/`LABEL_PX`/`RADIUS`;
+dial `DIAL_STYLES` colours + icons, `SS` supersample). After editing, `task regen`
+rebuilds and restarts (`auto_reload` doesn't watch image files). Adding/renaming
+a control means updating both the script's spec and the `icon:` path.
+
+### Buttons
+
+Each button's `icon:` points at a PNG, templated on state:
 
 ```yaml
 icon: '{{ "/app/icons/chill_on.png" if is_state("input_select.active_scene","chill") else "/app/icons/chill_off.png" }}'
@@ -130,19 +147,20 @@ active**; action/nav keys are a solid domain colour always:
 | covers | green | `#639922` bg, white |
 | inactive (any) | grey | `#C9C9CE` bg, `#6E6E73` |
 
-**Generating** (build artifact — `icons/` is git-ignored, so it's built on each
-machine, before start; needs internet once to fetch the MDI webfont, cached in
-`.iconbuild/`). Renders at 120×120 (the Plus key size):
+### Dials
 
-```bash
-task icons     # creates the venv on first run, then writes icons/*.png
+Dials render as a **vertical fill bar** on the touch strip: a domain-coloured bar
+filled bottom-to-top to the value, alongside an icon, the value number, and the
+room label. Since dials move in fixed 5% steps, there's a frame per 5% and the
+`icon:` templates to the nearest one:
+
+```yaml
+icon: '/app/icons/dials/lr_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
 ```
 
-The button spec, palette, icon size (`ICON_PX`), label size (`LABEL_PX`) and
-corner radius (`RADIUS`) live at the top of [`generate_icons.py`](generate_icons.py) —
-edit and run `task regen` to rebuild the images and restart the container
-(`auto_reload` doesn't watch image files). Adding/renaming a button means
-updating both the script's spec and the button's `icon:` path.
+Gauge colours: **cyan** volume (`#38D6F2`), **amber** brightness (`#F7A828`),
+**green** shades (`#63C63B`). Turn/push behaviour is unchanged (see the dial
+tables below); only the rendering changed.
 
 ## Home page — buttons (LCD keys)
 

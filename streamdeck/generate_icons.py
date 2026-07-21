@@ -66,6 +66,32 @@ LABEL_PX = 17
 LABEL_CY = 95     # label vertical centre
 RADIUS = 18       # chip corner radius
 
+# ── dial gauges (touchscreen strip) ─────────────────────────────────────────
+# The Stream Deck Plus touch strip is 800x100, split into four 200x100 dial
+# segments. Dials move in fixed 5% steps, so we pre-render a frame per 5% and
+# the dial's `icon:` field templates to the current value.
+DIAL_W, DIAL_H = 200, 100
+SS = 4            # supersample factor for smooth arcs
+DIAL_STEP = 5     # percent between frames -> frames 0,5,...,100
+
+# style -> (accent colour, mdi icon)
+DIAL_STYLES = {
+    "volume": ("#38D6F2", "volume-high"),
+    "bright": ("#F7A828", "brightness-7"),
+    "shade":  ("#63C63B", "window-shutter"),
+}
+# (slug, style, label) — one dial each; frames are <slug>_<pct>.png
+DIALS = [
+    ("lr_volume",         "volume", "Living Room"),
+    ("madagascar_volume", "volume", "Madagascar"),
+    ("lr_bright",         "bright", "LR Ceiling"),
+    ("kitchen_bright",    "bright", "Kitchen"),
+    ("lr_shade",          "shade",  "Living Room"),
+    ("kitchen_shade",     "shade",  "Kitchen"),
+    ("bedroom_shade",     "shade",  "Bedroom"),
+    ("guest_shade",       "shade",  "Guest"),
+]
+
 
 def _fetch(url: str, dest: Path) -> None:
     if dest.exists() and dest.stat().st_size > 0:
@@ -122,6 +148,39 @@ def render(name: str, mdi: str, label: str, style: str,
     img.save(OUT / f"{name}.png")
 
 
+def render_gauge(slug: str, style: str, label: str, pct: int,
+                 cps: dict[str, str], mdi_ttf: str, label_ttf: str) -> None:
+    """Render one 200x100 dial frame: a vertical fill bar + icon, value, label."""
+    color, icon = DIAL_STYLES[style]
+    if icon not in cps:
+        sys.exit(f"unknown MDI icon: {icon}")
+    w, h = DIAL_W * SS, DIAL_H * SS
+    im = Image.new("RGB", (w, h), "#000000")
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=16 * SS, fill="#191A1D")
+
+    # vertical fill bar on the left (fills bottom -> top with the value)
+    bx0, bx1, by0, by1 = 16 * SS, 44 * SS, 14 * SS, 86 * SS
+    br = 8 * SS
+    d.rounded_rectangle((bx0, by0, bx1, by1), radius=br, fill="#2E3036")  # track
+    if pct > 0:
+        fy0 = by1 - (by1 - by0) * pct / 100.0
+        rr = int(min(br, (by1 - fy0) / 2))
+        d.rounded_rectangle((bx0, fy0, bx1, by1), radius=rr, fill=color)
+
+    # right block: icon (top), value (centre), label (bottom)
+    rcx = 121 * SS
+    d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
+           font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
+    d.text((rcx, 54 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
+           fill="#FFFFFF", anchor="mm")
+    d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
+           fill="#B8B8BE", anchor="mm")
+
+    (OUT / "dials").mkdir(parents=True, exist_ok=True)
+    im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(OUT / "dials" / f"{slug}_{pct}.png")
+
+
 def main() -> None:
     _fetch(f"https://cdn.jsdelivr.net/npm/@mdi/font@{MDI_VERSION}/fonts/materialdesignicons-webfont.ttf",
            BUILD / "mdi.ttf")
@@ -137,7 +196,14 @@ def main() -> None:
     for name, mdi, label, style in ACTION:
         render(name, mdi, label, style, cps, icon_font, label_font)
 
-    print(f"wrote {len(list(OUT.glob('*.png')))} images to {OUT}")
+    mdi_ttf, label_ttf = str(BUILD / "mdi.ttf"), _label_font(LABEL_PX).path
+    for slug, style, label in DIALS:
+        for pct in range(0, 101, DIAL_STEP):
+            render_gauge(slug, style, label, pct, cps, mdi_ttf, label_ttf)
+
+    n_keys = len(list(OUT.glob("*.png")))
+    n_dials = len(list((OUT / "dials").glob("*.png")))
+    print(f"wrote {n_keys} key images and {n_dials} dial frames to {OUT}")
 
 
 if __name__ == "__main__":
