@@ -38,8 +38,13 @@ defines a **Home** page with a light/climate button pair and two Stream Deck Plu
    Create the token in Home Assistant under
    *Profile → Security → Long-lived access tokens*.
 
-3. **Adjust `configuration.yaml`** so the `entity_id`s match your setup. The
-   defaults reference `light.living_room` and `climate.living_room`.
+   There is **no separate port setting** — the connection URI is
+   `<WEBSOCKET_PROTOCOL>://<HASS_HOST>/api/websocket`, so put the port in
+   `HASS_HOST` if HA isn't on the protocol default. For a bare HA on a LAN IP
+   (plain HTTP), use `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`. Behind
+   an HTTPS reverse proxy, use the hostname and `WEBSOCKET_PROTOCOL=wss`.
+
+3. **Adjust `configuration.yaml`** so the `entity_id`s match your setup.
 
 4. **Start it:**
    ```bash
@@ -106,6 +111,9 @@ for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
   up in `lsusb` on the host, and verify USB access (privileged or udev rule).
-- **Auth errors** — re-check `HASS_HOST`/`HASS_PORT`/`HASS_TOKEN` in `.env`;
-  the host should be bare (no `http://`, no trailing port).
+- **`ConnectionRefusedError` on port 443** — the host is reachable but nothing
+  answers on that port. HA on a LAN IP speaks plain `ws` on `8123`, not `wss`
+  on `443`; set `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`.
+- **Auth errors** — re-check `HASS_HOST`/`HASS_TOKEN` in `.env`; `HASS_HOST`
+  should have no scheme (no `http://`), just `host:port`.
 - **Wrong entities** — the defaults are placeholders; edit `configuration.yaml`.
