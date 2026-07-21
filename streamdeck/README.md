@@ -85,25 +85,26 @@ Four dials, left → right, defined in [`configuration.yaml`](configuration.yaml
 
 | # | Control | Turn | Push |
 |---|---------|------|------|
-| 1 | Living Room media volume | set volume | toggle mute |
-| 2 | Madagascar media volume | set volume | — |
-| 3 | Living Room ceiling light | set brightness | toggle Living Room lights |
-| 4 | Kitchen ceiling light | set brightness | — |
+| 1 | Living Room media volume (`media_player.living_room`) | set volume | toggle mute |
+| 2 | Madagascar media volume (`media_player.unnamed_room`) | set volume | toggle mute |
+| 3 | Living Room ceiling light (`light.living_room_ceiling_light`) | set brightness | toggle **Living Room area** lights |
+| 4 | Kitchen ceiling light (`light.kitchen_ceiling_light`) | set brightness | toggle **Kitchen area** lights |
 
 **How turn + push share one dial:** the app merges two *consecutive* `dials`
 entries into a single physical dial when their `dial_event_type` differs (a
 `TURN` entry immediately followed by a `PUSH` entry). Two `TURN` entries in a
-row stay on separate dials. That's why the file has six entries that collapse to
-four dials — **don't reorder them**.
+row stay on separate dials. That's why the file has eight entries (four
+TURN/PUSH pairs) that collapse to four dials — **don't reorder them**.
 
 **Units matter:** `dial_value()` reads the entity's `state_attribute` in its
 native units, so `min/max/step` are set to match — `volume_level` on `0–1`,
 `brightness` on `0–255` — and the display/service templates convert to a
 percentage. Keeping them aligned avoids the dial jumping on the first turn.
 
-The `entity_id`s (`media_player.living_room`, `media_player.madagascar`,
-`light.living_room_ceiling`, `light.living_room`, `light.kitchen_ceiling`) are
-placeholders — swap them for yours. See the
+**Area toggles:** dials 3 and 4 push with `service: light.toggle` and a
+`target: {area_id: ...}`, flipping every light in that HA area. Confirm the
+IDs with `{{ area_id('Living Room') }}` / `{{ area_id('Kitchen') }}` in HA's
+Developer Tools → Template. See the
 [upstream docs](https://github.com/basnijholt/home-assistant-streamdeck-yaml)
 for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 
@@ -111,6 +112,12 @@ for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
   up in `lsusb` on the host, and verify USB access (privileged or udev rule).
+- **`TransportError: Failed to write feature report (-1)`** (crash at
+  `deck.reset()`) — the deck enumerated but rejected a USB write. Stop the
+  restart loop with `docker compose down`, unplug/replug the Stream Deck, then
+  `docker compose up`. If it persists, it's a USB-link issue: put the deck on a
+  USB 2.0 port or powered hub (the Pi 5's USB 3.0 ports can be flaky with Stream
+  Decks) and watch `dmesg -w` while replugging for reset/power errors.
 - **`ConnectionRefusedError` on port 443** — the host is reachable but nothing
   answers on that port. HA on a LAN IP speaks plain `ws` on `8123`, not `wss`
   on `443`; set `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`.
