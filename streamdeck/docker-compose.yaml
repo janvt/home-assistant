@@ -1,0 +1,19 @@
+services:
+  streamdeck:
+    image: basnijholt/home-assistant-streamdeck-yaml:latest
+    container_name: home-assistant-streamdeck
+    restart: unless-stopped
+
+    # --privileged plus the USB bus mount gives the container access to the
+    # Stream Deck HID device. On a headless Pi this is the simplest reliable
+    # setup; see the README for a tighter, rule-based alternative.
+    privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
+    env_file: .env
+
+    volumes:
+      # The whole directory is mounted at /app so the container picks up this
+      # configuration.yaml and auto-reloads it on change.
+      - ./:/app/

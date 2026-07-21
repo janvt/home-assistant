@@ -1,0 +1,121 @@
+# home-assistant-streamdeck-yaml configuration
+#
+# Docs / schema: https://github.com/basnijholt/home-assistant-streamdeck-yaml
+#
+# ── Dial layout (Stream Deck Plus, left → right) ─────────────────────────────
+#   Dial 1  Living Room media volume     turn = volume, push = mute toggle
+#   Dial 2  Madagascar media volume      turn = volume
+#   Dial 3  Living Room ceiling light    turn = brightness, push = toggle lights
+#   Dial 4  Kitchen ceiling light        turn = brightness
+#
+# How physical dials are assigned: the app walks the `dials` list and merges two
+# *consecutive* entries into one physical dial when their `dial_event_type`
+# differs (e.g. a TURN entry immediately followed by a PUSH entry). A TURN entry
+# followed by another TURN entry stays on its own dial. So the six entries below
+# collapse to exactly four dials — do not reorder them.
+#
+# `dial_value()` reads the entity's `state_attribute` in its NATIVE units, so
+# min/max/step are set in those same units (volume_level 0–1, brightness 0–255)
+# to keep the ring and service calls aligned.
+#
+# NOTE: entity_ids below are placeholders — replace them with your own.
+
+brightness: 80          # Stream Deck LCD/button brightness (0-100)
+auto_reload: true       # reload this file automatically when it changes
+inactivity_time: -1     # auto-off after N seconds of inactivity (-1 = disabled)
+
+pages:
+  - name: Home
+
+    # LCD keys above the touchscreen. Optional — kept as quick toggles.
+    buttons:
+      - entity_id: light.living_room
+        service: light.toggle
+        text: Living Room
+        icon_mdi: sofa
+
+      - entity_id: light.kitchen
+        service: light.toggle
+        text: Kitchen
+        icon_mdi: countertop
+
+    dials:
+      # ── Dial 1: Living Room media volume ────────────────────────────────────
+      # TURN: set volume (0–1 native scale, shown as %).
+      - entity_id: media_player.living_room
+        dial_event_type: TURN
+        state_attribute: volume_level
+        allow_touchscreen_events: true
+        service: media_player.volume_set
+        service_data:
+          volume_level: '{{ dial_value() | float }}'
+        text: |
+          Living Room
+          {{ (dial_value() * 100) | round }}%
+        icon: 'ring:{{ (dial_value() * 100) | round }}'
+        attributes:
+          min: 0
+          max: 1
+          step: 0.05
+      # PUSH: toggle mute.
+      - entity_id: media_player.living_room
+        dial_event_type: PUSH
+        service: media_player.volume_mute
+        service_data:
+          is_volume_muted: '{{ not state_attr("media_player.living_room", "is_volume_muted") }}'
+
+      # ── Dial 2: Madagascar media volume ─────────────────────────────────────
+      - entity_id: media_player.madagascar
+        dial_event_type: TURN
+        state_attribute: volume_level
+        allow_touchscreen_events: true
+        service: media_player.volume_set
+        service_data:
+          volume_level: '{{ dial_value() | float }}'
+        text: |
+          Madagascar
+          {{ (dial_value() * 100) | round }}%
+        icon: 'ring:{{ (dial_value() * 100) | round }}'
+        attributes:
+          min: 0
+          max: 1
+          step: 0.05
+
+      # ── Dial 3: Living Room ceiling light brightness ────────────────────────
+      # TURN: set brightness (0–255 native scale, shown as %).
+      - entity_id: light.living_room_ceiling
+        dial_event_type: TURN
+        state_attribute: brightness
+        allow_touchscreen_events: true
+        service: light.turn_on
+        service_data:
+          brightness: '{{ dial_value() | int }}'
+        text: |
+          LR Ceiling
+          {{ (dial_value() / 255 * 100) | round }}%
+        icon: 'ring:{{ (dial_value() / 255 * 100) | round }}'
+        attributes:
+          min: 0
+          max: 255
+          step: 13   # ~5% per detent
+      # PUSH: toggle the Living Room lights.
+      - entity_id: light.living_room
+        dial_event_type: PUSH
+        service: light.toggle
+
+      # ── Dial 4: Kitchen ceiling light brightness ────────────────────────────
+      - entity_id: light.kitchen_ceiling
+        dial_event_type: TURN
+        state_attribute: brightness
+        allow_touchscreen_events: true
+        service: light.turn_on
+        service_data:
+          brightness: '{{ dial_value() | int }}'
+        text: |
+          Kitchen Ceiling
+          {{ (dial_value() / 255 * 100) | round }}%
+        icon: 'ring:{{ (dial_value() / 255 * 100) | round }}'
+        attributes:
+          min: 0
+          max: 255
+          step: 13   # ~5% per detent
