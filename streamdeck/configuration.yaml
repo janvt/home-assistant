@@ -106,7 +106,7 @@ pages:
           volume_level: '{{ dial_value() | float }}'
         text: ''
         delay: 0.6
-        icon: '/app/icons/dials/lr_volume_{{ ((((dial_value() * 100) / 2) | round) * 2) | int }}.png'
+        icon: '{{ "/app/icons/dials/lr_volume_muted.png" if state_attr("media_player.living_room", "is_volume_muted") else "/app/icons/dials/lr_volume_" ~ (((((dial_value() * 100) / 2) | round) * 2) | int) ~ ".png" }}'
         attributes:
           min: 0
           max: 1
@@ -129,7 +129,7 @@ pages:
           volume_level: '{{ dial_value() | float }}'
         text: ''
         delay: 0.6
-        icon: '/app/icons/dials/madagascar_volume_{{ ((((dial_value() * 100) / 2) | round) * 2) | int }}.png'
+        icon: '{{ "/app/icons/dials/madagascar_volume_muted.png" if state_attr("media_player.unnamed_room", "is_volume_muted") else "/app/icons/dials/madagascar_volume_" ~ (((((dial_value() * 100) / 2) | round) * 2) | int) ~ ".png" }}'
         attributes:
           min: 0
           max: 1

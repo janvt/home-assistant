@@ -178,6 +178,11 @@ inverted** — the frame is chosen from `100 - dial_value()`, so a **full bar =
 closed** and the number reads **% closed** (the service still receives the real
 HA position, where 100 = open).
 
+**Mute:** the volume dials are state-driven off `is_volume_muted` — when a media
+player is muted the dial shows a dedicated greyed `*_muted.png` frame (mute icon,
+"MUTE", empty bar) instead of the level, via a templated `icon:`. Mute changes
+render on HA's echo (not the buggy turn path), so both volume dials reflect it.
+
 **Live-render caveat (upstream bug):** the eager/local re-render on turn looks
 the dial up by raw list index but is handed the *sorted* index, so it only works
 for a dial whose TURN entry sits at that raw position — which holds only when the

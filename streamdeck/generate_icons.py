@@ -79,7 +79,7 @@ SS = 4            # supersample factor for crisp edges
 DIAL_STYLES = {
     "volume": ("#38D6F2", "volume-high",   2),
     "bright": ("#F7A828", "brightness-7",  5),
-    "shade":  ("#63C63B", "window-shutter", 10),
+    "shade":  ("#63C63B", "window-shutter", 5),
 }
 # (slug, style, label) — one dial each; frames are <slug>_<pct>.png
 DIALS = [
@@ -150,9 +150,14 @@ def render(name: str, mdi: str, label: str, style: str,
 
 
 def render_gauge(slug: str, style: str, label: str, pct: int,
-                 cps: dict[str, str], mdi_ttf: str, label_ttf: str) -> None:
-    """Render one 200x100 dial frame: a vertical fill bar + icon, value, label."""
+                 cps: dict[str, str], mdi_ttf: str, label_ttf: str,
+                 muted: bool = False) -> None:
+    """Render one 200x100 dial frame: a vertical fill bar + icon, value, label.
+    With muted=True, render a single greyed 'muted' frame (mute icon, empty bar)."""
     color, icon, _ = DIAL_STYLES[style]
+    if muted:
+        color = "#6E6E73"
+        icon = "volume-off" if "volume-off" in cps else "volume-mute"
     if icon not in cps:
         sys.exit(f"unknown MDI icon: {icon}")
     w, h = DIAL_W * SS, DIAL_H * SS
@@ -164,8 +169,12 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     rcx = 78 * SS
     d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
            font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
-    d.text((rcx, 54 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
-           fill="#FFFFFF", anchor="mm")
+    if muted:
+        d.text((rcx, 54 * SS), "MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
+               fill=color, anchor="mm")
+    else:
+        d.text((rcx, 54 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
+               fill="#FFFFFF", anchor="mm")
     d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
            fill="#B8B8BE", anchor="mm")
 
@@ -173,13 +182,15 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     bx0, bx1, by0, by1 = 138 * SS, 164 * SS, 14 * SS, 86 * SS
     br = 8 * SS
     d.rounded_rectangle((bx0, by0, bx1, by1), radius=br, fill="#2E3036")  # track
-    if pct > 0:
-        fy0 = by1 - (by1 - by0) * pct / 100.0
+    bar_pct = 0 if muted else pct
+    if bar_pct > 0:
+        fy0 = by1 - (by1 - by0) * bar_pct / 100.0
         rr = int(min(br, (by1 - fy0) / 2))
         d.rounded_rectangle((bx0, fy0, bx1, by1), radius=rr, fill=color)
 
     (OUT / "dials").mkdir(parents=True, exist_ok=True)
-    im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(OUT / "dials" / f"{slug}_{pct}.png")
+    name = f"{slug}_muted.png" if muted else f"{slug}_{pct}.png"
+    im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(OUT / "dials" / name)
 
 
 def main() -> None:
@@ -202,6 +213,8 @@ def main() -> None:
         step = DIAL_STYLES[style][2]
         for pct in range(0, 101, step):
             render_gauge(slug, style, label, pct, cps, mdi_ttf, label_ttf)
+        if style == "volume":  # extra "muted" frame for media dials
+            render_gauge(slug, style, label, 0, cps, mdi_ttf, label_ttf, muted=True)
 
     n_keys = len(list(OUT.glob("*.png")))
     n_dials = len(list((OUT / "dials").glob("*.png")))
