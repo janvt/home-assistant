@@ -79,6 +79,67 @@ reboot as long as the Docker daemon starts on boot (the default). To confirm:
 sudo systemctl enable docker
 ```
 
+## Buttons (LCD keys)
+
+The eight LCD keys fill left→right, top→bottom, so the `buttons:` list order maps
+straight onto the two rows:
+
+| Key | Row | Label | Action |
+|-----|-----|-------|--------|
+| 1 | top | Chill | toggle `scene.chill` ↔ Living Room off |
+| 2 | top | Vinyl | toggle `scene.vinyl` ↔ Living Room off |
+| 3 | top | Pain Cave | toggle `scene.pain_cave` ↔ Living Room off |
+| 4 | top | Work S | toggle `scene.work_s` ↔ Kitchen off |
+| 5 | bottom | Living Room | toggle `light.living_room_ceiling_light` |
+| 6 | bottom | Kitchen | toggle `light.kitchen_ceiling_light` |
+
+Keys 7–8 are unused — add more `buttons:` entries to fill them. HA also has a
+separate `scene.work` ("Work") if key 4 was meant to be that instead of
+`scene.work_s`.
+
+### Scene toggle behaviour
+
+The top-row buttons don't just fire a scene — they **toggle** it, driven by the
+`input_select.active_scene` helper (kept in sync by the HA `Mark <scene> active`
+automations, which set it to the scene's short name whenever that scene runs).
+Each button calls `script.streamdeck_scene_toggle` with the scene and the area:
+
+- `active_scene` **≠** this scene → activate the scene (the automation then sets
+  `active_scene` to it).
+- `active_scene` **=** this scene → `light.turn_off` the whole area and reset the
+  helper to `none`.
+
+So pressing a *different* scene switches to it; pressing the *active* one clears
+the room. Each button's `entity_id` is `input_select.active_scene`, so it
+re-renders when the active scene changes, and `icon_mdi_color` shows amber for
+the active scene, grey otherwise.
+
+The script lives in HA (created via the config API, editable/removable under
+**Settings → Automations & Scenes → Scripts**), not in this repo:
+
+```yaml
+alias: Stream Deck Scene Toggle
+mode: restart
+fields: { scene: {}, area: {} }
+sequence:
+  - variables: { scene_key: "{{ scene.split('.')[-1] }}" }
+  - if:
+      - condition: template
+        value_template: "{{ is_state('input_select.active_scene', scene_key) }}"
+    then:
+      - service: light.turn_off
+        target: { area_id: "{{ area }}" }
+      - service: input_select.select_option
+        target: { entity_id: input_select.active_scene }
+        data: { option: none }
+    else:
+      - service: scene.turn_on
+        target: { entity_id: "{{ scene }}" }
+```
+
+This assumes the scene's short name matches an `input_select.active_scene`
+option (`scene.chill` → `chill`, etc.), which holds for the current scenes.
+
 ## Dials (Stream Deck Plus)
 
 Four dials, left → right, defined in [`configuration.yaml`](configuration.yaml):

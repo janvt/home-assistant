@@ -25,17 +25,63 @@ inactivity_time: -1     # auto-off after N seconds of inactivity (-1 = disabled)
 pages:
   - name: Home
 
-    # LCD keys above the touchscreen. Optional — kept as quick toggles.
+    # LCD keys (Stream Deck Plus has 8: two rows of four). The list fills
+    # left→right, top→bottom, so entries 1-4 are the top row and 5-8 the bottom.
     buttons:
+      # ── Top row: scene toggles ──────────────────────────────────────────────
+      # Each calls script.streamdeck_scene_toggle. If input_select.active_scene
+      # already equals this scene it turns OFF the whole area (and clears the
+      # helper to 'none'); otherwise it activates the scene. `entity_id` is the
+      # active-scene helper so the button re-renders when the active scene
+      # changes, and icon_mdi_color highlights the currently-active scene.
+      - entity_id: input_select.active_scene
+        service: script.streamdeck_scene_toggle
+        service_data:
+          scene: scene.chill
+          area: living_room
+        text: Chill
+        icon_mdi: sofa
+        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "chill") else "#555555" }}'
+
+      - entity_id: input_select.active_scene
+        service: script.streamdeck_scene_toggle
+        service_data:
+          scene: scene.vinyl
+          area: living_room
+        text: Vinyl
+        icon_mdi: album
+        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "vinyl") else "#555555" }}'
+
+      - entity_id: input_select.active_scene
+        service: script.streamdeck_scene_toggle
+        service_data:
+          scene: scene.pain_cave
+          area: living_room
+        text: Pain Cave
+        icon_mdi: bike-fast
+        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "pain_cave") else "#555555" }}'
+
+      # "Work S" — HA also has scene.work ("Work"); swap if you meant that one.
+      - entity_id: input_select.active_scene
+        service: script.streamdeck_scene_toggle
+        service_data:
+          scene: scene.work_s
+          area: kitchen
+        text: Work S
+        icon_mdi: desk
+        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "work_s") else "#555555" }}'
+
+      # ── Bottom row: light toggles ───────────────────────────────────────────
       - entity_id: light.living_room_ceiling_light
         service: light.toggle
         text: Living Room
-        icon_mdi: sofa
+        icon_mdi: ceiling-light
 
       - entity_id: light.kitchen_ceiling_light
         service: light.toggle
         text: Kitchen
-        icon_mdi: countertop
+        icon_mdi: ceiling-light
+      # Bottom-row keys 7 and 8 are free — add two more toggles/scenes here.
 
     dials:
       # ── Dial 1: Living Room media volume ────────────────────────────────────
