@@ -164,12 +164,19 @@ icon: '/app/icons/dials/lr_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.
 Gauge colours: **cyan** volume (`#38D6F2`), **amber** brightness (`#F7A828`),
 **green** shades (`#63C63B`).
 
-**Eager feedback:** each dial has a `delay` (debounce — `0.3s` volume/brightness,
-`0.5s` shades). With it set, a turn re-renders the bar **instantly from the local
-value** and the HA service is sent **once** after you stop turning — so the bar
-tracks your finger and the shade motor gets a single move to the target instead
-of chasing every detent. Without `delay` the bar only redraws on HA's echoed
-state (laggy, and shades crawl with the motor).
+**Eager feedback:** each dial has a `delay` (debounce — `0.6s` volume, `0.3s`
+brightness, `0.5s` shades). With it set, a turn re-renders the bar **instantly
+from the local value** and the HA service is sent **once** after you stop turning
+— so the bar tracks your finger and the shade motor gets a single move to the
+target instead of chasing every detent. Without `delay` the bar only redraws on
+HA's echoed state (laggy, and shades crawl with the motor).
+
+**Direction & orientation:** all dials use a **negative `attributes.step`**, so
+turning right *lowers* the value (`increment_state` does `state += value*step`;
+a negative step flips it, clamping still holds). Shades are also **display-
+inverted** — the frame is chosen from `100 - dial_value()`, so a **full bar =
+closed** and the number reads **% closed** (the service still receives the real
+HA position, where 100 = open).
 
 ## Home page — buttons (LCD keys)
 
