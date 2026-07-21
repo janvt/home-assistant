@@ -159,23 +159,23 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((0, 0, w - 1, h - 1), radius=16 * SS, fill="#191A1D")
 
-    # vertical fill bar on the left (fills bottom -> top with the value)
-    bx0, bx1, by0, by1 = 16 * SS, 44 * SS, 14 * SS, 86 * SS
-    br = 8 * SS
-    d.rounded_rectangle((bx0, by0, bx1, by1), radius=br, fill="#2E3036")  # track
-    if pct > 0:
-        fy0 = by1 - (by1 - by0) * pct / 100.0
-        rr = int(min(br, (by1 - fy0) / 2))
-        d.rounded_rectangle((bx0, fy0, bx1, by1), radius=rr, fill=color)
-
-    # right block: icon (top), value (centre), label (bottom)
-    rcx = 121 * SS
+    # icon (top), value (centre), label (bottom) — grouped on the left
+    rcx = 78 * SS
     d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
            font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
     d.text((rcx, 54 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
            fill="#FFFFFF", anchor="mm")
     d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
            fill="#B8B8BE", anchor="mm")
+
+    # vertical fill bar on the right, tight to the text (fills bottom -> top)
+    bx0, bx1, by0, by1 = 138 * SS, 164 * SS, 14 * SS, 86 * SS
+    br = 8 * SS
+    d.rounded_rectangle((bx0, by0, bx1, by1), radius=br, fill="#2E3036")  # track
+    if pct > 0:
+        fy0 = by1 - (by1 - by0) * pct / 100.0
+        rr = int(min(br, (by1 - fy0) / 2))
+        d.rounded_rectangle((bx0, fy0, bx1, by1), radius=rr, fill=color)
 
     (OUT / "dials").mkdir(parents=True, exist_ok=True)
     im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(OUT / "dials" / f"{slug}_{pct}.png")

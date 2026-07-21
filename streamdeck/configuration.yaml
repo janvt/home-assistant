@@ -220,7 +220,7 @@ pages:
         service: lock.open
         text: ''
         icon: /app/icons/apartment.png
-        delay: 2
+        delay: 5
 
       # ── Bottom row: mode toggles + nav ──────────────────────────────────────
       - entity_id: input_boolean.guest_mode
@@ -240,7 +240,7 @@ pages:
         service: switch.toggle
         text: ''
         icon: /app/icons/house.png
-        delay: 2
+        delay: 5
 
       # Key 8: mode button — cycles back to Home (next-page wraps).
       - special_type: next-page
