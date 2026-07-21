@@ -1,0 +1,63 @@
+alias: How much do we shut it down?
+description: "Asks the phone which shades to close: all, east-facing, or bedroom."
+mode: single
+triggers:
+  - trigger: state
+    entity_id:
+      - input_select.active_scene
+    to:
+      - sleep
+conditions: []
+actions:
+  - data:
+      title: Shut it down?
+      message: Which shades should I close?
+      data:
+        actions:
+          - action: CLOSE_ALL
+            title: All shades
+          - action: CLOSE_EAST
+            title: East facing
+          - action: CLOSE_BEDROOM
+            title: Bedroom only
+    action: notify.mobile_app_schmatzphone
+  - wait_for_trigger:
+      - event_type: mobile_app_notification_action
+        event_data:
+          action: CLOSE_ALL
+        trigger: event
+      - event_type: mobile_app_notification_action
+        event_data:
+          action: CLOSE_EAST
+        trigger: event
+      - event_type: mobile_app_notification_action
+        event_data:
+          action: CLOSE_BEDROOM
+        trigger: event
+    timeout:
+      minutes: 5
+    continue_on_timeout: false
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ (wait.trigger.event.data.action | default('')) == 'CLOSE_ALL' }}"
+        sequence:
+          - target:
+              entity_id:
+                - cover.living_room_shades
+                - cover.east_facing_shades
+            action: cover.close_cover
+      - conditions:
+          - condition: template
+            value_template: "{{ (wait.trigger.event.data.action | default('')) == 'CLOSE_EAST' }}"
+        sequence:
+          - target:
+              entity_id: cover.east_facing_shades
+            action: cover.close_cover
+      - conditions:
+          - condition: template
+            value_template: "{{ (wait.trigger.event.data.action | default('')) == 'CLOSE_BEDROOM' }}"
+        sequence:
+          - target:
+              entity_id: cover.bedroom_shades
+            action: cover.close_cover
