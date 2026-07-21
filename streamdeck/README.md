@@ -24,36 +24,57 @@ defines a **Home** page with a light/climate button pair and two Stream Deck Plu
   ```
   The upstream image publishes an `arm64` variant, so it runs natively on the Pi 5.
 - A Stream Deck connected to the Pi over USB.
+- `python3` + `venv` and a TrueType font, for generating the button images
+  (see [Button images](#button-images)):
+  ```bash
+  sudo apt-get install -y python3-venv fonts-dejavu-core
+  ```
+- [go-task](https://taskfile.dev) to run the workflow ([`Taskfile.yml`](Taskfile.yml)):
+  ```bash
+  sudo snap install task --classic   # or: see taskfile.dev/installation
+  ```
 
 ## Setup
 
+Everything below is wrapped in `task` — run `task` alone to list the commands.
+
 1. **Copy this directory to the Pi** (e.g. `~/streamdeck`) and `cd` into it.
 
-2. **Create your `.env`** from the template and fill in your Home Assistant
-   host and a long-lived access token:
+2. **Create and fill in `.env`:**
    ```bash
-   cp .env.example .env
+   task env      # copies .env.example -> .env
    nano .env
    ```
-   Create the token in Home Assistant under
-   *Profile → Security → Long-lived access tokens*.
-
-   There is **no separate port setting** — the connection URI is
-   `<WEBSOCKET_PROTOCOL>://<HASS_HOST>/api/websocket`, so put the port in
-   `HASS_HOST` if HA isn't on the protocol default. For a bare HA on a LAN IP
-   (plain HTTP), use `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`. Behind
-   an HTTPS reverse proxy, use the hostname and `WEBSOCKET_PROTOCOL=wss`.
+   Set your Home Assistant host and a long-lived access token (create it under
+   *Profile → Security → Long-lived access tokens*). There is **no separate port
+   setting** — the connection URI is `<WEBSOCKET_PROTOCOL>://<HASS_HOST>/api/websocket`,
+   so put the port in `HASS_HOST` if HA isn't on the protocol default. For a bare
+   HA on a LAN IP (plain HTTP), use `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`;
+   behind an HTTPS reverse proxy, use the hostname and `WEBSOCKET_PROTOCOL=wss`.
 
 3. **Adjust `configuration.yaml`** so the `entity_id`s match your setup.
 
-4. **Start it:**
+4. **Deploy** — builds the button images (venv + Pillow on first run), starts the
+   container, and tails the logs so you can watch it connect and detect the deck:
    ```bash
-   docker compose up -d
-   docker compose logs -f      # watch it connect and detect the Stream Deck
+   task deploy
    ```
 
-The Stream Deck lights up with the **Home** page. `auto_reload: true` means
-edits to `configuration.yaml` are picked up without a restart.
+The Stream Deck lights up with the **Home** page. `auto_reload: true` means edits
+to `configuration.yaml` are picked up without a restart — but **image changes are
+not watched**, so after editing `generate_icons.py` run `task regen` (rebuild +
+restart).
+
+### Task reference
+
+| Task | Does |
+|------|------|
+| `task deploy` | build icons → `up -d` → follow logs (first-time bring-up) |
+| `task up` | build icons (if venv missing, create it) → start detached |
+| `task regen` | rebuild button images → restart (apply icon/label changes) |
+| `task icons` | just (re)generate `icons/*.png` |
+| `task restart` / `task down` / `task logs` | container lifecycle |
+| `task env` | scaffold `.env` from the template |
 
 ## USB access
 
@@ -86,21 +107,42 @@ special button, and `next-page` wraps (`% len(pages)`), so pressing key 8 cycles
 Home → Shades → Home. Add a third page later and the same key cycles through all
 of them. The dials swap with the page too, not just the buttons.
 
-## Button styling
+## Button images
 
-Mushroom-style filled chips, matching the HA dashboards: a button is a **grey
-chip when its entity is off/inactive** and fills with a **domain colour when
-active** (`icon_background_color` + `icon_mdi_color` + `text_color`, all
-templated on state). Action/nav keys have no on/off, so they're a solid domain
-colour always.
+Buttons don't use the tool's built-in `icon_mdi` rendering (which can't shrink
+the glyph or place a label below it). Instead, [`generate_icons.py`](generate_icons.py)
+pre-renders a **PNG per button state** — a Mushroom-style rounded chip with a
+smaller icon and a label beneath — and each button's `icon:` field points at the
+right PNG, templated on state:
 
-| Domain | Colour | Active fill / icon |
-|--------|--------|--------------------|
-| lights, scenes | amber | `#EF9F27` bg, `#412402` icon |
-| switches, modes, nav | blue | `#378ADD` bg, `#FFFFFF` icon |
-| locks, doors | red | `#E24B4A` bg, `#FFFFFF` icon |
-| covers | green | `#639922` bg, `#FFFFFF` icon |
-| inactive (any) | grey | `#C9C9CE` bg, `#6E6E73` icon |
+```yaml
+icon: '{{ "/app/icons/chill_on.png" if is_state("input_select.active_scene","chill") else "/app/icons/chill_off.png" }}'
+```
+
+The chip is a **grey chip when off/inactive** and a **domain colour when
+active**; action/nav keys are a solid domain colour always:
+
+| Domain | Colour | Active |
+|--------|--------|--------|
+| lights, scenes | amber | `#EF9F27` bg, `#412402` icon+label |
+| switches, modes, nav | blue | `#378ADD` bg, white |
+| locks, doors | red | `#E24B4A` bg, white |
+| covers | green | `#639922` bg, white |
+| inactive (any) | grey | `#C9C9CE` bg, `#6E6E73` |
+
+**Generating** (build artifact — `icons/` is git-ignored, so it's built on each
+machine, before start; needs internet once to fetch the MDI webfont, cached in
+`.iconbuild/`). Renders at 120×120 (the Plus key size):
+
+```bash
+task icons     # creates the venv on first run, then writes icons/*.png
+```
+
+The button spec, palette, icon size (`ICON_PX`), label size (`LABEL_PX`) and
+corner radius (`RADIUS`) live at the top of [`generate_icons.py`](generate_icons.py) —
+edit and run `task regen` to rebuild the images and restart the container
+(`auto_reload` doesn't watch image files). Adding/renaming a button means
+updating both the script's spec and the button's `icon:` path.
 
 ## Home page — buttons (LCD keys)
 

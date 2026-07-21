@@ -1,0 +1,10 @@
+# Secrets
+.env
+
+# Generated button images (build artifact — run generate_icons.py per machine)
+icons/
+
+# Icon generator build cache (downloaded MDI font/css) and local venv
+.iconbuild/
+.venv/
+venv/

@@ -1,0 +1,76 @@
+version: '3'
+
+# Task runner for the Stream Deck setup (https://taskfile.dev).
+# Run `task` with no args to list everything.
+
+vars:
+  VENV: .venv
+  PY: '{{.VENV}}/bin/python'
+  PIP: '{{.VENV}}/bin/pip'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds: [task --list]
+    silent: true
+
+  env:
+    desc: Create .env from the template (then edit in your HASS_HOST / token)
+    status:
+      - test -f .env
+    cmds:
+      - cp .env.example .env
+      - "echo '>> Created .env — set HASS_HOST, WEBSOCKET_PROTOCOL and HASS_TOKEN'"
+
+  venv:
+    desc: Create the Python venv with the icon-generator dependencies
+    status:
+      - test -x {{.PY}}
+      - '{{.PY}} -c "import PIL"'
+    cmds:
+      - python3 -m venv {{.VENV}}
+      - '{{.PIP}} install --quiet --upgrade pip pillow'
+
+  icons:
+    desc: Generate the button images into icons/
+    deps: [venv]
+    cmds:
+      - '{{.PY}} generate_icons.py'
+
+  up:
+    desc: Generate icons and start the container (detached)
+    deps: [icons]
+    preconditions:
+      - sh: test -f .env
+        msg: "No .env found — run `task env` and fill it in first."
+    cmds:
+      - docker compose up -d
+      - docker compose ps
+
+  down:
+    desc: Stop and remove the container
+    cmds: [docker compose down]
+
+  restart:
+    desc: Restart the container (e.g. after editing .env)
+    cmds: [docker compose restart]
+
+  regen:
+    desc: Rebuild the button images and restart to apply them
+    deps: [icons]
+    cmds:
+      - docker compose restart
+
+  logs:
+    desc: Follow the container logs
+    cmds: [docker compose logs -f]
+
+  deploy:
+    desc: Full bring-up — build icons, start, then follow logs
+    deps: [icons]
+    preconditions:
+      - sh: test -f .env
+        msg: "No .env found — run `task env` and fill it in first."
+    cmds:
+      - docker compose up -d
+      - docker compose logs -f
