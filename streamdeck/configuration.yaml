@@ -268,9 +268,6 @@ pages:
           min: 0
           max: 100
           step: -10
-      - entity_id: cover.living_room_shades
-        dial_event_type: PUSH
-        service: cover.stop_cover
 
       # ── Dial 2: Kitchen shades ──────────────────────────────────────────────
       - entity_id: cover.shellyplus2pm_cc7b5c894ba4
@@ -287,9 +284,6 @@ pages:
           min: 0
           max: 100
           step: -10
-      - entity_id: cover.shellyplus2pm_cc7b5c894ba4
-        dial_event_type: PUSH
-        service: cover.stop_cover
 
       # ── Dial 3: Bedroom shades ──────────────────────────────────────────────
       - entity_id: cover.bedroom_shades
@@ -306,9 +300,6 @@ pages:
           min: 0
           max: 100
           step: -10
-      - entity_id: cover.bedroom_shades
-        dial_event_type: PUSH
-        service: cover.stop_cover
 
       # ── Dial 4: Guest Bedroom shades ────────────────────────────────────────
       - entity_id: cover.guest_bedroom_shades
@@ -325,6 +316,3 @@ pages:
           min: 0
           max: 100
           step: -10
-      - entity_id: cover.guest_bedroom_shades
-        dial_event_type: PUSH
-        service: cover.stop_cover

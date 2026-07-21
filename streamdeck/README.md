@@ -178,6 +178,15 @@ inverted** — the frame is chosen from `100 - dial_value()`, so a **full bar =
 closed** and the number reads **% closed** (the service still receives the real
 HA position, where 100 = open).
 
+**Live-render caveat (upstream bug):** the eager/local re-render on turn looks
+the dial up by raw list index but is handed the *sorted* index, so it only works
+for a dial whose TURN entry sits at that raw position — which holds only when the
+dials are **TURN-only** (no paired PUSH). That's why the **shade dials are
+TURN-only** (all four live-update). The Home volume/brightness dials keep their
+PUSH actions (mute / area-toggle), so only the leftmost (LR volume) live-updates;
+the others redraw after the debounce + HA echo. Fixing that without dropping
+their push needs a renderer patch (fork).
+
 ## Home page — buttons (LCD keys)
 
 The eight LCD keys fill left→right, top→bottom, so the `buttons:` list order maps
@@ -264,7 +273,7 @@ action fires, and **pressing again during the countdown cancels it**. Tune the
 seconds per key, or remove `delay` to fire instantly.
 | 8 | Home | mode button — cycle back |
 
-Dials (turn = set position 0–100 %, push = stop movement):
+Dials (turn = set position; **TURN-only**, no push — see note below):
 
 | # | Shade |
 |---|-------|
