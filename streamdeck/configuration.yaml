@@ -105,11 +105,12 @@ pages:
         service_data:
           volume_level: '{{ dial_value() | float }}'
         text: ''
-        icon: '/app/icons/dials/lr_volume_{{ ((((dial_value() * 100) / 5) | round) * 5) | int }}.png'
+        delay: 0.3
+        icon: '/app/icons/dials/lr_volume_{{ ((((dial_value() * 100) / 2) | round) * 2) | int }}.png'
         attributes:
           min: 0
           max: 1
-          step: 0.05
+          step: 0.02
       # PUSH: toggle mute.
       - entity_id: media_player.living_room
         dial_event_type: PUSH
@@ -127,11 +128,12 @@ pages:
         service_data:
           volume_level: '{{ dial_value() | float }}'
         text: ''
-        icon: '/app/icons/dials/madagascar_volume_{{ ((((dial_value() * 100) / 5) | round) * 5) | int }}.png'
+        delay: 0.3
+        icon: '/app/icons/dials/madagascar_volume_{{ ((((dial_value() * 100) / 2) | round) * 2) | int }}.png'
         attributes:
           min: 0
           max: 1
-          step: 0.05
+          step: 0.02
       # PUSH: toggle mute.
       - entity_id: media_player.unnamed_room
         dial_event_type: PUSH
@@ -149,6 +151,7 @@ pages:
         service_data:
           brightness: '{{ dial_value() | int }}'
         text: ''
+        delay: 0.3
         icon: '/app/icons/dials/lr_bright_{{ ((((dial_value() / 255 * 100) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
@@ -171,6 +174,7 @@ pages:
         service_data:
           brightness: '{{ dial_value() | int }}'
         text: ''
+        delay: 0.3
         icon: '/app/icons/dials/kitchen_bright_{{ ((((dial_value() / 255 * 100) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
@@ -258,11 +262,12 @@ pages:
         service_data:
           position: '{{ dial_value() | int }}'
         text: ''
-        icon: '/app/icons/dials/lr_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
+        delay: 0.5
+        icon: '/app/icons/dials/lr_shade_{{ (((dial_value() / 10) | round) * 10) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: 5
+          step: 10
       - entity_id: cover.living_room_shades
         dial_event_type: PUSH
         service: cover.stop_cover
@@ -276,11 +281,12 @@ pages:
         service_data:
           position: '{{ dial_value() | int }}'
         text: ''
-        icon: '/app/icons/dials/kitchen_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
+        delay: 0.5
+        icon: '/app/icons/dials/kitchen_shade_{{ (((dial_value() / 10) | round) * 10) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: 5
+          step: 10
       - entity_id: cover.shellyplus2pm_cc7b5c894ba4
         dial_event_type: PUSH
         service: cover.stop_cover
@@ -294,11 +300,12 @@ pages:
         service_data:
           position: '{{ dial_value() | int }}'
         text: ''
-        icon: '/app/icons/dials/bedroom_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
+        delay: 0.5
+        icon: '/app/icons/dials/bedroom_shade_{{ (((dial_value() / 10) | round) * 10) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: 5
+          step: 10
       - entity_id: cover.bedroom_shades
         dial_event_type: PUSH
         service: cover.stop_cover
@@ -312,11 +319,12 @@ pages:
         service_data:
           position: '{{ dial_value() | int }}'
         text: ''
-        icon: '/app/icons/dials/guest_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
+        delay: 0.5
+        icon: '/app/icons/dials/guest_shade_{{ (((dial_value() / 10) | round) * 10) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: 5
+          step: 10
       - entity_id: cover.guest_bedroom_shades
         dial_event_type: PUSH
         service: cover.stop_cover

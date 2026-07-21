@@ -61,6 +61,13 @@ tasks:
     cmds:
       - docker compose restart
 
+  update:
+    desc: One-shot — git pull, rebuild images, restart the container
+    cmds:
+      - git pull
+      - task: icons
+      - docker compose restart
+
   logs:
     desc: Follow the container logs
     cmds: [docker compose logs -f]

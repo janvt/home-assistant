@@ -69,6 +69,7 @@ restart).
 
 | Task | Does |
 |------|------|
+| `task update` | **git pull → rebuild images → restart** (one-shot update) |
 | `task deploy` | build icons → `up -d` → follow logs (first-time bring-up) |
 | `task up` | build icons (if venv missing, create it) → start detached |
 | `task regen` | rebuild button images → restart (apply icon/label changes) |
@@ -114,8 +115,8 @@ shrink the icon, put a label below it, or draw a decent gauge.
 [`generate_icons.py`](generate_icons.py) pre-renders every key and dial frame as
 a PNG, and each `icon:` field points at the right one, templated on state.
 
-`task icons` builds them all: **24 key images** (120×120) and **168 dial frames**
-(200×100 — 8 dials × 21 values). `icons/` is git-ignored (build artifact), so
+`task icons` builds them all: **24 key images** (120×120) and **188 dial frames**
+(200×100 — frames per dial vary by granularity). `icons/` is git-ignored (build artifact), so
 build it on each machine before start; the MDI webfont is fetched once into
 `.iconbuild/`.
 
@@ -151,16 +152,24 @@ active**; action/nav keys are a solid domain colour always:
 
 Dials render as a **vertical fill bar** on the touch strip: a domain-coloured bar
 filled bottom-to-top to the value, alongside an icon, the value number, and the
-room label. Since dials move in fixed 5% steps, there's a frame per 5% and the
-`icon:` templates to the nearest one:
+room label. Each dial has a frame per step and the `icon:` templates to the
+nearest one. Granularity is per type — **volume 2%, brightness 5%, shades 10%**
+— set in two places that must match: the display step in `DIAL_STYLES`
+(`generate_icons.py`) and each dial's turn increment (`attributes.step`):
 
 ```yaml
 icon: '/app/icons/dials/lr_shade_{{ (((dial_value() / 5) | round) * 5) | int }}.png'
 ```
 
 Gauge colours: **cyan** volume (`#38D6F2`), **amber** brightness (`#F7A828`),
-**green** shades (`#63C63B`). Turn/push behaviour is unchanged (see the dial
-tables below); only the rendering changed.
+**green** shades (`#63C63B`).
+
+**Eager feedback:** each dial has a `delay` (debounce — `0.3s` volume/brightness,
+`0.5s` shades). With it set, a turn re-renders the bar **instantly from the local
+value** and the HA service is sent **once** after you stop turning — so the bar
+tracks your finger and the shade motor gets a single move to the target instead
+of chasing every detent. Without `delay` the bar only redraws on HA's echoed
+state (laggy, and shades crawl with the motor).
 
 ## Home page — buttons (LCD keys)
 

@@ -71,14 +71,15 @@ RADIUS = 18       # chip corner radius
 # segments. Dials move in fixed 5% steps, so we pre-render a frame per 5% and
 # the dial's `icon:` field templates to the current value.
 DIAL_W, DIAL_H = 200, 100
-SS = 4            # supersample factor for smooth arcs
-DIAL_STEP = 5     # percent between frames -> frames 0,5,...,100
+SS = 4            # supersample factor for crisp edges
 
-# style -> (accent colour, mdi icon)
+# style -> (accent colour, mdi icon, frame step %). The step is the display
+# granularity; set the matching turn increment via each dial's `attributes.step`
+# in configuration.yaml.
 DIAL_STYLES = {
-    "volume": ("#38D6F2", "volume-high"),
-    "bright": ("#F7A828", "brightness-7"),
-    "shade":  ("#63C63B", "window-shutter"),
+    "volume": ("#38D6F2", "volume-high",   2),
+    "bright": ("#F7A828", "brightness-7",  5),
+    "shade":  ("#63C63B", "window-shutter", 10),
 }
 # (slug, style, label) — one dial each; frames are <slug>_<pct>.png
 DIALS = [
@@ -151,7 +152,7 @@ def render(name: str, mdi: str, label: str, style: str,
 def render_gauge(slug: str, style: str, label: str, pct: int,
                  cps: dict[str, str], mdi_ttf: str, label_ttf: str) -> None:
     """Render one 200x100 dial frame: a vertical fill bar + icon, value, label."""
-    color, icon = DIAL_STYLES[style]
+    color, icon, _ = DIAL_STYLES[style]
     if icon not in cps:
         sys.exit(f"unknown MDI icon: {icon}")
     w, h = DIAL_W * SS, DIAL_H * SS
@@ -198,7 +199,8 @@ def main() -> None:
 
     mdi_ttf, label_ttf = str(BUILD / "mdi.ttf"), _label_font(LABEL_PX).path
     for slug, style, label in DIALS:
-        for pct in range(0, 101, DIAL_STEP):
+        step = DIAL_STYLES[style][2]
+        for pct in range(0, 101, step):
             render_gauge(slug, style, label, pct, cps, mdi_ttf, label_ttf)
 
     n_keys = len(list(OUT.glob("*.png")))
