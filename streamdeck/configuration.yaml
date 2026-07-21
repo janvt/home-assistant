@@ -41,7 +41,9 @@ pages:
           area: living_room
         text: Chill
         icon_mdi: sofa
-        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "chill") else "#555555" }}'
+        icon_background_color: '{{ "#EF9F27" if is_state("input_select.active_scene", "chill") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("input_select.active_scene", "chill") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("input_select.active_scene", "chill") else "#3A3A3C" }}'
 
       - entity_id: input_select.active_scene
         service: script.streamdeck_scene_toggle
@@ -50,7 +52,9 @@ pages:
           area: living_room
         text: Vinyl
         icon_mdi: album
-        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "vinyl") else "#555555" }}'
+        icon_background_color: '{{ "#EF9F27" if is_state("input_select.active_scene", "vinyl") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("input_select.active_scene", "vinyl") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("input_select.active_scene", "vinyl") else "#3A3A3C" }}'
 
       - entity_id: input_select.active_scene
         service: script.streamdeck_scene_toggle
@@ -59,7 +63,9 @@ pages:
           area: living_room
         text: Pain Cave
         icon_mdi: bike-fast
-        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "pain_cave") else "#555555" }}'
+        icon_background_color: '{{ "#EF9F27" if is_state("input_select.active_scene", "pain_cave") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("input_select.active_scene", "pain_cave") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("input_select.active_scene", "pain_cave") else "#3A3A3C" }}'
 
       # "Work S" — HA also has scene.work ("Work"); swap if you meant that one.
       - entity_id: input_select.active_scene
@@ -69,7 +75,9 @@ pages:
           area: kitchen
         text: Work S
         icon_mdi: desk
-        icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "work_s") else "#555555" }}'
+        icon_background_color: '{{ "#EF9F27" if is_state("input_select.active_scene", "work_s") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("input_select.active_scene", "work_s") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("input_select.active_scene", "work_s") else "#3A3A3C" }}'
 
       # ── Bottom row ──────────────────────────────────────────────────────────
       # Key 5: toggle the hallway lights (Shelly Pro "Hallway Spots").
@@ -77,12 +85,18 @@ pages:
         service: light.toggle
         text: Hallway
         icon_mdi: wall-sconce
+        icon_background_color: '{{ "#EF9F27" if is_state("light.shellypro1pm_ec62608ad35c_switch_0", "on") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("light.shellypro1pm_ec62608ad35c_switch_0", "on") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("light.shellypro1pm_ec62608ad35c_switch_0", "on") else "#3A3A3C" }}'
 
       # Key 6: toggle the outside light (Balcony Ceiling Light).
       - entity_id: light.balcony_ceiling_light
         service: light.toggle
         text: Outside
         icon_mdi: outdoor-lamp
+        icon_background_color: '{{ "#EF9F27" if is_state("light.balcony_ceiling_light", "on") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#412402" if is_state("light.balcony_ceiling_light", "on") else "#6E6E73" }}'
+        text_color: '{{ "#412402" if is_state("light.balcony_ceiling_light", "on") else "#3A3A3C" }}'
       # Key 7: poop button — press triggers the "Keep bathroom fan on"
       # automation; the icon/background reflect input_boolean.keep_bathroom_fan_on.
       # `linked_entity` makes the button re-render when that helper changes,
@@ -92,13 +106,17 @@ pages:
         service: automation.trigger
         text: ''
         icon_mdi: emoticon-poop
-        icon_mdi_color: '{{ "#d98a3d" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#6b5442" }}'
-        icon_background_color: '{{ "#7b4a12" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#2e2016" }}'
+        icon_background_color: '{{ "#378ADD" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#FFFFFF" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#6E6E73" }}'
+        text_color: '{{ "#FFFFFF" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#3A3A3C" }}'
 
       # Key 8: mode button — cycles to the next view (next-page wraps around).
       - special_type: next-page
         text: Shades
         icon_mdi: window-shutter
+        icon_background_color: '#378ADD'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
     dials:
       # ── Dial 1: Living Room media volume ────────────────────────────────────
@@ -209,11 +227,17 @@ pages:
         service: script.turn_on
         text: Lights Off
         icon_mdi: lightbulb-off
+        icon_background_color: '#EF9F27'
+        icon_mdi_color: '#412402'
+        text_color: '#412402'
 
       - entity_id: script.open_all_blinds
         service: script.turn_on
         text: Open All
         icon_mdi: window-shutter-open
+        icon_background_color: '#639922'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
       # No "close all" script exists, so close every shade explicitly (listed so
       # a future non-shade cover can't be caught by an `entity_id: all`).
@@ -227,6 +251,9 @@ pages:
             - cover.east_facing_shades
         text: Close All
         icon_mdi: window-shutter
+        icon_background_color: '#639922'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
       # Key 4: open the apartment door (Nuki smart lock — lock.open unlatches).
       # `delay` shows a 2s countdown ring before firing; press again to cancel.
@@ -235,19 +262,26 @@ pages:
         text: Apartment
         icon_mdi: door-open
         delay: 2
+        icon_background_color: '#E24B4A'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
       # ── Bottom row: mode toggles + nav ──────────────────────────────────────
       - entity_id: input_boolean.guest_mode
         service: input_boolean.toggle
         text: Guest
         icon_mdi: account-group
-        icon_gray_when_off: true
+        icon_background_color: '{{ "#378ADD" if is_state("input_boolean.guest_mode", "on") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#FFFFFF" if is_state("input_boolean.guest_mode", "on") else "#6E6E73" }}'
+        text_color: '{{ "#FFFFFF" if is_state("input_boolean.guest_mode", "on") else "#3A3A3C" }}'
 
       - entity_id: input_boolean.cleaning_mode
         service: input_boolean.toggle
         text: Cleaning
         icon_mdi: broom
-        icon_gray_when_off: true
+        icon_background_color: '{{ "#378ADD" if is_state("input_boolean.cleaning_mode", "on") else "#C9C9CE" }}'
+        icon_mdi_color: '{{ "#FFFFFF" if is_state("input_boolean.cleaning_mode", "on") else "#6E6E73" }}'
+        text_color: '{{ "#FFFFFF" if is_state("input_boolean.cleaning_mode", "on") else "#3A3A3C" }}'
 
       # Key 7: open the house / street door (SwitchBot "Buzzer"). It's a passive
       # momentary pusher, so a one-shot toggle triggers the press.
@@ -257,11 +291,17 @@ pages:
         text: House
         icon_mdi: gate-open
         delay: 2
+        icon_background_color: '#E24B4A'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
       # Key 8: mode button — cycles back to Home (next-page wraps).
       - special_type: next-page
         text: Home
         icon_mdi: home
+        icon_background_color: '#378ADD'
+        icon_mdi_color: '#FFFFFF'
+        text_color: '#FFFFFF'
 
     dials:
       # Each shade: TURN sets position (0–100%), PUSH stops movement.

@@ -86,6 +86,22 @@ special button, and `next-page` wraps (`% len(pages)`), so pressing key 8 cycles
 Home → Shades → Home. Add a third page later and the same key cycles through all
 of them. The dials swap with the page too, not just the buttons.
 
+## Button styling
+
+Mushroom-style filled chips, matching the HA dashboards: a button is a **grey
+chip when its entity is off/inactive** and fills with a **domain colour when
+active** (`icon_background_color` + `icon_mdi_color` + `text_color`, all
+templated on state). Action/nav keys have no on/off, so they're a solid domain
+colour always.
+
+| Domain | Colour | Active fill / icon |
+|--------|--------|--------------------|
+| lights, scenes | amber | `#EF9F27` bg, `#412402` icon |
+| switches, modes, nav | blue | `#378ADD` bg, `#FFFFFF` icon |
+| locks, doors | red | `#E24B4A` bg, `#FFFFFF` icon |
+| covers | green | `#639922` bg, `#FFFFFF` icon |
+| inactive (any) | grey | `#C9C9CE` bg, `#6E6E73` icon |
+
 ## Home page — buttons (LCD keys)
 
 The eight LCD keys fill left→right, top→bottom, so the `buttons:` list order maps
