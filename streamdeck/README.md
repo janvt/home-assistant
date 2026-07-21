@@ -90,12 +90,16 @@ straight onto the two rows:
 | 2 | top | Vinyl | toggle `scene.vinyl` ↔ Living Room off |
 | 3 | top | Pain Cave | toggle `scene.pain_cave` ↔ Living Room off |
 | 4 | top | Work S | toggle `scene.work_s` ↔ Kitchen off |
-| 5 | bottom | Living Room | toggle `light.living_room_ceiling_light` |
-| 6 | bottom | Kitchen | toggle `light.kitchen_ceiling_light` |
+| 5 | bottom | Hallway | toggle `light.shellypro1pm_ec62608ad35c_switch_0` (Hallway Spots) |
+| 6 | bottom | Outside | toggle `light.balcony_ceiling_light` |
+| 7 | bottom | 💩 | trigger `automation.keep_bathroom_fan_on` |
 
-Keys 7–8 are unused — add more `buttons:` entries to fill them. HA also has a
-separate `scene.work` ("Work") if key 4 was meant to be that instead of
-`scene.work_s`.
+Key 8 is unused — add another `buttons:` entry to fill it. HA also has a separate
+`scene.work` ("Work") if key 4 was meant to be that instead of `scene.work_s`.
+The poop key (7) fires `automation.trigger` on the fan automation, but shows the
+status of `input_boolean.keep_bathroom_fan_on`: `linked_entity` points at the
+helper so the key re-renders on its changes, and the `emoticon-poop` icon +
+`icon_background_color` brighten while the helper is `on`.
 
 ### Scene toggle behaviour
 

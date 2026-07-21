@@ -71,17 +71,30 @@ pages:
         icon_mdi: desk
         icon_mdi_color: '{{ "#f5a623" if is_state("input_select.active_scene", "work_s") else "#555555" }}'
 
-      # ── Bottom row: light toggles ───────────────────────────────────────────
-      - entity_id: light.living_room_ceiling_light
+      # ── Bottom row ──────────────────────────────────────────────────────────
+      # Key 5: toggle the hallway lights (Shelly Pro "Hallway Spots").
+      - entity_id: light.shellypro1pm_ec62608ad35c_switch_0
         service: light.toggle
-        text: Living Room
-        icon_mdi: ceiling-light
+        text: Hallway
+        icon_mdi: wall-sconce
 
-      - entity_id: light.kitchen_ceiling_light
+      # Key 6: toggle the outside light (Balcony Ceiling Light).
+      - entity_id: light.balcony_ceiling_light
         service: light.toggle
-        text: Kitchen
-        icon_mdi: ceiling-light
-      # Bottom-row keys 7 and 8 are free — add two more toggles/scenes here.
+        text: Outside
+        icon_mdi: outdoor-lamp
+      # Key 7: poop button — press triggers the "Keep bathroom fan on"
+      # automation; the icon/background reflect input_boolean.keep_bathroom_fan_on.
+      # `linked_entity` makes the button re-render when that helper changes,
+      # while `entity_id` keeps automation.trigger aimed at the automation.
+      - entity_id: automation.keep_bathroom_fan_on
+        linked_entity: input_boolean.keep_bathroom_fan_on
+        service: automation.trigger
+        text: ''
+        icon_mdi: emoticon-poop
+        icon_mdi_color: '{{ "#d98a3d" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#6b5442" }}'
+        icon_background_color: '{{ "#7b4a12" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#2e2016" }}'
+      # Key 8: free.
 
     dials:
       # ── Dial 1: Living Room media volume ────────────────────────────────────
