@@ -94,7 +94,11 @@ pages:
         icon_mdi: emoticon-poop
         icon_mdi_color: '{{ "#d98a3d" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#6b5442" }}'
         icon_background_color: '{{ "#7b4a12" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "#2e2016" }}'
-      # Key 8: free.
+
+      # Key 8: mode button — cycles to the next view (next-page wraps around).
+      - special_type: next-page
+        text: Shades
+        icon_mdi: window-shutter
 
     dials:
       # ── Dial 1: Living Room media volume ────────────────────────────────────
@@ -192,3 +196,151 @@ pages:
         service: light.toggle
         target:
           area_id: kitchen
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # Page 2 — Shades: dials control shade positions, buttons handle whole-home
+  # actions and mode helpers. Key 8 mirrors Home's mode button to cycle back.
+  # ═══════════════════════════════════════════════════════════════════════════
+  - name: Shades
+
+    buttons:
+      # ── Top row: whole-home actions ─────────────────────────────────────────
+      - entity_id: script.turn_off_all_lights
+        service: script.turn_on
+        text: Lights Off
+        icon_mdi: lightbulb-off
+
+      - entity_id: script.open_all_blinds
+        service: script.turn_on
+        text: Open All
+        icon_mdi: window-shutter-open
+
+      # No "close all" script exists, so close every shade explicitly (listed so
+      # a future non-shade cover can't be caught by an `entity_id: all`).
+      - service: cover.close_cover
+        service_data:
+          entity_id:
+            - cover.living_room_shades
+            - cover.shellyplus2pm_cc7b5c894ba4
+            - cover.bedroom_shades
+            - cover.guest_bedroom_shades
+            - cover.east_facing_shades
+        text: Close All
+        icon_mdi: window-shutter
+
+      # Key 4: open the apartment door (Nuki smart lock — lock.open unlatches).
+      # `delay` shows a 2s countdown ring before firing; press again to cancel.
+      - entity_id: lock.nuki_schmatzknauf_lock_2
+        service: lock.open
+        text: Apartment
+        icon_mdi: door-open
+        delay: 2
+
+      # ── Bottom row: mode toggles + nav ──────────────────────────────────────
+      - entity_id: input_boolean.guest_mode
+        service: input_boolean.toggle
+        text: Guest
+        icon_mdi: account-group
+        icon_gray_when_off: true
+
+      - entity_id: input_boolean.cleaning_mode
+        service: input_boolean.toggle
+        text: Cleaning
+        icon_mdi: broom
+        icon_gray_when_off: true
+
+      # Key 7: open the house / street door (SwitchBot "Buzzer"). It's a passive
+      # momentary pusher, so a one-shot toggle triggers the press.
+      # `delay` shows a 2s countdown ring before firing; press again to cancel.
+      - entity_id: switch.buzzer
+        service: switch.toggle
+        text: House
+        icon_mdi: gate-open
+        delay: 2
+
+      # Key 8: mode button — cycles back to Home (next-page wraps).
+      - special_type: next-page
+        text: Home
+        icon_mdi: home
+
+    dials:
+      # Each shade: TURN sets position (0–100%), PUSH stops movement.
+      # ── Dial 1: Living Room shades ──────────────────────────────────────────
+      - entity_id: cover.living_room_shades
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: |
+          Living Room
+          {{ dial_value() | int }}%
+        icon: 'ring:{{ dial_value() | int }}'
+        attributes:
+          min: 0
+          max: 100
+          step: 5
+      - entity_id: cover.living_room_shades
+        dial_event_type: PUSH
+        service: cover.stop_cover
+
+      # ── Dial 2: Kitchen shades ──────────────────────────────────────────────
+      - entity_id: cover.shellyplus2pm_cc7b5c894ba4
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: |
+          Kitchen
+          {{ dial_value() | int }}%
+        icon: 'ring:{{ dial_value() | int }}'
+        attributes:
+          min: 0
+          max: 100
+          step: 5
+      - entity_id: cover.shellyplus2pm_cc7b5c894ba4
+        dial_event_type: PUSH
+        service: cover.stop_cover
+
+      # ── Dial 3: Bedroom shades ──────────────────────────────────────────────
+      - entity_id: cover.bedroom_shades
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: |
+          Bedroom
+          {{ dial_value() | int }}%
+        icon: 'ring:{{ dial_value() | int }}'
+        attributes:
+          min: 0
+          max: 100
+          step: 5
+      - entity_id: cover.bedroom_shades
+        dial_event_type: PUSH
+        service: cover.stop_cover
+
+      # ── Dial 4: Guest Bedroom shades ────────────────────────────────────────
+      - entity_id: cover.guest_bedroom_shades
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: |
+          Guest Room
+          {{ dial_value() | int }}%
+        icon: 'ring:{{ dial_value() | int }}'
+        attributes:
+          min: 0
+          max: 100
+          step: 5
+      - entity_id: cover.guest_bedroom_shades
+        dial_event_type: PUSH
+        service: cover.stop_cover

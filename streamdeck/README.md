@@ -79,7 +79,14 @@ reboot as long as the Docker daemon starts on boot (the default). To confirm:
 sudo systemctl enable docker
 ```
 
-## Buttons (LCD keys)
+## Pages / views
+
+There are two pages. **Key 8 is the mode button** on both — it's a `next-page`
+special button, and `next-page` wraps (`% len(pages)`), so pressing key 8 cycles
+Home → Shades → Home. Add a third page later and the same key cycles through all
+of them. The dials swap with the page too, not just the buttons.
+
+## Home page — buttons (LCD keys)
 
 The eight LCD keys fill left→right, top→bottom, so the `buttons:` list order maps
 straight onto the two rows:
@@ -93,9 +100,10 @@ straight onto the two rows:
 | 5 | bottom | Hallway | toggle `light.shellypro1pm_ec62608ad35c_switch_0` (Hallway Spots) |
 | 6 | bottom | Outside | toggle `light.balcony_ceiling_light` |
 | 7 | bottom | 💩 | trigger `automation.keep_bathroom_fan_on` |
+| 8 | bottom | Shades | **mode button** — cycle to the next view |
 
-Key 8 is unused — add another `buttons:` entry to fill it. HA also has a separate
-`scene.work` ("Work") if key 4 was meant to be that instead of `scene.work_s`.
+HA also has a separate `scene.work` ("Work") if key 4 was meant to be that
+instead of `scene.work_s`.
 The poop key (7) fires `automation.trigger` on the fan automation, but shows the
 status of `input_boolean.keep_bathroom_fan_on`: `linked_entity` points at the
 helper so the key re-renders on its changes, and the `emoticon-poop` icon +
@@ -144,7 +152,40 @@ sequence:
 This assumes the scene's short name matches an `input_select.active_scene`
 option (`scene.chill` → `chill`, etc.), which holds for the current scenes.
 
-## Dials (Stream Deck Plus)
+## Shades page
+
+Reached via the mode button (key 8). Layout:
+
+| Key | Label | Action |
+|-----|-------|--------|
+| 1 | Lights Off | `script.turn_off_all_lights` |
+| 2 | Open All | `script.open_all_blinds` |
+| 3 | Close All | `cover.close_cover` on all five shades (listed explicitly) |
+| 4 | Apartment | `lock.open` on `lock.nuki_schmatzknauf_lock_2` (Nuki — unlatches), 2s delay |
+| 5 | Guest | toggle `input_boolean.guest_mode` (dims when off) |
+| 6 | Cleaning | toggle `input_boolean.cleaning_mode` (dims when off) |
+| 7 | House | `switch.toggle` on `switch.buzzer` (SwitchBot street-door buzzer), 2s delay |
+
+The two door keys (4, 7) use `delay: 2` as an accidental-press guard: a press
+starts a 2-second countdown ring (the confirmation display) before the door
+action fires, and **pressing again during the countdown cancels it**. Tune the
+seconds per key, or remove `delay` to fire instantly.
+| 8 | Home | mode button — cycle back |
+
+Dials (turn = set position 0–100 %, push = stop movement):
+
+| # | Shade |
+|---|-------|
+| 1 | Living Room (`cover.living_room_shades`) |
+| 2 | Kitchen (`cover.shellyplus2pm_cc7b5c894ba4`) |
+| 3 | Bedroom (`cover.bedroom_shades`) |
+| 4 | Guest Bedroom (`cover.guest_bedroom_shades`) |
+
+`cover.east_facing_shades` has no dial (5 shades, 4 dials) but is still included
+in **Close All**. All five covers report `supported_features=15` (open/close/set
+position/stop).
+
+## Home page — dials (Stream Deck Plus)
 
 Four dials, left → right, defined in [`configuration.yaml`](configuration.yaml):
 
