@@ -1,10 +1,12 @@
 services:
   streamdeck:
-    # Pin for resilience: `:latest` can pull a broken upstream image on the next
-    # restart with no rollback. Once you've settled on a version, pin by digest,
-    # e.g. basnijholt/home-assistant-streamdeck-yaml@sha256:<digest> — get it with
+    # Pinned by digest for resilience/supply-chain (was `:latest`). This is the
+    # multi-arch manifest digest the `latest` tag resolved to, built from
+    # upstream commit 1ad32a4dfb802401bb3f4b9a8130733b4f6b2e2c. It keeps both
+    # amd64 and arm64 (the Pi 5 pulls arm64). To move to a newer build, get the
+    # new digest with:
     #   docker inspect --format '{{index .RepoDigests 0}}' basnijholt/home-assistant-streamdeck-yaml:latest
-    image: basnijholt/home-assistant-streamdeck-yaml:latest
+    image: basnijholt/home-assistant-streamdeck-yaml@sha256:e9c4c523a95aee01466e360e5e969c93febe5cfe276167854185368022a593c3
     container_name: home-assistant-streamdeck
     restart: unless-stopped
 

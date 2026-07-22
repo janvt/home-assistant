@@ -114,9 +114,9 @@ reach on the Pi:
 | `device_cgroup_rules: ['c 189:* rmw']` | permits only USB device nodes, not arbitrary devices |
 | `mem_limit: 256m`, `pids_limit: 256` | caps memory and process count to contain runaway/fork behaviour |
 
-Pinning the image to a digest (`image: basnijholt/...@sha256:...`) instead of
-`:latest` further hardens the supply chain — swap it in once you've chosen a
-version to run.
+The image is **pinned by digest** (`image: basnijholt/...@sha256:...`) rather
+than `:latest`, which hardens the supply chain — see
+[Resilience → Pinning the image](#pinning-the-image) for how to bump it.
 
 ## Run on boot
 
@@ -140,7 +140,7 @@ compose file already handles the first two; the rest are host-level steps below.
 |---------|-------------------|
 | **App hang** (running but wedged) | A `healthcheck` TCP-probes the Home Assistant websocket host, and a small `autoheal` service restarts the container when it goes `unhealthy` (Compose won't restart on health state alone). |
 | **Logs filling the SD card** | Both services cap `json-file` logs at `max-size: 10m`, `max-file: 3` — the default driver never rotates, and a restart loop can otherwise fill a small card in hours. |
-| **Bad image on restart** | Guidance to pin the image by digest (see below) so a broken upstream `:latest` can't silently break the next restart. |
+| **Bad image on restart** | The image is pinned by digest (see [Pinning the image](#pinning-the-image)), so a moving upstream `:latest` can't silently break the next restart. |
 
 The healthcheck assumes `python3` is on the container's PATH (the upstream image
 is Python-based); if not, change it to `python` in `docker-compose.yaml`. The
@@ -184,8 +184,13 @@ time-sensitive, so a drifting clock shows up as auth/connection failures.
 
 ### Pinning the image
 
-`task update` pulls `:latest`, so an update has no rollback point. Pin the
-digest once you've chosen a version:
+The image is **pinned by digest** in `docker-compose.yaml` (not `:latest`), so an
+update has a fixed, rollback-able reference. The current pin is the multi-arch
+`latest` manifest (built from upstream commit
+`1ad32a4dfb802401bb3f4b9a8130733b4f6b2e2c`), which keeps both `amd64` and the
+`arm64` the Pi 5 pulls.
+
+To move to a newer build, resolve the new digest and swap it in:
 
 ```bash
 docker inspect --format '{{index .RepoDigests 0}}' \
@@ -193,8 +198,8 @@ docker inspect --format '{{index .RepoDigests 0}}' \
 # -> basnijholt/home-assistant-streamdeck-yaml@sha256:<digest>
 ```
 
-Put that `@sha256:...` reference in `docker-compose.yaml` and bump it
-deliberately when you want a new version.
+Note the value is a `sha256:` **registry digest**, not a git commit SHA — only
+the former works in `image:`. Bump it deliberately when you want a new version.
 
 ## Pages / views
 
