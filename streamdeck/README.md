@@ -76,6 +76,7 @@ restart).
 | `task icons` | just (re)generate `icons/*.png` |
 | `task restart` / `task down` / `task logs` | container lifecycle |
 | `task env` | scaffold `.env` from the template |
+| `task harden` | idempotently apply the host-level hardening/resilience steps (needs sudo) |
 
 ## USB access
 
@@ -148,6 +149,10 @@ is Python-based); if not, change it to `python` in `docker-compose.yaml`. The
 restarts containers, so treat it as a trusted, root-equivalent component.
 
 ### Host-level steps (do these on the Pi)
+
+Most of these are automated idempotently by [`harden.sh`](harden.sh) — run
+`task harden` (needs sudo; it never reboots, and reports the manual/hardware
+steps it can't do). The individual commands are documented below for reference.
 
 **Hardware watchdog** — recovers from a *total* kernel freeze (undervoltage,
 thermal, driver lockup) that `restart:` can't touch. The Pi has a built-in

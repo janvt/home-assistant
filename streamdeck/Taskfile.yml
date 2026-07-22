@@ -75,6 +75,10 @@ tasks:
     desc: Follow the container logs
     cmds: [docker compose logs -f]
 
+  harden:
+    desc: Idempotently apply host-level hardening/resilience (udev, watchdog, auto-upgrades, NTP; needs sudo)
+    cmds: [bash harden.sh]
+
   deploy:
     desc: Full bring-up — build icons, start, then follow logs
     deps: [icons]
