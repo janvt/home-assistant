@@ -70,7 +70,10 @@ services:
   # the host — that's inherent to how autoheal restarts containers. The socket
   # is mounted read-only to limit it to inspect/restart-style use.
   autoheal:
-    image: willfarrell/autoheal:latest
+    # Pinned by digest (multi-arch manifest incl. arm64) for the same
+    # supply-chain reason as the main image. To bump:
+    #   docker inspect --format '{{index .RepoDigests 0}}' willfarrell/autoheal:latest
+    image: willfarrell/autoheal@sha256:c3dee32ad1199e942a895010a5d3ae88ed3fe5fc3d32212ac8b8d47d9e6b24ff
     container_name: home-assistant-streamdeck-autoheal
     restart: unless-stopped
     security_opt:

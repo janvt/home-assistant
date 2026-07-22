@@ -191,11 +191,11 @@ time-sensitive, so a drifting clock shows up as auth/connection failures.
 
 ### Pinning the image
 
-The image is **pinned by digest** in `docker-compose.yaml` (not `:latest`), so an
-update has a fixed, rollback-able reference. The current pin is the multi-arch
-`latest` manifest (built from upstream commit
-`1ad32a4dfb802401bb3f4b9a8130733b4f6b2e2c`), which keeps both `amd64` and the
-`arm64` the Pi 5 pulls.
+Both images — the app **and** the `autoheal` sidecar — are **pinned by digest**
+in `docker-compose.yaml` (not `:latest`), so an update has a fixed,
+rollback-able reference. The app pin is the multi-arch `latest` manifest (built
+from upstream commit `1ad32a4dfb802401bb3f4b9a8130733b4f6b2e2c`); the autoheal
+pin is likewise its multi-arch manifest. Both keep the `arm64` the Pi 5 pulls.
 
 To move to a newer build, resolve the new digest and swap it in:
 
