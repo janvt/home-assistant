@@ -4,12 +4,24 @@ services:
     container_name: home-assistant-streamdeck
     restart: unless-stopped
 
-    # --privileged plus the USB bus mount gives the container access to the
-    # Stream Deck HID device. On a headless Pi this is the simplest reliable
-    # setup; see the README for a tighter, rule-based alternative.
-    privileged: true
+    # Hardening: the container runs unprivileged. Instead of `--privileged`,
+    # Stream Deck (USB HID) access is granted narrowly by mounting the USB bus
+    # and allowing only the USB device-node major (189) through the device
+    # cgroup. A host udev rule is what makes the node itself accessible — see
+    # the README "USB access" section (it's now required, not optional).
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     devices:
       - /dev/bus/usb:/dev/bus/usb
+    device_cgroup_rules:
+      # c = character device, 189 = USB device nodes (/dev/bus/usb/*), rmw = read/mknod/write
+      - 'c 189:* rmw'
+
+    # Resource ceilings to contain a compromised or runaway container.
+    mem_limit: 256m
+    pids_limit: 256
 
     env_file: .env
 

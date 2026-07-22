@@ -79,9 +79,13 @@ restart).
 
 ## USB access
 
-The compose file uses `privileged: true` plus a `/dev/bus/usb` mount — the
-simplest approach that reliably works headless. To avoid `privileged`, install
-a udev rule on the host instead and drop `privileged` from the compose file:
+The compose file runs the container **unprivileged** (hardened): there is no
+`privileged: true`. USB (HID) access is granted narrowly — the `/dev/bus/usb`
+mount plus a `device_cgroup_rules` entry allowing only the USB device-node major
+(`c 189:* rmw`), with `cap_drop: [ALL]` and `security_opt: no-new-privileges:true`.
+
+Because the container is unprivileged, the host must make the Stream Deck's
+device node accessible with a udev rule (**required**, not optional):
 
 ```bash
 echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0fd9", GROUP="users", TAG+="uaccess"' \
@@ -90,7 +94,29 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 Then reconnect the Stream Deck. The `0fd9` vendor id covers all Elgato Stream
-Deck models. Keep the `devices: [/dev/bus/usb:/dev/bus/usb]` mapping either way.
+Deck models. Keep the `devices: [/dev/bus/usb:/dev/bus/usb]` mapping.
+
+If the deck still isn't detected, fall back to a privileged container by
+temporarily adding `privileged: true` to the service and removing the
+`cap_drop`, `security_opt` and `device_cgroup_rules` lines — but the udev rule
+above is the intended, hardened path.
+
+## Container hardening
+
+The service applies defence-in-depth so a compromised container has minimal
+reach on the Pi:
+
+| Setting | Effect |
+|---------|--------|
+| _no_ `privileged` | container can't access all host devices / capabilities |
+| `security_opt: no-new-privileges:true` | processes can't gain privileges via setuid/setgid |
+| `cap_drop: [ALL]` | drops every Linux capability (none are needed for USB HID) |
+| `device_cgroup_rules: ['c 189:* rmw']` | permits only USB device nodes, not arbitrary devices |
+| `mem_limit: 256m`, `pids_limit: 256` | caps memory and process count to contain runaway/fork behaviour |
+
+Pinning the image to a digest (`image: basnijholt/...@sha256:...`) instead of
+`:latest` further hardens the supply chain — swap it in once you've chosen a
+version to run.
 
 ## Run on boot
 
@@ -325,7 +351,8 @@ for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 ## Troubleshooting
 
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
-  up in `lsusb` on the host, and verify USB access (privileged or udev rule).
+  up in `lsusb` on the host, and verify the udev rule is installed (see
+  [USB access](#usb-access)).
 - **`TransportError: Failed to write feature report (-1)`** (crash at
   `deck.reset()`) — the deck enumerated but rejected a USB write. Stop the
   restart loop with `docker compose down`, unplug/replug the Stream Deck, then
