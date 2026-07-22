@@ -91,12 +91,29 @@ else
   note "clock not synchronized yet — give it a minute"
 fi
 
+# 6. log2ram — RAM-back /var/log to cut SD-card writes (we're staying on SD).
+# Installs from the third-party azlux apt repo (the upstream/standard source for
+# log2ram). Needs a reboot to take effect. Default config RAM-backs /var/log at
+# 40M, which covers journald/syslog churn; container logs live under
+# /var/lib/docker (already size-capped in compose), not /var/log.
+if dpkg -s log2ram >/dev/null 2>&1; then
+  ok "log2ram installed"
+else
+  KEYRING=/usr/share/keyrings/azlux-archive-keyring.gpg
+  LIST=/etc/apt/sources.list.d/azlux.list
+  [ -s "$KEYRING" ] || sudo curl -fsSL https://azlux.fr/repo.gpg -o "$KEYRING"
+  echo "deb [signed-by=$KEYRING] http://packages.azlux.fr/debian/ stable main" \
+    | sudo tee "$LIST" >/dev/null
+  sudo apt-get update -qq
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y log2ram >/dev/null
+  set_ "installed log2ram (RAM-backed /var/log; azlux repo)"; REBOOT=1
+fi
+
 # Manual / hardware steps this script can't (or shouldn't) do.
 echo
 echo "Manual steps (not automated — see README 'Resilience'):"
 note "- Boot from a USB SSD instead of the SD card (Pi 5 supports it)."
 note "- Use the official 27W USB-C PD PSU to avoid brownout reset loops."
-note "- If staying on SD, consider log2ram to reduce card writes."
 note "- Bump the pinned image digest deliberately (README 'Pinning the image')."
 note "- Container-level hardening is applied by 'task up' / 'task deploy'."
 

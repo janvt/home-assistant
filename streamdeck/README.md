@@ -174,7 +174,9 @@ this deployment writes icon builds + logs. In rough priority:
 - **Use a quality PSU** (the official 27 W USB-C PD). Brownouts/undervoltage
   cause reset loops — the same USB-link flakiness the [Troubleshooting](#troubleshooting)
   section warns about.
-- If staying on SD, consider `log2ram` and keeping writes (logs, icons) low.
+- Staying on SD: `task harden` installs **`log2ram`** (RAM-backs `/var/log`,
+  syncing to disk periodically) to cut card writes. Container logs are already
+  size-capped in compose; keep icon rebuilds occasional. Needs a reboot to mount.
 
 **Unattended host patches + time sync** — for an always-on box:
 
