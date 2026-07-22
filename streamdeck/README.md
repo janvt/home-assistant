@@ -153,7 +153,7 @@ active**; action/nav keys are a solid domain colour always:
 Dials render as a **vertical fill bar** on the touch strip: a domain-coloured bar
 filled bottom-to-top to the value, alongside an icon, the value number, and the
 room label. Each dial has a frame per step and the `icon:` templates to the
-nearest one. Granularity is per type — **volume 2%, brightness 5%, shades 10%**
+nearest one. Granularity is per type — **volume 2%, brightness 5%, shades 5%**
 — set in two places that must match: the display step in `DIAL_STYLES`
 (`generate_icons.py`) and each dial's turn increment (`attributes.step`):
 
@@ -262,21 +262,23 @@ option (`scene.chill` → `chill`, etc.), which holds for the current scenes.
 
 Reached via the mode button (key 8). Layout:
 
-| Key | Label | Action |
-|-----|-------|--------|
-| 1 | Lights Off | `script.turn_off_all_lights` |
-| 2 | Open All | `script.open_all_blinds` |
-| 3 | Close All | `cover.close_cover` on all five shades (listed explicitly) |
-| 4 | Apartment | `lock.open` on `lock.nuki_schmatzknauf_lock_2` (Nuki — unlatches), 2s delay |
-| 5 | Guest | toggle `input_boolean.guest_mode` (dims when off) |
-| 6 | Cleaning | toggle `input_boolean.cleaning_mode` (dims when off) |
-| 7 | House | `switch.toggle` on `switch.buzzer` (SwitchBot street-door buzzer), 2s delay |
+Keys are colour-grouped into columns (top row = keys 1-4, bottom = 5-8):
 
-The two door keys (4, 7) use `delay: 2` as an accidental-press guard: a press
-starts a 2-second countdown ring (the confirmation display) before the door
-action fires, and **pressing again during the countdown cancels it**. Tune the
-seconds per key, or remove `delay` to fire instantly.
-| 8 | Home | mode button — cycle back |
+| Key | Row | Label | Action |
+|-----|-----|-------|--------|
+| 1 | top | House | `switch.toggle` on `switch.buzzer` (SwitchBot street door), 5s cancel |
+| 2 | top | Open All | `script.open_all_blinds` |
+| 3 | top | Guest | toggle `input_boolean.guest_mode` |
+| 4 | top | Lights Off | `script.turn_off_all_lights` |
+| 5 | bottom | Apartment | `lock.open` on `lock.nuki_schmatzknauf_lock_2` (Nuki — unlatches), 5s cancel |
+| 6 | bottom | Close All | `cover.close_cover` on all five shades (explicit list) |
+| 7 | bottom | Cleaning | toggle `input_boolean.cleaning_mode` |
+| 8 | bottom | Menu | mode button — cycle to next page |
+
+So the columns read: **doors (red)**, **shades (green)**, **modes (blue)**, then
+**Lights Off (amber) over Menu**. The two door keys (1 House, 5 Apartment) use
+`delay: 5` as an accidental-press guard — a press starts a 5-second countdown
+ring before firing, and **pressing again during it cancels**.
 
 Dials (turn = set position; **TURN-only**, no push — see note below):
 

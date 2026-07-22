@@ -194,19 +194,45 @@ pages:
   - name: Shades
 
     buttons:
-      # ── Top row: whole-home actions ─────────────────────────────────────────
-      - entity_id: script.turn_off_all_lights
-        service: script.turn_on
-        text: ''
-        icon: /app/icons/lights_off.png
+      # Column-grouped so colours line up vertically. Keys fill left→right,
+      # top→bottom, so list order is: top row = keys 1-4, bottom row = keys 5-8.
+      #   col1 doors (red)   col2 shades (green)  col3 modes (blue)  col4
+      #   House              Open All             Guest              Lights Off
+      #   Apartment          Close All            Cleaning           Menu
 
+      # ── Col 1 top: House / street door (SwitchBot buzzer). 5s cancel window. ─
+      - entity_id: switch.buzzer
+        service: switch.toggle
+        text: ''
+        icon: /app/icons/house.png
+        delay: 5
+
+      # ── Col 2 top: open all shades ──────────────────────────────────────────
       - entity_id: script.open_all_blinds
         service: script.turn_on
         text: ''
         icon: /app/icons/open_all.png
 
-      # No "close all" script exists, so close every shade explicitly (listed so
-      # a future non-shade cover can't be caught by an `entity_id: all`).
+      # ── Col 3 top: guest mode ───────────────────────────────────────────────
+      - entity_id: input_boolean.guest_mode
+        service: input_boolean.toggle
+        text: ''
+        icon: '{{ "/app/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/app/icons/guest_off.png" }}'
+
+      # ── Col 4 top: all lights off ───────────────────────────────────────────
+      - entity_id: script.turn_off_all_lights
+        service: script.turn_on
+        text: ''
+        icon: /app/icons/lights_off.png
+
+      # ── Col 1 bottom: apartment door (Nuki lock.open). 5s cancel window. ─────
+      - entity_id: lock.nuki_schmatzknauf_lock_2
+        service: lock.open
+        text: ''
+        icon: /app/icons/apartment.png
+        delay: 5
+
+      # ── Col 2 bottom: close all shades (explicit list, not `entity_id: all`) ─
       - service: cover.close_cover
         service_data:
           entity_id:
@@ -218,35 +244,13 @@ pages:
         text: ''
         icon: /app/icons/close_all.png
 
-      # Key 4: open the apartment door (Nuki smart lock — lock.open unlatches).
-      # `delay` shows a 2s countdown ring before firing; press again to cancel.
-      - entity_id: lock.nuki_schmatzknauf_lock_2
-        service: lock.open
-        text: ''
-        icon: /app/icons/apartment.png
-        delay: 5
-
-      # ── Bottom row: mode toggles + nav ──────────────────────────────────────
-      - entity_id: input_boolean.guest_mode
-        service: input_boolean.toggle
-        text: ''
-        icon: '{{ "/app/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/app/icons/guest_off.png" }}'
-
+      # ── Col 3 bottom: cleaning mode ─────────────────────────────────────────
       - entity_id: input_boolean.cleaning_mode
         service: input_boolean.toggle
         text: ''
         icon: '{{ "/app/icons/cleaning_on.png" if is_state("input_boolean.cleaning_mode", "on") else "/app/icons/cleaning_off.png" }}'
 
-      # Key 7: open the house / street door (SwitchBot "Buzzer"). It's a passive
-      # momentary pusher, so a one-shot toggle triggers the press.
-      # `delay` shows a 2s countdown ring before firing; press again to cancel.
-      - entity_id: switch.buzzer
-        service: switch.toggle
-        text: ''
-        icon: /app/icons/house.png
-        delay: 5
-
-      # Key 8: mode button — cycles back to Home (next-page wraps).
+      # ── Col 4 bottom: mode button (cycles pages) ────────────────────────────
       - special_type: next-page
         text: ''
         icon: /app/icons/menu.png
@@ -263,11 +267,11 @@ pages:
           position: '{{ dial_value() | int }}'
         text: ''
         delay: 0.5
-        icon: '/app/icons/dials/lr_shade_{{ ((((100 - dial_value()) / 10) | round) * 10) | int }}.png'
+        icon: '/app/icons/dials/lr_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: -10
+          step: -5
 
       # ── Dial 2: Kitchen shades ──────────────────────────────────────────────
       - entity_id: cover.shellyplus2pm_cc7b5c894ba4
@@ -279,11 +283,11 @@ pages:
           position: '{{ dial_value() | int }}'
         text: ''
         delay: 0.5
-        icon: '/app/icons/dials/kitchen_shade_{{ ((((100 - dial_value()) / 10) | round) * 10) | int }}.png'
+        icon: '/app/icons/dials/kitchen_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: -10
+          step: -5
 
       # ── Dial 3: Bedroom shades ──────────────────────────────────────────────
       - entity_id: cover.bedroom_shades
@@ -295,11 +299,11 @@ pages:
           position: '{{ dial_value() | int }}'
         text: ''
         delay: 0.5
-        icon: '/app/icons/dials/bedroom_shade_{{ ((((100 - dial_value()) / 10) | round) * 10) | int }}.png'
+        icon: '/app/icons/dials/bedroom_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: -10
+          step: -5
 
       # ── Dial 4: Guest Bedroom shades ────────────────────────────────────────
       - entity_id: cover.guest_bedroom_shades
@@ -311,8 +315,8 @@ pages:
           position: '{{ dial_value() | int }}'
         text: ''
         delay: 0.5
-        icon: '/app/icons/dials/guest_shade_{{ ((((100 - dial_value()) / 10) | round) * 10) | int }}.png'
+        icon: '/app/icons/dials/guest_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
         attributes:
           min: 0
           max: 100
-          step: -10
+          step: -5
