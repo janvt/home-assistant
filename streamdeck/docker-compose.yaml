@@ -1,5 +1,9 @@
 services:
   streamdeck:
+    # Pin for resilience: `:latest` can pull a broken upstream image on the next
+    # restart with no rollback. Once you've settled on a version, pin by digest,
+    # e.g. basnijholt/home-assistant-streamdeck-yaml@sha256:<digest> — get it with
+    #   docker inspect --format '{{index .RepoDigests 0}}' basnijholt/home-assistant-streamdeck-yaml:latest
     image: basnijholt/home-assistant-streamdeck-yaml:latest
     container_name: home-assistant-streamdeck
     restart: unless-stopped
@@ -23,9 +27,60 @@ services:
     mem_limit: 256m
     pids_limit: 256
 
+    # Resilience: `restart: unless-stopped` only reacts to the process exiting.
+    # This healthcheck makes a wedged-but-running container observable in
+    # `docker ps`, and the `autoheal` service below restarts it when unhealthy.
+    # The check confirms the container can still reach the Home Assistant
+    # websocket host (TCP connect) — it catches network/DNS wedges, not deep
+    # app deadlocks. Tune or replace it to suit. NOTE: the upstream image is
+    # Python-based; if `python3` isn't on PATH, change it to `python`.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python3 -c \"import os,socket; h=os.environ.get('HASS_HOST',''); proto=os.environ.get('WEBSOCKET_PROTOCOL','wss'); host,_,port=h.partition(':'); port=int(port) if port else (443 if proto=='wss' else 80); socket.create_connection((host,port),5).close()\""
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+    # Resilience: cap container logs so a restart loop can't fill the SD card
+    # (the default json-file driver never rotates).
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Marks this container for the autoheal service to watch.
+    labels:
+      - autoheal=true
+
     env_file: .env
 
     volumes:
       # The whole directory is mounted at /app so the container picks up this
       # configuration.yaml and auto-reloads it on change.
       - ./:/app/
+
+  # Restarts any container it finds `unhealthy` (Compose alone won't act on
+  # health state). Watches only containers labelled `autoheal=true`.
+  # SECURITY NOTE: this needs the Docker socket, which is effectively root on
+  # the host — that's inherent to how autoheal restarts containers. The socket
+  # is mounted read-only to limit it to inspect/restart-style use.
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: home-assistant-streamdeck-autoheal
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - AUTOHEAL_CONTAINER_LABEL=autoheal
+      - AUTOHEAL_INTERVAL=30
+      - AUTOHEAL_START_PERIOD=60
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

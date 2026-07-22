@@ -63,6 +63,9 @@ tasks:
 
   update:
     desc: One-shot — git pull, rebuild images, restart the container
+    # Note: this pulls the tag in docker-compose.yaml as-is. If you've pinned
+    # the image by digest (recommended, see README "Resilience"), bump the
+    # digest deliberately rather than relying on :latest moving underneath you.
     cmds:
       - git pull
       - task: icons

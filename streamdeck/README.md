@@ -127,6 +127,75 @@ reboot as long as the Docker daemon starts on boot (the default). To confirm:
 sudo systemctl enable docker
 ```
 
+## Resilience
+
+`restart: unless-stopped` + `systemctl enable docker` only cover the easy cases
+(process crash, clean reboot). For an always-on headless appliance the real
+outage causes are **hangs, disk-fill, power loss and kernel freezes**. The
+compose file already handles the first two; the rest are host-level steps below.
+
+### Handled in the compose file
+
+| Concern | What's configured |
+|---------|-------------------|
+| **App hang** (running but wedged) | A `healthcheck` TCP-probes the Home Assistant websocket host, and a small `autoheal` service restarts the container when it goes `unhealthy` (Compose won't restart on health state alone). |
+| **Logs filling the SD card** | Both services cap `json-file` logs at `max-size: 10m`, `max-file: 3` — the default driver never rotates, and a restart loop can otherwise fill a small card in hours. |
+| **Bad image on restart** | Guidance to pin the image by digest (see below) so a broken upstream `:latest` can't silently break the next restart. |
+
+The healthcheck assumes `python3` is on the container's PATH (the upstream image
+is Python-based); if not, change it to `python` in `docker-compose.yaml`. The
+`autoheal` service mounts the Docker socket read-only — that's inherent to how it
+restarts containers, so treat it as a trusted, root-equivalent component.
+
+### Host-level steps (do these on the Pi)
+
+**Hardware watchdog** — recovers from a *total* kernel freeze (undervoltage,
+thermal, driver lockup) that `restart:` can't touch. The Pi has a built-in
+watchdog:
+
+```bash
+# Enable the watchdog device
+echo 'dtparam=watchdog=on' | sudo tee -a /boot/firmware/config.txt
+# Have systemd pet it and reboot on a hung host
+sudo sed -i 's/^#\?RuntimeWatchdogSec=.*/RuntimeWatchdogSec=15/' /etc/systemd/system.conf
+sudo reboot
+```
+
+**SD-card durability / power loss** — SD cards corrupt on abrupt power loss, and
+this deployment writes icon builds + logs. In rough priority:
+
+- **Boot from a USB SSD** instead of the SD card (the Pi 5 supports it) — far
+  more resilient and faster.
+- **Use a quality PSU** (the official 27 W USB-C PD). Brownouts/undervoltage
+  cause reset loops — the same USB-link flakiness the [Troubleshooting](#troubleshooting)
+  section warns about.
+- If staying on SD, consider `log2ram` and keeping writes (logs, icons) low.
+
+**Unattended host patches + time sync** — for an always-on box:
+
+```bash
+sudo apt-get install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+timedatectl status   # confirm "System clock synchronized: yes" / NTP active
+```
+
+Accurate time matters here: websocket TLS and the long-lived token are
+time-sensitive, so a drifting clock shows up as auth/connection failures.
+
+### Pinning the image
+
+`task update` pulls `:latest`, so an update has no rollback point. Pin the
+digest once you've chosen a version:
+
+```bash
+docker inspect --format '{{index .RepoDigests 0}}' \
+  basnijholt/home-assistant-streamdeck-yaml:latest
+# -> basnijholt/home-assistant-streamdeck-yaml@sha256:<digest>
+```
+
+Put that `@sha256:...` reference in `docker-compose.yaml` and bump it
+deliberately when you want a new version.
+
 ## Pages / views
 
 There are two pages. **Key 8 is the mode button** on both — it's a `next-page`
