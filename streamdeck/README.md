@@ -79,9 +79,13 @@ restart).
 
 ## USB access
 
-The compose file uses `privileged: true` plus a `/dev/bus/usb` mount — the
-simplest approach that reliably works headless. To avoid `privileged`, install
-a udev rule on the host instead and drop `privileged` from the compose file:
+The compose file runs the container **unprivileged** (hardened): there is no
+`privileged: true`. USB (HID) access is granted narrowly — the `/dev/bus/usb`
+mount plus a `device_cgroup_rules` entry allowing only the USB device-node major
+(`c 189:* rmw`), with `cap_drop: [ALL]` and `security_opt: no-new-privileges:true`.
+
+Because the container is unprivileged, the host must make the Stream Deck's
+device node accessible with a udev rule (**required**, not optional):
 
 ```bash
 echo 'SUBSYSTEMS=="usb", ATTRS{idVendor}=="0fd9", GROUP="users", TAG+="uaccess"' \
@@ -90,7 +94,29 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 Then reconnect the Stream Deck. The `0fd9` vendor id covers all Elgato Stream
-Deck models. Keep the `devices: [/dev/bus/usb:/dev/bus/usb]` mapping either way.
+Deck models. Keep the `devices: [/dev/bus/usb:/dev/bus/usb]` mapping.
+
+If the deck still isn't detected, fall back to a privileged container by
+temporarily adding `privileged: true` to the service and removing the
+`cap_drop`, `security_opt` and `device_cgroup_rules` lines — but the udev rule
+above is the intended, hardened path.
+
+## Container hardening
+
+The service applies defence-in-depth so a compromised container has minimal
+reach on the Pi:
+
+| Setting | Effect |
+|---------|--------|
+| _no_ `privileged` | container can't access all host devices / capabilities |
+| `security_opt: no-new-privileges:true` | processes can't gain privileges via setuid/setgid |
+| `cap_drop: [ALL]` | drops every Linux capability (none are needed for USB HID) |
+| `device_cgroup_rules: ['c 189:* rmw']` | permits only USB device nodes, not arbitrary devices |
+| `mem_limit: 256m`, `pids_limit: 256` | caps memory and process count to contain runaway/fork behaviour |
+
+The image is **pinned by digest** (`image: basnijholt/...@sha256:...`) rather
+than `:latest`, which hardens the supply chain — see
+[Resilience → Pinning the image](#pinning-the-image) for how to bump it.
 
 ## Run on boot
 
@@ -100,6 +126,80 @@ reboot as long as the Docker daemon starts on boot (the default). To confirm:
 ```bash
 sudo systemctl enable docker
 ```
+
+## Resilience
+
+`restart: unless-stopped` + `systemctl enable docker` only cover the easy cases
+(process crash, clean reboot). For an always-on headless appliance the real
+outage causes are **hangs, disk-fill, power loss and kernel freezes**. The
+compose file already handles the first two; the rest are host-level steps below.
+
+### Handled in the compose file
+
+| Concern | What's configured |
+|---------|-------------------|
+| **App hang** (running but wedged) | A `healthcheck` TCP-probes the Home Assistant websocket host, and a small `autoheal` service restarts the container when it goes `unhealthy` (Compose won't restart on health state alone). |
+| **Logs filling the SD card** | Both services cap `json-file` logs at `max-size: 10m`, `max-file: 3` — the default driver never rotates, and a restart loop can otherwise fill a small card in hours. |
+| **Bad image on restart** | The image is pinned by digest (see [Pinning the image](#pinning-the-image)), so a moving upstream `:latest` can't silently break the next restart. |
+
+The healthcheck assumes `python3` is on the container's PATH (the upstream image
+is Python-based); if not, change it to `python` in `docker-compose.yaml`. The
+`autoheal` service mounts the Docker socket read-only — that's inherent to how it
+restarts containers, so treat it as a trusted, root-equivalent component.
+
+### Host-level steps (do these on the Pi)
+
+**Hardware watchdog** — recovers from a *total* kernel freeze (undervoltage,
+thermal, driver lockup) that `restart:` can't touch. The Pi has a built-in
+watchdog:
+
+```bash
+# Enable the watchdog device
+echo 'dtparam=watchdog=on' | sudo tee -a /boot/firmware/config.txt
+# Have systemd pet it and reboot on a hung host
+sudo sed -i 's/^#\?RuntimeWatchdogSec=.*/RuntimeWatchdogSec=15/' /etc/systemd/system.conf
+sudo reboot
+```
+
+**SD-card durability / power loss** — SD cards corrupt on abrupt power loss, and
+this deployment writes icon builds + logs. In rough priority:
+
+- **Boot from a USB SSD** instead of the SD card (the Pi 5 supports it) — far
+  more resilient and faster.
+- **Use a quality PSU** (the official 27 W USB-C PD). Brownouts/undervoltage
+  cause reset loops — the same USB-link flakiness the [Troubleshooting](#troubleshooting)
+  section warns about.
+- If staying on SD, consider `log2ram` and keeping writes (logs, icons) low.
+
+**Unattended host patches + time sync** — for an always-on box:
+
+```bash
+sudo apt-get install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+timedatectl status   # confirm "System clock synchronized: yes" / NTP active
+```
+
+Accurate time matters here: websocket TLS and the long-lived token are
+time-sensitive, so a drifting clock shows up as auth/connection failures.
+
+### Pinning the image
+
+The image is **pinned by digest** in `docker-compose.yaml` (not `:latest`), so an
+update has a fixed, rollback-able reference. The current pin is the multi-arch
+`latest` manifest (built from upstream commit
+`1ad32a4dfb802401bb3f4b9a8130733b4f6b2e2c`), which keeps both `amd64` and the
+`arm64` the Pi 5 pulls.
+
+To move to a newer build, resolve the new digest and swap it in:
+
+```bash
+docker inspect --format '{{index .RepoDigests 0}}' \
+  basnijholt/home-assistant-streamdeck-yaml:latest
+# -> basnijholt/home-assistant-streamdeck-yaml@sha256:<digest>
+```
+
+Note the value is a `sha256:` **registry digest**, not a git commit SHA — only
+the former works in `image:`. Bump it deliberately when you want a new version.
 
 ## Pages / views
 
@@ -325,7 +425,8 @@ for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 ## Troubleshooting
 
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
-  up in `lsusb` on the host, and verify USB access (privileged or udev rule).
+  up in `lsusb` on the host, and verify the udev rule is installed (see
+  [USB access](#usb-access)).
 - **`TransportError: Failed to write feature report (-1)`** (crash at
   `deck.reset()`) — the deck enumerated but rejected a USB write. Stop the
   restart loop with `docker compose down`, unplug/replug the Stream Deck, then
