@@ -34,12 +34,15 @@ services:
     # `docker ps`, and the `autoheal` service below restarts it when unhealthy.
     # The check confirms the container can still reach the Home Assistant
     # websocket host (TCP connect) — it catches network/DNS wedges, not deep
-    # app deadlocks. Tune or replace it to suit. NOTE: the upstream image is
-    # Python-based; if `python3` isn't on PATH, change it to `python`.
+    # app deadlocks. Tune or replace it to suit. NOTE: the image is conda-based
+    # and launches the app via an absolute-path console script, so a bare
+    # `python3` is NOT on the healthcheck's PATH — use the interpreter's full
+    # path (`/opt/conda/bin/python3`), else the check errors, the container is
+    # marked unhealthy, and autoheal restarts it on a loop (deck flicker).
     healthcheck:
       test:
         - CMD-SHELL
-        - "python3 -c \"import os,socket; h=os.environ.get('HASS_HOST',''); proto=os.environ.get('WEBSOCKET_PROTOCOL','wss'); host,_,port=h.partition(':'); port=int(port) if port else (443 if proto=='wss' else 80); socket.create_connection((host,port),5).close()\""
+        - "/opt/conda/bin/python3 -c \"import os,socket; h=os.environ.get('HASS_HOST',''); proto=os.environ.get('WEBSOCKET_PROTOCOL','wss'); host,_,port=h.partition(':'); port=int(port) if port else (443 if proto=='wss' else 80); socket.create_connection((host,port),5).close()\""
       interval: 30s
       timeout: 10s
       retries: 5
