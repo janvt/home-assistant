@@ -173,10 +173,10 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
            font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
     if muted:
-        d.text((rcx, 55 * SS),"MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
+        d.text((rcx, 57 * SS),"MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
                fill=color, anchor="mm")
     else:
-        d.text((rcx, 55 * SS),str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
+        d.text((rcx, 57 * SS),str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
                fill="#FFFFFF", anchor="mm")
     d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
            fill="#B8B8BE", anchor="mm")
