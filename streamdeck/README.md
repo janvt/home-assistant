@@ -222,7 +222,7 @@ shrink the icon, put a label below it, or draw a decent gauge.
 [`generate_icons.py`](generate_icons.py) pre-renders every key and dial frame as
 a PNG, and each `icon:` field points at the right one, templated on state.
 
-`task icons` builds them all: **24 key images** (120×120) and **188 dial frames**
+`task icons` builds them all: **25 key images** (120×120) and **188 dial frames**
 (200×100 — frames per dial vary by granularity). `icons/` is git-ignored (build artifact), so
 build it on each machine before start; the MDI webfont is fetched once into
 `.iconbuild/`.
@@ -309,14 +309,18 @@ straight onto the two rows:
 | 1 | top | Chill | toggle `scene.chill` ↔ Living Room off |
 | 2 | top | Vinyl | toggle `scene.vinyl` ↔ Living Room off |
 | 3 | top | Pain Cave | toggle `scene.pain_cave` ↔ Living Room off |
-| 4 | top | Work S | toggle `scene.work_s` ↔ Kitchen off |
+| 4 | top | Work S | tap: toggle `scene.work_s` ↔ Kitchen off · **hold ~1s: activate `scene.work`** |
 | 5 | bottom | Hallway | toggle `light.shellypro1pm_ec62608ad35c_switch_0` (Hallway Spots) |
 | 6 | bottom | Outside | toggle `light.balcony_ceiling_light` |
 | 7 | bottom | 💩 | trigger `automation.keep_bathroom_fan_on` |
 | 8 | bottom | Shades | **mode button** — cycle to the next view |
 
-HA also has a separate `scene.work` ("Work") if key 4 was meant to be that
-instead of `scene.work_s`.
+Key 4 uses a `long_press:` override — a tap runs the normal toggle, a ~1s hold
+(`long_press_duration`, default 1.0s) activates `scene.work` instead. Any button
+can take a `long_press` with its own `service`/`entity_id`/`target`. Its icon is
+three-way: `work_s_on` (desk) when `scene.work_s` is active, a dedicated
+`work.png` (briefcase, "Work") when `scene.work` is active, else the grey
+`work_s_off` — so you can tell which of the two Work scenes is on.
 The poop key (7) fires `automation.trigger` on the fan automation, but shows the
 status of `input_boolean.keep_bathroom_fan_on`: `linked_entity` points at the
 helper so the key re-renders on its changes, and the `emoticon-poop` icon +

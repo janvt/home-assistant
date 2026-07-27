@@ -45,8 +45,8 @@ STATEFUL = [
     ("vinyl",     "album",        "Vinyl",     "amber"),
     ("pain_cave", "bike-fast",    "Pain Cave", "amber"),
     ("work_s",    "desk",         "Work S",    "amber"),
-    ("hallway",   "wall-sconce",  "Hallway",   "amber"),
-    ("outside",   "outdoor-lamp", "Outside",   "amber"),
+    ("hallway",   "human-walker", "Hallway",   "amber"),
+    ("outside",   "cloud",        "Outside",   "amber"),
     ("fan",       "emoticon-poop","Fan",       "blue"),
     ("guest",     "account-group","Guest",     "blue"),
     ("cleaning",  "broom",        "Cleaning",  "blue"),
@@ -56,8 +56,11 @@ ACTION = [
     ("open_all",   "window-shutter-open", "Open All",   "green"),
     ("close_all",  "window-shutter",      "Close All",  "green"),
     ("apartment",  "door-open",           "Apartment",  "red"),
-    ("house",      "gate-open",           "House",      "red"),
+    ("house",      "home",                "House",      "red"),
     ("menu",       "dots-horizontal",     "Menu",       "blue"),
+    # Active look for the plain "Work" scene (shown by the Work S key when
+    # scene.work is active, via long-press). Amber like an active scene.
+    ("work",       "briefcase",           "Work",       "amber"),
 ]
 
 ICON_PX = 54      # glyph size (smaller than the key -> leaves room for a label)
@@ -170,10 +173,10 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
            font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
     if muted:
-        d.text((rcx, 54 * SS), "MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
+        d.text((rcx, 55 * SS),"MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
                fill=color, anchor="mm")
     else:
-        d.text((rcx, 54 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
+        d.text((rcx, 55 * SS),str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
                fill="#FFFFFF", anchor="mm")
     d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
            fill="#B8B8BE", anchor="mm")

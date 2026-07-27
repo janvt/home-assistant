@@ -58,14 +58,18 @@ pages:
         text: ''
         icon: '{{ "/app/icons/pain_cave_on.png" if is_state("input_select.active_scene", "pain_cave") else "/app/icons/pain_cave_off.png" }}'
 
-      # "Work S" — HA also has scene.work ("Work"); swap if you meant that one.
+      # "Work S": tap = toggle scene.work_s (like the other scenes); long-press
+      # (~1s, the global long_press_duration) = activate the other "Work" scene.
       - entity_id: input_select.active_scene
         service: script.streamdeck_scene_toggle
         service_data:
           scene: scene.work_s
           area: kitchen
         text: ''
-        icon: '{{ "/app/icons/work_s_on.png" if is_state("input_select.active_scene", "work_s") else "/app/icons/work_s_off.png" }}'
+        icon: '{{ "/app/icons/work_s_on.png" if is_state("input_select.active_scene", "work_s") else "/app/icons/work.png" if is_state("input_select.active_scene", "work") else "/app/icons/work_s_off.png" }}'
+        long_press:
+          service: scene.turn_on
+          entity_id: scene.work
 
       # ── Bottom row ──────────────────────────────────────────────────────────
       # Key 5: toggle the hallway lights (Shelly Pro "Hallway Spots").
