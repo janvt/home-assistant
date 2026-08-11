@@ -1,20 +1,40 @@
-# Stream Deck → Home Assistant (headless Raspberry Pi 5)
+# Stream Deck → Home Assistant (two decks)
 
 Runs [basnijholt/home-assistant-streamdeck-yaml](https://github.com/basnijholt/home-assistant-streamdeck-yaml)
-in Docker Compose on a headless Raspberry Pi 5, driving an Elgato Stream Deck
-plugged into the Pi's USB. The included [configuration.yaml](configuration.yaml)
-defines a **Home** page with a light/climate button pair and two Stream Deck Plus
-**dials** — one for light brightness, one for climate target temperature.
+against two Elgato decks on two different machines, sharing one image renderer:
+
+| Deck | Host | Runs as | Keys | Dials |
+|------|------|---------|------|-------|
+| **Stream Deck Plus** | headless Raspberry Pi 5 | Docker Compose | 8 (4×2) @ 120px | 4 |
+| **Stream Deck Plus XL** | Mac laptop | native venv | 36 (9×4) @ 112px | 6 |
+
+Each deck owns its `configuration.yaml`, `.env` and rendered `icons/`; they
+share the renderer, the palette, and the Home-Assistant-side helpers.
+
+> **One deck per host.** The app's `get_deck()` grabs the first deck it
+> enumerates, with no way to select a device, so never plug both decks into the
+> same machine — it would pick whichever enumerates first.
 
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| [`docker-compose.yaml`](docker-compose.yaml) | Container definition (image, USB access, config mount) |
-| [`configuration.yaml`](configuration.yaml) | Pages, buttons and dials |
-| [`.env.example`](.env.example) | Template for Home Assistant host + token |
+| [`generate_icons.py`](generate_icons.py) | **Shared** renderer — key chips + dial gauges for every deck |
+| [`decks/<deck>/spec.py`](decks) | That deck's content: key size, which tiles, which dials |
+| [`decks/<deck>/configuration.yaml`](decks) | That deck's pages, buttons and dials |
+| [`decks/<deck>/.env.example`](decks) | Per-deck HA host + token template (they differ — see below) |
+| [`decks/plus/docker-compose.yaml`](decks/plus/docker-compose.yaml) | Pi container (image, USB access, hardening) |
+| [`Taskfile.yml`](Taskfile.yml) | `task plus:*` / `task xl:*` workflows |
+| [`harden.sh`](harden.sh) | Host hardening/resilience (Pi only) |
 
 ## Prerequisites
+
+**Both machines**
+
+- [go-task](https://taskfile.dev) to run the workflow ([`Taskfile.yml`](Taskfile.yml)).
+- `python3` + `venv` and a TrueType font, for rendering the deck images.
+
+**Raspberry Pi (Plus)**
 
 - Raspberry Pi 5 running a 64-bit OS (Raspberry Pi OS Bookworm or similar), headless.
 - Docker Engine + Compose plugin:
@@ -23,62 +43,84 @@ defines a **Home** page with a light/climate button pair and two Stream Deck Plu
   sudo usermod -aG docker "$USER"   # log out/in afterwards
   ```
   The upstream image publishes an `arm64` variant, so it runs natively on the Pi 5.
-- A Stream Deck connected to the Pi over USB.
-- `python3` + `venv` and a TrueType font, for generating the button images
-  (see [Button images](#button-images)):
+- Renderer deps + go-task:
   ```bash
   sudo apt-get install -y python3-venv fonts-dejavu-core
-  ```
-- [go-task](https://taskfile.dev) to run the workflow ([`Taskfile.yml`](Taskfile.yml)):
-  ```bash
   sudo snap install task --classic   # or: see taskfile.dev/installation
   ```
 
+**Mac (Plus XL)** — *not* Docker: Docker Desktop on macOS runs in a VM with no
+USB passthrough, so the app runs natively. `task xl:install` handles the Python
+side; it needs Homebrew libs and go-task:
+
+```bash
+brew install go-task hidapi cairo libffi
+```
+
+> **Plus XL needs the library from git.** `StreamDeckPlusXL` exists only on
+> `python-elgato-streamdeck`'s `master` — the latest release (0.9.8) has neither
+> the device class nor its USB product id (`0x00c6`). `task xl:install` installs
+> the app first, then force-reinstalls `streamdeck` from `master` so it wins over
+> the release the app would otherwise pull in, and verifies the class imports.
+
 ## Setup
 
-Everything below is wrapped in `task` — run `task` alone to list the commands.
+Everything is wrapped in `task` — run `task` alone to list the commands. Note
+each deck needs **its own `.env`**, and the values genuinely differ: the Pi
+reaches HA directly at `10.69.42.3:8123` over plain `ws`, while the laptop is on
+a different subnet and must go via `ha.janvt.dev` over `wss`. There is no
+separate port setting — the URI is `<WEBSOCKET_PROTOCOL>://<HASS_HOST>/api/websocket`,
+so any non-default port goes inside `HASS_HOST`.
 
-1. **Copy this directory to the Pi** (e.g. `~/streamdeck`) and `cd` into it.
+### Stream Deck Plus (on the Pi)
 
-2. **Create and fill in `.env`:**
-   ```bash
-   task env      # copies .env.example -> .env
-   nano .env
-   ```
-   Set your Home Assistant host and a long-lived access token (create it under
-   *Profile → Security → Long-lived access tokens*). There is **no separate port
-   setting** — the connection URI is `<WEBSOCKET_PROTOCOL>://<HASS_HOST>/api/websocket`,
-   so put the port in `HASS_HOST` if HA isn't on the protocol default. For a bare
-   HA on a LAN IP (plain HTTP), use `HASS_HOST=<ip>:8123` and `WEBSOCKET_PROTOCOL=ws`;
-   behind an HTTPS reverse proxy, use the hostname and `WEBSOCKET_PROTOCOL=wss`.
+```bash
+task plus:env          # decks/plus/.env from the template
+nano decks/plus/.env   # set HASS_TOKEN
+task plus:deploy       # render 120px images → up -d → follow logs
+```
 
-3. **Adjust `configuration.yaml`** so the `entity_id`s match your setup.
+`auto_reload: true` picks up `configuration.yaml` edits without a restart — but
+**image files are not watched**, so after changing a spec or the renderer run
+`task plus:regen` (rebuild + restart).
 
-4. **Deploy** — builds the button images (venv + Pillow on first run), starts the
-   container, and tails the logs so you can watch it connect and detect the deck:
-   ```bash
-   task deploy
-   ```
+### Stream Deck Plus XL (on the Mac)
 
-The Stream Deck lights up with the **Home** page. `auto_reload: true` means edits
-to `configuration.yaml` are picked up without a restart — but **image changes are
-not watched**, so after editing `generate_icons.py` run `task regen` (rebuild +
-restart).
+```bash
+task xl:install        # venv + app + streamdeck from git master (verifies Plus XL support)
+task xl:env            # decks/plus-xl/.env from the template
+nano decks/plus-xl/.env
+task xl:detect         # confirm the deck is seen (prints deck type + pid)
+task xl:run            # renders 112px images, then runs in the foreground
+```
+
+`task xl:run` runs in the foreground (Ctrl-C to stop) — the laptop isn't an
+always-on appliance, so there's no autoheal/watchdog/service wrapper. After
+changing images, `task xl:regen` then restart `xl:run`.
 
 ### Task reference
 
 | Task | Does |
 |------|------|
-| `task update` | **git pull → rebuild images → restart** (one-shot update) |
-| `task deploy` | build icons → `up -d` → follow logs (first-time bring-up) |
-| `task up` | build icons (if venv missing, create it) → start detached |
-| `task regen` | rebuild button images → restart (apply icon/label changes) |
-| `task icons` | just (re)generate `icons/*.png` |
-| `task restart` / `task down` / `task logs` | container lifecycle |
-| `task env` | scaffold `.env` from the template |
-| `task harden` | idempotently apply the host-level hardening/resilience steps (needs sudo) |
+| `task plus:deploy` | render → `up -d` → follow logs (first-time Pi bring-up) |
+| `task plus:update` | **git pull → rebuild images → restart** (one-shot Pi update) |
+| `task plus:regen` | rebuild Plus images → restart (apply icon/label changes) |
+| `task plus:up` / `down` / `restart` / `logs` | container lifecycle |
+| `task plus:env` | scaffold `decks/plus/.env` |
+| `task xl:install` | venv + app + `streamdeck` from master (idempotent) |
+| `task xl:run` | render + run the Plus XL in the foreground |
+| `task xl:detect` | list attached decks (type + USB pid) |
+| `task xl:regen` | rebuild Plus XL images |
+| `task xl:env` | scaffold `decks/plus-xl/.env` |
+| `task icons DECK=plus\|plus-xl` / `task icons:all` | just render images |
+| `task harden` | host-level hardening/resilience — **Pi only** (needs sudo) |
 
-## USB access
+## USB access (Pi / Plus only)
+
+> The next four sections — USB access, container hardening, run-on-boot and
+> resilience — are all about the **Pi's Docker deployment**. None of it applies
+> to the Mac, which runs the app natively in the foreground.
+
 
 The compose file runs the container **unprivileged** (hardened): there is no
 `privileged: true`. USB (HID) access is granted narrowly — the `/dev/bus/usb`
@@ -210,31 +252,61 @@ the former works in `image:`. Bump it deliberately when you want a new version.
 
 ## Pages / views
 
-There are two pages. **Key 8 is the mode button** on both — it's a `next-page`
-special button, and `next-page` wraps (`% len(pages)`), so pressing key 8 cycles
-Home → Shades → Home. Add a third page later and the same key cycles through all
+The **Plus** has two pages, and **key 8 is the mode button** on both — a
+`next-page` special button. `next-page` wraps (`% len(pages)`), so pressing key 8
+cycles Home → Shades → Home; add a third page and the same key cycles through all
 of them. The dials swap with the page too, not just the buttons.
 
-## Button & dial images
+The **Plus XL** has one page — 36 keys means everything fits, so it has no mode
+key at all.
+
+## Button & dial images (shared renderer)
 
 Neither the buttons nor the dials use the tool's built-in rendering — it can't
 shrink the icon, put a label below it, or draw a decent gauge.
 [`generate_icons.py`](generate_icons.py) pre-renders every key and dial frame as
 a PNG, and each `icon:` field points at the right one, templated on state.
 
-`task icons` builds them all: **25 key images** (120×120) and **188 dial frames**
-(200×100 — frames per dial vary by granularity). `icons/` is git-ignored (build artifact), so
-build it on each machine before start; the MDI webfont is fetched once into
-`.iconbuild/`.
+**One renderer, many decks.** The drawing code and palette are shared; each deck's
+[`decks/<deck>/spec.py`](decks) supplies only *content* — its key size and which
+tiles/dials it wants. Key geometry is expressed relative to a 120px reference and
+scaled to the deck (so the Plus's 120px output is unchanged and the XL's 112px is
+derived automatically). Add a deck by dropping in a new `decks/<name>/spec.py`.
+
+Dial frames are **identical across both decks**: the Plus strip is 800×100 over 4
+dials and the XL's is 1200×100 over 6, so a segment is 200×100 either way and the
+same gauge code serves both.
 
 ```bash
-task icons     # creates the venv on first run, then writes icons/ + icons/dials/
+task icons:all                 # both decks
+task icons DECK=plus-xl        # just one
 ```
 
-Tunables live at the top of the script (button `ICON_PX`/`LABEL_PX`/`RADIUS`;
-dial `DIAL_STYLES` colours + icons, `SS` supersample). After editing, `task regen`
-rebuilds and restarts (`auto_reload` doesn't watch image files). Adding/renaming
-a control means updating both the script's spec and the `icon:` path.
+| Deck | Key images | Dial frames |
+|------|-----------|-------------|
+| plus | 25 @ 120×120 | 230 @ 200×100 |
+| plus-xl | 55 @ 112×112 | 188 @ 200×100 |
+
+`decks/*/icons/` is git-ignored (build artifact), so render on each machine
+before starting; the MDI webfont is fetched once into `.iconbuild/`.
+
+Shared tunables live at the top of the script (`REF_*` key geometry, `STYLES`
+palette, `DIAL_STYLES` colours/icons/granularity, `SS` supersample); per-deck
+content lives in `spec.py`. After editing either, re-render and restart
+(`auto_reload` doesn't watch image files). Adding/renaming a control means
+updating both the deck's `spec.py` and its `configuration.yaml` `icon:` path.
+
+### Icon paths differ per deck
+
+A relative `icon:` resolves against the *app's installed assets dir*, not the
+working directory — so paths must be **absolute**:
+
+- **Plus (Docker):** `/app/icons/...` — absolute inside the container, which
+  mounts `decks/plus/` at `/app`.
+- **Plus XL (native):** the real host path,
+  `/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/...`. This
+  is machine-specific by design; if the checkout moves, update the prefix in that
+  deck's `configuration.yaml`.
 
 ### Buttons
 
@@ -298,6 +370,8 @@ TURN-only** (all four live-update). The Home volume/brightness dials keep their
 PUSH actions (mute / area-toggle), so only the leftmost (LR volume) live-updates;
 the others redraw after the debounce + HA echo. Fixing that without dropping
 their push needs a renderer patch (fork).
+
+# Stream Deck Plus layout (the Pi)
 
 ## Home page — buttons (LCD keys)
 
@@ -432,6 +506,36 @@ IDs with `{{ area_id('Living Room') }}` / `{{ area_id('Kitchen') }}` in HA's
 Developer Tools → Template. See the
 [upstream docs](https://github.com/basnijholt/home-assistant-streamdeck-yaml)
 for the full schema and helper functions (`dial_value()`, `dial_attr()`).
+
+# Stream Deck Plus XL layout (the Mac)
+
+Its own design, not a copy of the Plus: one page, 36 keys in four rows of nine,
+plus six dials. See [`decks/plus-xl/spec.py`](decks/plus-xl/spec.py) for the
+tiles and [`decks/plus-xl/configuration.yaml`](decks/plus-xl/configuration.yaml)
+for the wiring.
+
+| Row | Contents |
+|-----|----------|
+| 1 | Scenes — Chill, Vinyl, Pain Cave, Work, Work S, Clean, Sleep, then Lights Off + Open All |
+| 2 | Room lights — Living Rm, Kitchen, Hallway, Outside, Bedroom, Bathroom, Reading, Record, Signe |
+| 3 | Close All, media transport (Play/Prev/Next), TV / Apple TV / Xbox, then both doors |
+| 4 | Modes (Guest, Cleaning, Be Smart, Fan), routines (Come Home, Leave, Wake Up), Unlock |
+
+Scenes here simply **activate** (`scene.turn_on`) and highlight from
+`input_select.active_scene` — no toggle-off semantics, since the XL has a
+dedicated key per room light for turning things off. Doors and Unlock keep the
+same `delay: 5` cancel guard as the Plus.
+
+**All six dials are TURN-only, deliberately.** The eager local re-render looks a
+dial up by raw list index while being handed the *sorted* index (see the
+[live-render caveat](#dials)), so it only works when no dial has a paired PUSH.
+Keeping every dial TURN-only means **all six track your finger live**; mixing
+paired and unpaired dials would redraw the wrong segment. Mute and area-toggle
+belong on keys here — there are 36 of them.
+
+Dials, left to right: Living Room volume, Madagascar volume, LR ceiling
+brightness, Kitchen brightness, LR shades, Kitchen shades. Same reversed turn
+direction (negative `step`) and inverted shade bar (full = closed) as the Plus.
 
 ## Troubleshooting
 

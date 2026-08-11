@@ -1,12 +1,21 @@
 version: '3'
 
-# Task runner for the Stream Deck setup (https://taskfile.dev).
+# Task runner for the Stream Deck decks (https://taskfile.dev).
 # Run `task` with no args to list everything.
+#
+# Two decks, two very different deployments:
+#   plus  — Stream Deck Plus on the Raspberry Pi, in Docker Compose
+#   xl    — Stream Deck Plus XL on the Mac, running NATIVELY (Docker Desktop on
+#           macOS can't pass through USB), and needing the streamdeck library
+#           from git master since Plus XL support is not in any release yet.
+#
+# Rendering is shared: generate_icons.py --deck <name> uses decks/<name>/spec.py.
 
 vars:
   VENV: .venv
   PY: '{{.VENV}}/bin/python'
   PIP: '{{.VENV}}/bin/pip'
+  XLVENV: decks/plus-xl/.venv
 
 tasks:
   default:
@@ -14,16 +23,9 @@ tasks:
     cmds: [task --list]
     silent: true
 
-  env:
-    desc: Create .env from the template (then edit in your HASS_HOST / token)
-    status:
-      - test -f .env
-    cmds:
-      - cp .env.example .env
-      - "echo '>> Created .env — set HASS_HOST, WEBSOCKET_PROTOCOL and HASS_TOKEN'"
-
+  # ── shared ────────────────────────────────────────────────────────────────
   venv:
-    desc: Create the Python venv with the icon-generator dependencies
+    desc: Create the Python venv used by the image renderer
     status:
       - test -x {{.PY}}
       - '{{.PY}} -c "import PIL"'
@@ -32,59 +34,142 @@ tasks:
       - '{{.PIP}} install --quiet --upgrade pip pillow'
 
   icons:
-    desc: Generate the button images into icons/
+    desc: Render images for one deck (DECK=plus|plus-xl)
+    deps: [venv]
+    requires:
+      vars: [DECK]
+    cmds:
+      - '{{.PY}} generate_icons.py --deck {{.DECK}}'
+
+  icons:all:
+    desc: Render images for every deck
     deps: [venv]
     cmds:
-      - '{{.PY}} generate_icons.py'
+      - '{{.PY}} generate_icons.py --deck all'
 
-  up:
-    desc: Generate icons and start the container (detached)
-    deps: [icons]
+  harden:
+    desc: Idempotently apply host-level hardening/resilience on the Pi (needs sudo)
+    cmds: [bash harden.sh]
+
+  # ── plus (Raspberry Pi, Docker) ───────────────────────────────────────────
+  plus:env:
+    desc: Create decks/plus/.env from the template
+    dir: decks/plus
+    status: [test -f .env]
+    cmds:
+      - cp .env.example .env
+      - "echo '>> Created decks/plus/.env — set HASS_HOST, WEBSOCKET_PROTOCOL, HASS_TOKEN'"
+
+  plus:icons:
+    desc: Render the Plus images (120px)
+    cmds: [{task: icons, vars: {DECK: plus}}]
+
+  plus:up:
+    desc: Render images and start the Plus container (detached)
+    deps: [plus:icons]
+    dir: decks/plus
     preconditions:
       - sh: test -f .env
-        msg: "No .env found — run `task env` and fill it in first."
+        msg: "No decks/plus/.env — run `task plus:env` and fill it in first."
     cmds:
       - docker compose up -d
       - docker compose ps
 
-  down:
-    desc: Stop and remove the container
+  plus:down:
+    desc: Stop and remove the Plus container
+    dir: decks/plus
     cmds: [docker compose down]
 
-  restart:
-    desc: Restart the container (e.g. after editing .env)
+  plus:restart:
+    desc: Restart the Plus container
+    dir: decks/plus
     cmds: [docker compose restart]
 
-  regen:
-    desc: Rebuild the button images and restart to apply them
-    deps: [icons]
-    cmds:
-      - docker compose restart
-
-  update:
-    desc: One-shot — git pull, rebuild images, restart the container
-    # Note: this pulls the tag in docker-compose.yaml as-is. If you've pinned
-    # the image by digest (recommended, see README "Resilience"), bump the
-    # digest deliberately rather than relying on :latest moving underneath you.
-    cmds:
-      - git pull
-      - task: icons
-      - docker compose restart
-
-  logs:
-    desc: Follow the container logs
+  plus:logs:
+    desc: Follow the Plus container logs
+    dir: decks/plus
     cmds: [docker compose logs -f]
 
-  harden:
-    desc: Idempotently apply host-level hardening/resilience (udev, watchdog, auto-upgrades, NTP; needs sudo)
-    cmds: [bash harden.sh]
+  plus:regen:
+    desc: Rebuild the Plus images and restart to apply them
+    deps: [plus:icons]
+    dir: decks/plus
+    cmds: [docker compose restart]
 
-  deploy:
-    desc: Full bring-up — build icons, start, then follow logs
-    deps: [icons]
+  plus:deploy:
+    desc: Full Plus bring-up — build images, start, follow logs
+    deps: [plus:icons]
+    dir: decks/plus
     preconditions:
       - sh: test -f .env
-        msg: "No .env found — run `task env` and fill it in first."
+        msg: "No decks/plus/.env — run `task plus:env` and fill it in first."
     cmds:
       - docker compose up -d
       - docker compose logs -f
+
+  plus:update:
+    desc: One-shot Plus update — git pull, rebuild images, restart
+    cmds:
+      - git pull
+      - {task: plus:icons}
+      - task: plus:restart
+
+  # ── plus-xl (Mac, native) ─────────────────────────────────────────────────
+  xl:deps:
+    desc: Install the macOS system libraries the deck needs (Homebrew)
+    status:
+      - brew list hidapi >/dev/null 2>&1
+      - brew list cairo >/dev/null 2>&1
+      - brew list libffi >/dev/null 2>&1
+    cmds:
+      - brew install hidapi cairo libffi
+
+  xl:install:
+    desc: Create the app venv for the Plus XL (streamdeck from git master — Plus XL is not in any release)
+    deps: [xl:deps]
+    status:
+      - test -x {{.XLVENV}}/bin/home-assistant-streamdeck-yaml
+      - '{{.XLVENV}}/bin/python -c "from StreamDeck.Devices.StreamDeckPlusXL import StreamDeckPlusXL"'
+    cmds:
+      - python3 -m venv {{.XLVENV}}
+      - '{{.XLVENV}}/bin/pip install --quiet --upgrade pip'
+      - '{{.XLVENV}}/bin/pip install --quiet "home-assistant-streamdeck-yaml @ git+https://github.com/basnijholt/home-assistant-streamdeck-yaml@main"'
+      # Install AFTER the app so this master build wins over the PyPI release
+      # that the app's dependency resolution pulls in (0.9.8 has no Plus XL).
+      - '{{.XLVENV}}/bin/pip install --quiet --upgrade --force-reinstall "streamdeck @ git+https://github.com/abcminiuser/python-elgato-streamdeck@master"'
+      - '{{.XLVENV}}/bin/python -c "from StreamDeck.Devices.StreamDeckPlusXL import StreamDeckPlusXL as D; print(f\"Plus XL support OK: {D.KEY_COUNT} keys, {D.DIAL_COUNT} dials, {D.KEY_PIXEL_WIDTH}px\")"'
+
+  xl:env:
+    desc: Create decks/plus-xl/.env from the template
+    dir: decks/plus-xl
+    status: [test -f .env]
+    cmds:
+      - cp .env.example .env
+      - "echo '>> Created decks/plus-xl/.env — set HASS_HOST/HASS_TOKEN (use ha.janvt.dev + wss from the laptop)'"
+
+  xl:icons:
+    desc: Render the Plus XL images (112px)
+    cmds: [{task: icons, vars: {DECK: plus-xl}}]
+
+  xl:detect:
+    desc: List attached Stream Decks (confirms the Plus XL is seen)
+    deps: [xl:install]
+    cmds:
+      - '{{.XLVENV}}/bin/python -c "from StreamDeck.DeviceManager import DeviceManager; ds=DeviceManager().enumerate(); print(f\"{len(ds)} deck(s):\"); [print(f\"  {d.deck_type()}  pid=0x{d.product_id():04x}\") for d in ds]"'
+
+  xl:run:
+    desc: Run the Plus XL deck in the foreground (Ctrl-C to stop)
+    deps: [xl:install, xl:icons]
+    dir: decks/plus-xl
+    dotenv: ['.env']
+    preconditions:
+      - sh: test -f .env
+        msg: "No decks/plus-xl/.env — run `task xl:env` and fill it in first."
+    cmds:
+      - ./.venv/bin/home-assistant-streamdeck-yaml --config configuration.yaml
+
+  xl:regen:
+    desc: Rebuild the Plus XL images (restart xl:run afterwards to apply)
+    cmds:
+      - {task: icons, vars: {DECK: plus-xl}}
+      - "echo '>> Images rebuilt — restart `task xl:run` to apply (image files are not auto-reloaded).'"

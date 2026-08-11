@@ -1,10 +1,12 @@
-# Secrets
+# Secrets (one .env per deck — different host/protocol per machine)
 .env
+decks/*/.env
 
-# Generated button images (build artifact — run generate_icons.py per machine)
-icons/
+# Generated deck images (build artifact — run `task icons:all` per machine)
+decks/*/icons/
 
-# Icon generator build cache (downloaded MDI font/css) and local venv
+# Icon generator build cache (downloaded MDI font/css) and local venvs
 .iconbuild/
 .venv/
 venv/
+decks/*/.venv/

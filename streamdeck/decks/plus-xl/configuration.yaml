@@ -1,0 +1,319 @@
+# home-assistant-streamdeck-yaml — Stream Deck Plus XL (runs natively on the Mac)
+#
+# 36 keys (9x4) + 6 dials. Everything fits on one page, so unlike the Plus there
+# is no mode/paging key.
+#
+# ICON PATHS ARE ABSOLUTE AND MACHINE-SPECIFIC. The app resolves a relative
+# `icon:` against its own installed package assets dir (NOT the cwd), so these
+# must be absolute. They point at this checkout on the Mac; if you move the
+# repo or run it elsewhere, update the prefix:
+#   /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons
+# (The Pi's Plus config gets away with /app/icons/... because that's absolute
+# inside its container.)
+#
+# Images come from ../../generate_icons.py --deck plus-xl (see spec.py).
+
+brightness: 80
+auto_reload: true
+inactivity_time: -1
+
+pages:
+  - name: Home
+
+    buttons:
+      # ── Row 1: scenes ────────────────────────────────────────────────────
+      # Activate on press; highlighted while input_select.active_scene matches
+      # (kept in sync by the HA "Mark <scene> active" automations).
+      - entity_id: scene.chill
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/chill_on.png" if is_state("input_select.active_scene", "chill") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/chill_off.png" }}'
+
+      - entity_id: scene.vinyl
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/vinyl_on.png" if is_state("input_select.active_scene", "vinyl") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/vinyl_off.png" }}'
+
+      - entity_id: scene.pain_cave
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/pain_cave_on.png" if is_state("input_select.active_scene", "pain_cave") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/pain_cave_off.png" }}'
+
+      - entity_id: scene.work
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/work_on.png" if is_state("input_select.active_scene", "work") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/work_off.png" }}'
+
+      - entity_id: scene.work_s
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/work_s_on.png" if is_state("input_select.active_scene", "work_s") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/work_s_off.png" }}'
+
+      - entity_id: scene.cleaning
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_sc_on.png" if is_state("input_select.active_scene", "cleaning") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_sc_off.png" }}'
+
+      - entity_id: scene.sleep
+        service: scene.turn_on
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/sleep_on.png" if is_state("input_select.active_scene", "sleep") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/sleep_off.png" }}'
+
+      - entity_id: script.turn_off_all_lights
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/lights_off.png
+
+      - entity_id: script.open_all_blinds
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/open_all.png
+
+      # ── Row 2: room lights ───────────────────────────────────────────────
+      - entity_id: light.living_room_ceiling_light
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/lr_ceiling_on.png" if is_state("light.living_room_ceiling_light", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/lr_ceiling_off.png" }}'
+
+      - entity_id: light.kitchen_ceiling_light
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/kitchen_on.png" if is_state("light.kitchen_ceiling_light", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/kitchen_off.png" }}'
+
+      - entity_id: light.shellypro1pm_ec62608ad35c_switch_0
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/hallway_on.png" if is_state("light.shellypro1pm_ec62608ad35c_switch_0", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/hallway_off.png" }}'
+
+      - entity_id: light.balcony_ceiling_light
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/outside_on.png" if is_state("light.balcony_ceiling_light", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/outside_off.png" }}'
+
+      - entity_id: light.signify_netherlands_b_v_ltv002
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bedroom_on.png" if is_state("light.signify_netherlands_b_v_ltv002", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bedroom_off.png" }}'
+
+      - entity_id: light.shellyplus2pm_10061ccb8718_switch_0
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bathroom_on.png" if is_state("light.shellyplus2pm_10061ccb8718_switch_0", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bathroom_off.png" }}'
+
+      - entity_id: light.reading_spot
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/reading_on.png" if is_state("light.reading_spot", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/reading_off.png" }}'
+
+      - entity_id: light.record_player
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/record_on.png" if is_state("light.record_player", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/record_off.png" }}'
+
+      - entity_id: light.philips_hue_signe
+        service: light.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/signe_on.png" if is_state("light.philips_hue_signe", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/signe_off.png" }}'
+
+      # ── Row 3: shades + media ────────────────────────────────────────────
+      # No "close all" script exists, so close every shade explicitly.
+      - service: cover.close_cover
+        service_data:
+          entity_id:
+            - cover.living_room_shades
+            - cover.shellyplus2pm_cc7b5c894ba4
+            - cover.bedroom_shades
+            - cover.guest_bedroom_shades
+            - cover.east_facing_shades
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/close_all.png
+
+      - entity_id: media_player.living_room
+        service: media_player.media_play_pause
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/play_pause.png
+
+      - entity_id: media_player.living_room
+        service: media_player.media_previous_track
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/prev.png
+
+      - entity_id: media_player.living_room
+        service: media_player.media_next_track
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/next.png
+
+      - entity_id: media_player.lg_webos_tv_oled48c37la
+        service: media_player.toggle
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/tv.png
+
+      - entity_id: media_player.apple_tv
+        service: media_player.toggle
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/appletv.png
+
+      - entity_id: media_player.xbox
+        service: media_player.toggle
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/xbox.png
+
+      # Doors — 5s countdown guard; press again during it to cancel.
+      - entity_id: lock.nuki_schmatzknauf_lock_2
+        service: lock.open
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/apartment.png
+        delay: 5
+
+      - entity_id: switch.buzzer
+        service: switch.toggle
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/house.png
+        delay: 5
+
+      # ── Row 4: modes + routines ──────────────────────────────────────────
+      - entity_id: input_boolean.guest_mode
+        service: input_boolean.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_off.png" }}'
+
+      - entity_id: input_boolean.cleaning_mode
+        service: input_boolean.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_on.png" if is_state("input_boolean.cleaning_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_off.png" }}'
+
+      - entity_id: input_boolean.be_smart
+        service: input_boolean.toggle
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_on.png" if is_state("input_boolean.be_smart", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_off.png" }}'
+
+      # Press triggers the automation; the icon reflects the helper it manages.
+      - entity_id: automation.keep_bathroom_fan_on
+        linked_entity: input_boolean.keep_bathroom_fan_on
+        service: automation.trigger
+        text: ''
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
+
+      - entity_id: script.come_home
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/come_home.png
+
+      - entity_id: script.leave_home
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/leave_home.png
+
+      - entity_id: script.wake_up
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/wake_up.png
+
+      # Unlocking the house — 5s countdown guard like the doors.
+      - entity_id: script.unlock_house
+        service: script.turn_on
+        text: ''
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/unlock.png
+        delay: 5
+
+      - special_type: empty
+
+    dials:
+      # Six dials, ALL TURN-only — no PUSH entries. That's deliberate: the app's
+      # eager local re-render looks a dial up by raw list index while being
+      # handed the *sorted* index, so it only works when they line up, i.e. when
+      # no dial has a paired PUSH. Keeping every dial TURN-only means all six
+      # track your finger live (mixing paired and unpaired dials would redraw
+      # the wrong segment). Mute / area-toggle live on keys instead — there are
+      # 36 of them. Turn direction is reversed (negative step) and the shade bar
+      # is display-inverted (full bar = closed), matching the Plus.
+      # ── Dial 1: Living Room volume ────────────────────────────────────────
+      - entity_id: media_player.living_room
+        dial_event_type: TURN
+        state_attribute: volume_level
+        allow_touchscreen_events: true
+        service: media_player.volume_set
+        service_data:
+          volume_level: '{{ dial_value() | float }}'
+        text: ''
+        delay: 0.6
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/lr_volume_muted.png" if state_attr("media_player.living_room", "is_volume_muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/lr_volume_" ~ (((((dial_value() * 100) / 2) | round) * 2) | int) ~ ".png" }}'
+        attributes:
+          min: 0
+          max: 1
+          step: -0.02
+      # ── Dial 2: Madagascar volume ────────────────────────────────────────
+      - entity_id: media_player.unnamed_room
+        dial_event_type: TURN
+        state_attribute: volume_level
+        allow_touchscreen_events: true
+        service: media_player.volume_set
+        service_data:
+          volume_level: '{{ dial_value() | float }}'
+        text: ''
+        delay: 0.6
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/madagascar_volume_muted.png" if state_attr("media_player.unnamed_room", "is_volume_muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/madagascar_volume_" ~ (((((dial_value() * 100) / 2) | round) * 2) | int) ~ ".png" }}'
+        attributes:
+          min: 0
+          max: 1
+          step: -0.02
+      # ── Dial 3: Living Room ceiling brightness ────────────────────────────
+      - entity_id: light.living_room_ceiling_light
+        dial_event_type: TURN
+        state_attribute: brightness
+        allow_touchscreen_events: true
+        service: light.turn_on
+        service_data:
+          brightness: '{{ dial_value() | int }}'
+        text: ''
+        delay: 0.3
+        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/lr_bright_{{ ((((dial_value() / 255 * 100) / 5) | round) * 5) | int }}.png'
+        attributes:
+          min: 0
+          max: 255
+          step: -13
+      # ── Dial 4: Kitchen ceiling brightness ────────────────────────────────
+      - entity_id: light.kitchen_ceiling_light
+        dial_event_type: TURN
+        state_attribute: brightness
+        allow_touchscreen_events: true
+        service: light.turn_on
+        service_data:
+          brightness: '{{ dial_value() | int }}'
+        text: ''
+        delay: 0.3
+        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/kitchen_bright_{{ ((((dial_value() / 255 * 100) / 5) | round) * 5) | int }}.png'
+        attributes:
+          min: 0
+          max: 255
+          step: -13
+      # ── Dials 5-6: shades ─────────────────────────────────────────────────
+      - entity_id: cover.living_room_shades
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: ''
+        delay: 0.5
+        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/lr_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
+        attributes:
+          min: 0
+          max: 100
+          step: -5
+
+      - entity_id: cover.shellyplus2pm_cc7b5c894ba4
+        dial_event_type: TURN
+        state_attribute: current_position
+        allow_touchscreen_events: true
+        service: cover.set_cover_position
+        service_data:
+          position: '{{ dial_value() | int }}'
+        text: ''
+        delay: 0.5
+        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/kitchen_shade_{{ ((((100 - dial_value()) / 5) | round) * 5) | int }}.png'
+        attributes:
+          min: 0
+          max: 100
+          step: -5

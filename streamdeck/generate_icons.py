@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
-"""Generate Stream Deck key images: a coloured chip with a smaller icon and a
-label below it, one PNG per button state.
+"""Shared Stream Deck image renderer for every deck in decks/.
 
-Run:  python generate_icons.py
-Output: icons/*.png (120x120, the Stream Deck Plus native key size)
+Renders two kinds of image, both referenced from a deck's `configuration.yaml`
+via its templated `icon:` field:
 
-The button config references these via a templated `icon:` field. Re-run this
-whenever the spec or palette below changes, then redeploy.
+  * keys        — a coloured chip with a smaller icon and a label below it,
+                  at the deck's native key size (Plus 120px, Plus XL 112px).
+  * dial frames — a vertical fill bar + icon/value/label, one PNG per step.
+                  Always 200x100: the Plus strip is 800x100 over 4 dials and
+                  the Plus XL's is 1200x100 over 6, so a segment is 200x100 on
+                  both and these frames are shared verbatim.
 
-Build deps (isolated, not committed): the Material Design Icons webfont + css
-are downloaded into .iconbuild/ on first run; labels use a system sans font.
-Requires Pillow (`pip install pillow`).
+Usage:  python generate_icons.py --deck plus
+Output: decks/<deck>/icons/{*.png,dials/*.png}
+
+WHAT LIVES WHERE: this file owns the drawing code and the palette (shared by
+all decks). Each deck's decks/<deck>/spec.py owns its content — key size, which
+tiles, which dials. Add a deck by creating a new decks/<name>/spec.py.
+
+Key geometry is expressed relative to REF_KEY (the 120px size the look was
+tuned at) and scaled to the deck's key size, so one renderer serves all decks.
+
+Build deps (not committed): the Material Design Icons webfont + css are cached
+in .iconbuild/ on first run; labels use a system sans font. Needs Pillow.
 """
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import re
 import sys
 import urllib.request
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 from PIL import Image, ImageDraw, ImageFont
 
 HERE = Path(__file__).parent
 BUILD = HERE / ".iconbuild"
-OUT = HERE / "icons"
-KEY = 120  # Stream Deck Plus key size in px
+DECKS = HERE / "decks"
 MDI_VERSION = "7.4.47"
 
-# ── palette (matches the button colour scheme) ──────────────────────────────
+# ── palette (shared by all decks) ───────────────────────────────────────────
 # name -> (background, icon colour, label colour)
 STYLES = {
     "off":   ("#C9C9CE", "#6E6E73", "#3A3A3C"),
@@ -37,64 +51,26 @@ STYLES = {
     "green": ("#639922", "#FFFFFF", "#FFFFFF"),
 }
 
-# ── button spec: (output name, mdi icon, label, active style) ───────────────
-# Stateful buttons render <name>_on (active style) and <name>_off (grey).
-# Action buttons render <name> in their domain style.
-STATEFUL = [
-    ("chill",     "sofa",         "Chill",     "amber"),
-    ("vinyl",     "album",        "Vinyl",     "amber"),
-    ("pain_cave", "bike-fast",    "Pain Cave", "amber"),
-    ("work_s",    "desk",         "Work S",    "amber"),
-    ("hallway",   "human-walker", "Hallway",   "amber"),
-    ("outside",   "cloud",        "Outside",   "amber"),
-    ("fan",       "emoticon-poop","Fan",       "blue"),
-    ("guest",     "account-group","Guest",     "blue"),
-    ("cleaning",  "broom",        "Cleaning",  "blue"),
-]
-ACTION = [
-    ("lights_off", "lightbulb-off",       "Lights Off", "amber"),
-    ("open_all",   "window-shutter-open", "Open All",   "green"),
-    ("close_all",  "window-shutter",      "Close All",  "green"),
-    ("apartment",  "door-open",           "Apartment",  "red"),
-    ("house",      "home",                "House",      "red"),
-    ("menu",       "dots-horizontal",     "Menu",       "blue"),
-    # Active look for the plain "Work" scene (shown by the Work S key when
-    # scene.work is active, via long-press). Amber like an active scene.
-    ("work",       "briefcase",           "Work",       "amber"),
-]
+# ── key geometry, tuned at REF_KEY px and scaled per deck ───────────────────
+REF_KEY = 120
+REF_ICON_PX = 54   # glyph size (smaller than the key -> leaves room for a label)
+REF_ICON_CY = 44   # glyph vertical centre
+REF_LABEL_PX = 17
+REF_LABEL_CY = 95  # label vertical centre
+REF_RADIUS = 18    # chip corner radius
 
-ICON_PX = 54      # glyph size (smaller than the key -> leaves room for a label)
-ICON_CY = 44      # glyph vertical centre
-LABEL_PX = 17
-LABEL_CY = 95     # label vertical centre
-RADIUS = 18       # chip corner radius
-
-# ── dial gauges (touchscreen strip) ─────────────────────────────────────────
-# The Stream Deck Plus touch strip is 800x100, split into four 200x100 dial
-# segments. Dials move in fixed 5% steps, so we pre-render a frame per 5% and
-# the dial's `icon:` field templates to the current value.
+# ── dial gauges (touchscreen strip) — identical on every deck ───────────────
 DIAL_W, DIAL_H = 200, 100
-SS = 4            # supersample factor for crisp edges
+SS = 4  # supersample factor for crisp edges
 
 # style -> (accent colour, mdi icon, frame step %). The step is the display
 # granularity; set the matching turn increment via each dial's `attributes.step`
-# in configuration.yaml.
+# in that deck's configuration.yaml.
 DIAL_STYLES = {
     "volume": ("#38D6F2", "volume-high",   2),
     "bright": ("#F7A828", "brightness-7",  5),
     "shade":  ("#63C63B", "window-shutter", 5),
 }
-# (slug, style, label) — one dial each; frames are <slug>_<pct>.png
-DIALS = [
-    ("lr_volume",         "volume", "Living Room"),
-    ("madagascar_volume", "volume", "Madagascar"),
-    ("lr_bright",         "bright", "LR Ceiling"),
-    ("kitchen_bright",    "bright", "Kitchen"),
-    ("lr_shade",          "shade",  "Living Room"),
-    ("kitchen_shade",     "shade",  "Kitchen"),
-    ("bedroom_shade",     "shade",  "Bedroom"),
-    ("guest_shade",       "shade",  "Guest"),
-]
 
 
 def _fetch(url: str, dest: Path) -> None:
@@ -136,24 +112,46 @@ def _label_font(size: int) -> ImageFont.FreeTypeFont:
     )
 
 
-def render(name: str, mdi: str, label: str, style: str,
-           cps: dict[str, str], icon_font: ImageFont.FreeTypeFont,
-           label_font: ImageFont.FreeTypeFont) -> None:
+def load_spec(deck: str) -> ModuleType:
+    """Import decks/<deck>/spec.py as a module."""
+    path = DECKS / deck / "spec.py"
+    if not path.exists():
+        sys.exit(f"no spec for deck {deck!r} (expected {path})")
+    spec = importlib.util.spec_from_file_location(f"{deck}_spec", path)
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+def geometry(key_px: int) -> SimpleNamespace:
+    """Scale the reference key geometry to this deck's key size."""
+    def s(v: int) -> int:
+        return round(v * key_px / REF_KEY)
+    return SimpleNamespace(
+        key=key_px, icon_px=s(REF_ICON_PX), icon_cy=s(REF_ICON_CY),
+        label_px=s(REF_LABEL_PX), label_cy=s(REF_LABEL_CY), radius=s(REF_RADIUS),
+    )
+
+
+def render_key(name: str, mdi: str, label: str, style: str, *,
+               geo: SimpleNamespace, out: Path, cps: dict[str, str],
+               icon_font: ImageFont.FreeTypeFont,
+               label_font: ImageFont.FreeTypeFont) -> None:
     if mdi not in cps:
         sys.exit(f"unknown MDI icon: {mdi}")
     bg, icon_c, label_c = STYLES[style]
-    img = Image.new("RGB", (KEY, KEY), "#000000")
+    img = Image.new("RGB", (geo.key, geo.key), "#000000")
     draw = ImageDraw.Draw(img)
-    draw.rounded_rectangle((0, 0, KEY - 1, KEY - 1), radius=RADIUS, fill=bg)
+    draw.rounded_rectangle((0, 0, geo.key - 1, geo.key - 1), radius=geo.radius, fill=bg)
     glyph = chr(int(cps[mdi], 16))
-    draw.text((KEY / 2, ICON_CY), glyph, font=icon_font, fill=icon_c, anchor="mm")
-    draw.text((KEY / 2, LABEL_CY), label, font=label_font, fill=label_c, anchor="mm")
-    OUT.mkdir(exist_ok=True)
-    img.save(OUT / f"{name}.png")
+    draw.text((geo.key / 2, geo.icon_cy), glyph, font=icon_font, fill=icon_c, anchor="mm")
+    draw.text((geo.key / 2, geo.label_cy), label, font=label_font, fill=label_c, anchor="mm")
+    out.mkdir(parents=True, exist_ok=True)
+    img.save(out / f"{name}.png")
 
 
-def render_gauge(slug: str, style: str, label: str, pct: int,
-                 cps: dict[str, str], mdi_ttf: str, label_ttf: str,
+def render_gauge(slug: str, style: str, label: str, pct: int, *,
+                 out: Path, cps: dict[str, str], mdi_ttf: str, label_ttf: str,
                  muted: bool = False) -> None:
     """Render one 200x100 dial frame: a vertical fill bar + icon, value, label.
     With muted=True, render a single greyed 'muted' frame (mute icon, empty bar)."""
@@ -173,10 +171,10 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
     d.text((rcx, 27 * SS), chr(int(cps[icon], 16)),
            font=ImageFont.truetype(mdi_ttf, 26 * SS), fill=color, anchor="mm")
     if muted:
-        d.text((rcx, 57 * SS),"MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
+        d.text((rcx, 57 * SS), "MUTE", font=ImageFont.truetype(label_ttf, 22 * SS),
                fill=color, anchor="mm")
     else:
-        d.text((rcx, 57 * SS),str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
+        d.text((rcx, 57 * SS), str(pct), font=ImageFont.truetype(label_ttf, 38 * SS),
                fill="#FFFFFF", anchor="mm")
     d.text((rcx, 84 * SS), label, font=ImageFont.truetype(label_ttf, 13 * SS),
            fill="#B8B8BE", anchor="mm")
@@ -191,37 +189,57 @@ def render_gauge(slug: str, style: str, label: str, pct: int,
         rr = int(min(br, (by1 - fy0) / 2))
         d.rounded_rectangle((bx0, fy0, bx1, by1), radius=rr, fill=color)
 
-    (OUT / "dials").mkdir(parents=True, exist_ok=True)
+    (out / "dials").mkdir(parents=True, exist_ok=True)
     name = f"{slug}_muted.png" if muted else f"{slug}_{pct}.png"
-    im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(OUT / "dials" / name)
+    im.resize((DIAL_W, DIAL_H), Image.LANCZOS).save(out / "dials" / name)
 
 
-def main() -> None:
+def build(deck: str) -> None:
+    spec = load_spec(deck)
+    geo = geometry(spec.KEY_PX)
+    out = DECKS / deck / "icons"
+
     _fetch(f"https://cdn.jsdelivr.net/npm/@mdi/font@{MDI_VERSION}/fonts/materialdesignicons-webfont.ttf",
            BUILD / "mdi.ttf")
     _fetch(f"https://cdn.jsdelivr.net/npm/@mdi/font@{MDI_VERSION}/css/materialdesignicons.css",
            BUILD / "mdi.css")
     cps = _codepoints(BUILD / "mdi.css")
-    icon_font = ImageFont.truetype(str(BUILD / "mdi.ttf"), ICON_PX)
-    label_font = _label_font(LABEL_PX)
+    mdi_ttf = str(BUILD / "mdi.ttf")
+    icon_font = ImageFont.truetype(mdi_ttf, geo.icon_px)
+    label_font = _label_font(geo.label_px)
 
-    for name, mdi, label, style in STATEFUL:
-        render(f"{name}_on", mdi, label, style, cps, icon_font, label_font)
-        render(f"{name}_off", mdi, label, "off", cps, icon_font, label_font)
-    for name, mdi, label, style in ACTION:
-        render(name, mdi, label, style, cps, icon_font, label_font)
+    common = {"geo": geo, "out": out, "cps": cps,
+              "icon_font": icon_font, "label_font": label_font}
+    for name, mdi, label, style in getattr(spec, "STATEFUL", []):
+        render_key(f"{name}_on", mdi, label, style, **common)
+        render_key(f"{name}_off", mdi, label, "off", **common)
+    for name, mdi, label, style in getattr(spec, "ACTION", []):
+        render_key(name, mdi, label, style, **common)
 
-    mdi_ttf, label_ttf = str(BUILD / "mdi.ttf"), _label_font(LABEL_PX).path
-    for slug, style, label in DIALS:
+    label_ttf = label_font.path
+    for slug, style, label in getattr(spec, "DIALS", []):
         step = DIAL_STYLES[style][2]
         for pct in range(0, 101, step):
-            render_gauge(slug, style, label, pct, cps, mdi_ttf, label_ttf)
+            render_gauge(slug, style, label, pct, out=out, cps=cps,
+                         mdi_ttf=mdi_ttf, label_ttf=label_ttf)
         if style == "volume":  # extra "muted" frame for media dials
-            render_gauge(slug, style, label, 0, cps, mdi_ttf, label_ttf, muted=True)
+            render_gauge(slug, style, label, 0, out=out, cps=cps,
+                         mdi_ttf=mdi_ttf, label_ttf=label_ttf, muted=True)
 
-    n_keys = len(list(OUT.glob("*.png")))
-    n_dials = len(list((OUT / "dials").glob("*.png")))
-    print(f"wrote {n_keys} key images and {n_dials} dial frames to {OUT}")
+    n_keys = len(list(out.glob("*.png")))
+    n_dials = len(list((out / "dials").glob("*.png")))
+    print(f"[{deck}] wrote {n_keys} key images ({geo.key}px) "
+          f"and {n_dials} dial frames to {out}")
+
+
+def main() -> None:
+    available = sorted(p.parent.name for p in DECKS.glob("*/spec.py"))
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--deck", required=True, choices=[*available, "all"],
+                        help="which deck to render for (or 'all')")
+    args = parser.parse_args()
+    for deck in (available if args.deck == "all" else [args.deck]):
+        build(deck)
 
 
 if __name__ == "__main__":
