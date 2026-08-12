@@ -51,11 +51,16 @@ share the renderer, the palette, and the Home-Assistant-side helpers.
 
 **Mac (Plus XL)** — *not* Docker: Docker Desktop on macOS runs in a VM with no
 USB passthrough, so the app runs natively. `task xl:install` handles the Python
-side; it needs Homebrew libs and go-task:
+side; it needs Homebrew libs, go-task, and a modern Python:
 
 ```bash
-brew install go-task hidapi cairo libffi
+brew install go-task hidapi cairo libffi python@3.12
 ```
+
+> **Python ≥ 3.10 required.** macOS ships 3.9 as `python3` (from the Xcode
+> command line tools) and the app refuses to install on it. The Taskfile picks
+> the newest `python3.13/3.12/3.11/3.10` it finds on PATH and fails with a clear
+> message if none qualifies; override with `task xl:install XLPY=/path/to/python3.12`.
 
 > **Plus XL needs the library from git.** `StreamDeckPlusXL` exists only on
 > `python-elgato-streamdeck`'s `master` — the latest release (0.9.8) has neither
@@ -94,9 +99,38 @@ task xl:detect         # confirm the deck is seen (prints deck type + pid)
 task xl:run            # renders 112px images, then runs in the foreground
 ```
 
-`task xl:run` runs in the foreground (Ctrl-C to stop) — the laptop isn't an
-always-on appliance, so there's no autoheal/watchdog/service wrapper. After
-changing images, `task xl:regen` then restart `xl:run`.
+`task xl:run` runs in the foreground (Ctrl-C to stop) — handy while iterating.
+
+#### Running it automatically at login
+
+```bash
+task xl:service          # install + start the LaunchAgent
+task xl:service:status   # state / pid / last exit
+task xl:service:logs     # tail ~/Library/Logs/streamdeck-xl.log
+task xl:service:stop     # stop and uninstall
+```
+
+This installs [`com.janvt.streamdeck-xl.plist`](decks/plus-xl/com.janvt.streamdeck-xl.plist)
+into `~/Library/LaunchAgents/` and bootstraps it. Design notes:
+
+- It's a **LaunchAgent** (your login session), not a system LaunchDaemon — that's
+  what gives it USB HID access to the deck.
+- **The token isn't duplicated into the plist**: the agent runs
+  `bash -c 'set -a; . ./.env; ...'`, so `HASS_TOKEN` stays only in
+  `decks/plus-xl/.env`.
+- `HOMEBREW_PREFIX` and `PATH` are set explicitly. launchd starts with a minimal
+  environment, and `python-elgato-streamdeck` finds Homebrew's `libhidapi` via
+  `HOMEBREW_PREFIX` (falling back to shelling out to `brew`) — without this it
+  can't open the deck.
+- `KeepAlive`/`SuccessfulExit: false` restarts it if it exits non-zero (crash,
+  deck unplugged, HA unreachable). `ThrottleInterval: 30` stops an unplugged deck
+  from respawning in a tight loop.
+- Re-running `task xl:service` boots it out and back in, so plist edits apply.
+- After changing images, `task xl:regen` now **restarts the service automatically**
+  if it's loaded (falling back to the manual hint if you're using `xl:run`).
+
+Logs go to `~/Library/Logs/streamdeck-xl.log`. It's not rotated — if it grows,
+trim it or add a `newsyslog.d` entry.
 
 ### Task reference
 
@@ -110,8 +144,11 @@ changing images, `task xl:regen` then restart `xl:run`.
 | `task xl:install` | venv + app + `streamdeck` from master (idempotent) |
 | `task xl:run` | render + run the Plus XL in the foreground |
 | `task xl:detect` | list attached decks (type + USB pid) |
-| `task xl:regen` | rebuild Plus XL images |
+| `task xl:regen` | rebuild Plus XL images (restarts the service if loaded) |
 | `task xl:env` | scaffold `decks/plus-xl/.env` |
+| `task xl:patch` | patch the app for Plus XL touchscreen rendering (see below) |
+| `task xl:service` | install + start the login LaunchAgent |
+| `task xl:service:status` / `logs` / `restart` / `stop` | service lifecycle |
 | `task icons DECK=plus\|plus-xl` / `task icons:all` | just render images |
 | `task harden` | host-level hardening/resilience — **Pi only** (needs sudo) |
 
@@ -538,6 +575,35 @@ brightness, Kitchen brightness, LR shades, Kitchen shades. Same reversed turn
 direction (negative `step`) and inverted shade bar (full = closed) as the Plus.
 
 ## Troubleshooting
+
+- **Plus XL touchscreen blank, or only the first dial renders** — two upstream
+  bugs, both fixed by [`patch_touchscreen_rotation.py`](decks/plus-xl/patch_touchscreen_rotation.py)
+  (`task xl:patch`, pulled in automatically by `xl:run` / `xl:service`, and
+  re-applied after `xl:install` since that recreates the venv):
+  1. **Rotation ignored** → *whole strip blank.* The Plus XL reports
+     `TOUCHSCREEN_ROTATION = 90` and its `set_touchscreen_image()` swaps the
+     region geometry for the device (`int_w = height`, `int_h = width`), so the
+     JPEG bytes must be rotated too. The app encodes them unrotated, which is
+     only correct on a rotation-0 deck like the Plus.
+  2. **Partial-region writes don't land** → *only the first dial renders.*
+     Verified on hardware: writing each dial's 200×100 region at `x = 200*k`
+     only takes effect for `k = 0`. A single full-strip write (rotated,
+     `x=0 y=0 1200×100`) renders all six. The patch therefore caches each dial's
+     tile and repaints the whole strip on every update.
+
+  Both paths are gated on the deck's reported rotation, so the Plus keeps its
+  original per-region behaviour untouched.
+- **`OSError: cannot open resource` / `IconWarning: Failed to render icon`** (on
+  the Mac, native install) — that's a *font* error, not an image one. The pip/git
+  install ships only the `.py` module with **no `assets/` directory**, so the
+  app's bundled `Roboto-Regular.ttf` is missing; the Docker image is fine because
+  it has the full checkout. Any button with a `text:` key (even `text: ''`) goes
+  through the text renderer and trips it. Two defences, both applied: the XL
+  config sets **no `text:` keys at all** (labels are baked into the PNGs, and
+  `text` defaults to `None`, which skips the font path entirely), and
+  `task xl:font` restores the missing font into the venv. Note a
+  `special_type: next-page` button *needs* `text: ''` to suppress its default
+  "Next Page" label — so if you add one to the XL, run `task xl:font` first.
 
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
   up in `lsusb` on the host, and verify the udev rule is installed (see

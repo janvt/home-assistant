@@ -208,13 +208,22 @@ def build(deck: str) -> None:
     icon_font = ImageFont.truetype(mdi_ttf, geo.icon_px)
     label_font = _label_font(geo.label_px)
 
+    # Track what this run produces so stale files can be pruned afterwards.
+    # Rendering in place (rather than wiping the directory first) matters: the
+    # app may be running with auto_reload on, and a missing icon at the wrong
+    # moment is a FileNotFoundError on the key it was rendering.
+    keys: set[str] = set()
+    dials: set[str] = set()
+
     common = {"geo": geo, "out": out, "cps": cps,
               "icon_font": icon_font, "label_font": label_font}
     for name, mdi, label, style in getattr(spec, "STATEFUL", []):
         render_key(f"{name}_on", mdi, label, style, **common)
         render_key(f"{name}_off", mdi, label, "off", **common)
+        keys |= {f"{name}_on.png", f"{name}_off.png"}
     for name, mdi, label, style in getattr(spec, "ACTION", []):
         render_key(name, mdi, label, style, **common)
+        keys.add(f"{name}.png")
 
     label_ttf = label_font.path
     for slug, style, label in getattr(spec, "DIALS", []):
@@ -222,14 +231,22 @@ def build(deck: str) -> None:
         for pct in range(0, 101, step):
             render_gauge(slug, style, label, pct, out=out, cps=cps,
                          mdi_ttf=mdi_ttf, label_ttf=label_ttf)
+            dials.add(f"{slug}_{pct}.png")
         if style == "volume":  # extra "muted" frame for media dials
             render_gauge(slug, style, label, 0, out=out, cps=cps,
                          mdi_ttf=mdi_ttf, label_ttf=label_ttf, muted=True)
+            dials.add(f"{slug}_muted.png")
 
-    n_keys = len(list(out.glob("*.png")))
-    n_dials = len(list((out / "dials").glob("*.png")))
-    print(f"[{deck}] wrote {n_keys} key images ({geo.key}px) "
-          f"and {n_dials} dial frames to {out}")
+    # Prune images the spec no longer asks for (e.g. a key removed from a
+    # layout), so the directory always matches spec.py exactly.
+    stale = ([p for p in out.glob("*.png") if p.name not in keys]
+             + [p for p in (out / "dials").glob("*.png") if p.name not in dials])
+    for p in stale:
+        p.unlink()
+
+    print(f"[{deck}] wrote {len(keys)} key images ({geo.key}px) "
+          f"and {len(dials)} dial frames to {out}"
+          + (f" (pruned {len(stale)} stale)" if stale else ""))
 
 
 def main() -> None:

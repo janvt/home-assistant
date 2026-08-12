@@ -16,6 +16,16 @@ vars:
   PY: '{{.VENV}}/bin/python'
   PIP: '{{.VENV}}/bin/pip'
   XLVENV: decks/plus-xl/.venv
+  XLLABEL: com.janvt.streamdeck-xl
+  # The app needs Python >= 3.10, but macOS ships 3.9 as `python3` (Xcode CLT).
+  # Pick the newest suitable interpreter on PATH; override with XLPY=... if you
+  # want a specific one.
+  XLPY:
+    sh: |
+      for p in python3.13 python3.12 python3.11 python3.10; do
+        command -v "$p" 2>/dev/null && exit 0
+      done
+      command -v python3
 
 tasks:
   default:
@@ -130,14 +140,50 @@ tasks:
     status:
       - test -x {{.XLVENV}}/bin/home-assistant-streamdeck-yaml
       - '{{.XLVENV}}/bin/python -c "from StreamDeck.Devices.StreamDeckPlusXL import StreamDeckPlusXL"'
+    preconditions:
+      # macOS ships Python 3.9 as `python3`; the app requires >= 3.10.
+      - sh: '{{.XLPY}} -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"'
+        msg: "{{.XLPY}} is too old — the app needs Python >= 3.10. Install one (brew install python@3.12) or pass XLPY=/path/to/python3.12."
     cmds:
-      - python3 -m venv {{.XLVENV}}
+      - 'echo "using {{.XLPY}} ($({{.XLPY}} --version))"'
+      - rm -rf {{.XLVENV}}
+      - '{{.XLPY}} -m venv {{.XLVENV}}'
       - '{{.XLVENV}}/bin/pip install --quiet --upgrade pip'
       - '{{.XLVENV}}/bin/pip install --quiet "home-assistant-streamdeck-yaml @ git+https://github.com/basnijholt/home-assistant-streamdeck-yaml@main"'
       # Install AFTER the app so this master build wins over the PyPI release
       # that the app's dependency resolution pulls in (0.9.8 has no Plus XL).
       - '{{.XLVENV}}/bin/pip install --quiet --upgrade --force-reinstall "streamdeck @ git+https://github.com/abcminiuser/python-elgato-streamdeck@master"'
       - '{{.XLVENV}}/bin/python -c "from StreamDeck.Devices.StreamDeckPlusXL import StreamDeckPlusXL as D; print(f\"Plus XL support OK: {D.KEY_COUNT} keys, {D.DIAL_COUNT} dials, {D.KEY_PIXEL_WIDTH}px\")"'
+
+  xl:font:
+    desc: Repair the app's missing bundled font (upstream ships no assets/ in the wheel)
+    deps: [xl:install]
+    cmds:
+      - |
+        {{.XLVENV}}/bin/python - <<'PY'
+        import pathlib, urllib.request
+        import home_assistant_streamdeck_yaml as m
+        assets = pathlib.Path(m.__file__).parent / "assets"
+        assets.mkdir(exist_ok=True)
+        font = assets / "Roboto-Regular.ttf"
+        if font.exists():
+            print(f"font present: {font}")
+        else:
+            # The pip/git install ships only the .py module — no assets/ — so
+            # any button with text: set raises "OSError: cannot open resource".
+            # Our labels are baked into the PNGs so we normally never hit this,
+            # but restore the font so text-bearing buttons work if ever added.
+            url = ("https://raw.githubusercontent.com/basnijholt/"
+                   "home-assistant-streamdeck-yaml/main/assets/Roboto-Regular.ttf")
+            urllib.request.urlretrieve(url, font)
+            print(f"fetched missing font -> {font}")
+        PY
+
+  xl:patch:
+    desc: Patch the app to honour TOUCHSCREEN_ROTATION (Plus XL strip is blank without it)
+    deps: [xl:install]
+    cmds:
+      - '{{.XLVENV}}/bin/python decks/plus-xl/patch_touchscreen_rotation.py'
 
   xl:env:
     desc: Create decks/plus-xl/.env from the template
@@ -159,7 +205,7 @@ tasks:
 
   xl:run:
     desc: Run the Plus XL deck in the foreground (Ctrl-C to stop)
-    deps: [xl:install, xl:icons]
+    deps: [xl:install, xl:font, xl:patch, xl:icons]
     dir: decks/plus-xl
     dotenv: ['.env']
     preconditions:
@@ -169,7 +215,55 @@ tasks:
       - ./.venv/bin/home-assistant-streamdeck-yaml --config configuration.yaml
 
   xl:regen:
-    desc: Rebuild the Plus XL images (restart xl:run afterwards to apply)
+    desc: Rebuild the Plus XL images and restart the service if it's running
     cmds:
       - {task: icons, vars: {DECK: plus-xl}}
-      - "echo '>> Images rebuilt — restart `task xl:run` to apply (image files are not auto-reloaded).'"
+      - |
+        if launchctl print gui/$(id -u)/{{.XLLABEL}} >/dev/null 2>&1; then
+          launchctl kickstart -k gui/$(id -u)/{{.XLLABEL}}
+          echo ">> Images rebuilt and service restarted."
+        else
+          echo ">> Images rebuilt — restart 'task xl:run' to apply (image files are not auto-reloaded)."
+        fi
+
+  # ── plus-xl: run automatically at login (launchd) ─────────────────────────
+  xl:service:
+    desc: Install + start the Plus XL LaunchAgent (runs at login, restarts on crash)
+    deps: [xl:install, xl:font, xl:patch, xl:icons]
+    preconditions:
+      - sh: test -f decks/plus-xl/.env
+        msg: "No decks/plus-xl/.env — run `task xl:env` and fill it in first."
+    cmds:
+      - mkdir -p ~/Library/LaunchAgents ~/Library/Logs
+      - cp decks/plus-xl/{{.XLLABEL}}.plist ~/Library/LaunchAgents/{{.XLLABEL}}.plist
+      # bootout first so re-running picks up plist changes (ignore "not loaded")
+      - launchctl bootout gui/$(id -u)/{{.XLLABEL}} 2>/dev/null || true
+      - launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/{{.XLLABEL}}.plist
+      - sleep 2
+      - task: xl:service:status
+
+  xl:service:status:
+    desc: Show whether the Plus XL service is running
+    cmds:
+      - |
+        if launchctl print gui/$(id -u)/{{.XLLABEL}} 2>/dev/null | grep -E "state = |pid = |last exit" ; then
+          :
+        else
+          echo "not loaded — run 'task xl:service'"
+        fi
+
+  xl:service:logs:
+    desc: Follow the Plus XL service log
+    cmds: [tail -f ~/Library/Logs/streamdeck-xl.log]
+
+  xl:service:restart:
+    desc: Restart the Plus XL service
+    cmds:
+      - 'launchctl kickstart -k gui/$(id -u)/{{.XLLABEL}}'
+
+  xl:service:stop:
+    desc: Stop and uninstall the Plus XL LaunchAgent (won't start at login)
+    cmds:
+      - launchctl bootout gui/$(id -u)/{{.XLLABEL}} 2>/dev/null || true
+      - rm -f ~/Library/LaunchAgents/{{.XLLABEL}}.plist
+      - echo ">> Service stopped and removed."

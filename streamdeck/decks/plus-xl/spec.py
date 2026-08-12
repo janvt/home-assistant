@@ -7,12 +7,16 @@ Device: 36 keys (9x4) at 112x112, 6 dials, 1200x100 touch strip. A dial segment
 is 1200/6 = 200x100 — identical to the Plus's 800/4 — so dial frames render
 from the same code at the same size.
 
-Layout is its own design (not a copy of the Plus): 36 keys means everything
-fits on one page, so there's no mode/paging key. Rows, left to right:
-  1  scenes
-  2  room lights
-  3  shades + media
-  4  modes, doors, routines
+Layout is deliberately SPARSE — only 15 of the 36 keys are populated:
+
+      col: 1        2       3         4        5        6      7 8   9
+  row 1     Work S   Work    Chill     Vinyl    Pain C   ·      · ·   Lights Off
+  row 2     Hallway  Kitchen LivingRm  Outside  Bathrm   Record · ·   House
+  row 3     ·        ·       ·         ·        ·        ·      · ·   Apartment
+  row 4     ·        ·       ·         ·        ·        ·      · ·   Fan
+
+Row 1 = scenes, row 2 = lights, right edge (col 9) = the always-reachable
+actions. Everything else is `special_type: empty`.
 """
 
 KEY_PX = 112  # Stream Deck Plus XL native key size
@@ -23,56 +27,28 @@ KEY_PX = 112  # Stream Deck Plus XL native key size
 # ACTION renders <slug> in its domain style.
 STATEFUL = [
     # row 1 — scenes (highlighted from input_select.active_scene)
+    ("work_s",      "desk",             "Work S",    "amber"),
+    ("work",        "briefcase",        "Work",      "amber"),
     ("chill",       "sofa",             "Chill",     "amber"),
     ("vinyl",       "album",            "Vinyl",     "amber"),
     ("pain_cave",   "bike-fast",        "Pain Cave", "amber"),
-    ("work",        "briefcase",        "Work",      "amber"),
-    ("work_s",      "desk",             "Work S",    "amber"),
-    ("cleaning_sc", "spray-bottle",     "Clean",     "amber"),
-    ("sleep",       "weather-night",    "Sleep",     "amber"),
 
     # row 2 — room lights
-    ("lr_ceiling",  "ceiling-light",    "Living Rm", "amber"),
-    ("kitchen",     "ceiling-light",    "Kitchen",   "amber"),
     ("hallway",     "human-walker",     "Hallway",   "amber"),
+    ("kitchen",     "ceiling-light",    "Kitchen",   "amber"),
+    ("lr_ceiling",  "ceiling-light",    "Living Rm", "amber"),
     ("outside",     "cloud",            "Outside",   "amber"),
-    ("bedroom",     "bed",              "Bedroom",   "amber"),
     ("bathroom",    "shower",           "Bathroom",  "amber"),
-    ("reading",     "floor-lamp",       "Reading",   "amber"),
     ("record",      "record-player",    "Record",    "amber"),
-    ("signe",       "floor-lamp-torchiere", "Signe", "amber"),
 
-    # row 4 — mode helpers
-    ("guest",       "account-group",    "Guest",     "blue"),
-    ("cleaning",    "broom",            "Cleaning",  "blue"),
-    ("be_smart",    "brain",            "Be Smart",  "blue"),
+    # col 9 row 4 — bathroom fan hold
     ("fan",         "emoticon-poop",    "Fan",       "blue"),
 ]
 ACTION = [
-    # row 1 — whole-home light action
-    ("lights_off",  "lightbulb-off",       "Lights Off", "amber"),
-
-    # row 3 — shades
-    ("open_all",    "window-shutter-open", "Open All",   "green"),
-    ("close_all",   "window-shutter",      "Close All",  "green"),
-
-    # row 3 — media transport
-    ("play_pause",  "play-pause",          "Play",       "blue"),
-    ("prev",        "skip-previous",       "Prev",       "blue"),
-    ("next",        "skip-next",           "Next",       "blue"),
-    ("tv",          "television",          "TV",         "blue"),
-    ("appletv",     "apple",               "Apple TV",   "blue"),
-    ("xbox",        "microsoft-xbox",      "Xbox",       "blue"),
-
-    # row 4 — doors (5s cancel guard in configuration.yaml)
-    ("apartment",   "door-open",           "Apartment",  "red"),
-    ("house",       "home",                "House",      "red"),
-
-    # row 4 — routines
-    ("come_home",   "home-import-outline", "Come Home",  "green"),
-    ("leave_home",  "exit-run",            "Leave",      "green"),
-    ("wake_up",     "weather-sunset-up",   "Wake Up",    "green"),
-    ("unlock",      "lock-open-variant",   "Unlock",     "red"),
+    # col 9 — right-edge actions
+    ("lights_off",       "lightbulb-off",     "Lights Off", "amber"),
+    ("unlock_house",     "lock-open-variant", "House",      "red"),
+    ("unlock_apartment", "door-open",         "Apartment",  "red"),
 ]
 
 # ── dials ───────────────────────────────────────────────────────────────────

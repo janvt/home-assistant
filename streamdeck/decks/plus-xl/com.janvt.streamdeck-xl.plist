@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd LaunchAgent for the Stream Deck Plus XL (macOS).
+
+  Installed to ~/Library/LaunchAgents/ by `task xl:service` — it runs in your
+  LOGIN session (an Agent, not a system Daemon), which is what gives it USB HID
+  access to the deck.
+
+  Paths are absolute and machine-specific, matching the icon paths in
+  configuration.yaml. If the checkout moves, update WorkingDirectory here and
+  re-run `task xl:service`.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.janvt.streamdeck-xl</string>
+
+    <!-- Source .env for HASS_HOST/HASS_TOKEN so the secret stays in that file
+         (mode 600) rather than being duplicated into this plist. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>set -a; . ./.env; set +a; exec ./.venv/bin/home-assistant-streamdeck-yaml --config configuration.yaml</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl</string>
+
+    <!-- python-elgato-streamdeck locates Homebrew's libhidapi via HOMEBREW_PREFIX,
+         falling back to shelling out to `brew`. launchd starts with a minimal
+         environment, so set both explicitly rather than relying on a login shell. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOMEBREW_PREFIX</key>
+        <string>/opt/homebrew</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if it exits non-zero (crash, HA connection given up, deck
+         unplugged). ThrottleInterval keeps an unplugged deck from respawning in
+         a tight loop — launchd's default is 10s. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/janvt/Library/Logs/streamdeck-xl.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/janvt/Library/Logs/streamdeck-xl.log</string>
+</dict>
+</plist>
