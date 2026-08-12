@@ -147,8 +147,12 @@ def render_key(name: str, mdi: str, label: str, style: str, *,
     draw = ImageDraw.Draw(img)
     draw.rounded_rectangle((0, 0, geo.key - 1, geo.key - 1), radius=geo.radius, fill=bg)
     glyph = chr(int(cps[mdi], 16))
-    draw.text((geo.key / 2, geo.icon_cy), glyph, font=icon_font, fill=icon_c, anchor="mm")
-    draw.text((geo.key / 2, geo.label_cy), label, font=label_font, fill=label_c, anchor="mm")
+    # No label: centre the glyph in the tile instead of leaving room below it
+    # for text that isn't there (used for quiet "..." nav keys).
+    icon_cy = geo.key / 2 if not label else geo.icon_cy
+    draw.text((geo.key / 2, icon_cy), glyph, font=icon_font, fill=icon_c, anchor="mm")
+    if label:
+        draw.text((geo.key / 2, geo.label_cy), label, font=label_font, fill=label_c, anchor="mm")
     out.mkdir(parents=True, exist_ok=True)
     img.save(out / f"{name}.png")
 

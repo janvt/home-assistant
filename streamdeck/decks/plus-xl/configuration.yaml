@@ -1,16 +1,27 @@
 # home-assistant-streamdeck-yaml — Stream Deck Plus XL (runs natively on the Mac)
 #
-# 36 keys (9x4) + 6 dials, on a single page — no mode/paging key needed.
+# 36 keys (9x4) + 6 dials. TWO pages: Home and Settings, linked by a page-nav
+# key each way (`special_type: go-to-page`, by name — not next/previous-page
+# cycling, since two pages don't need cycling).
 #
-# LAYOUT — 24 of 36 keys are used. Buttons fill left→right, top→bottom, so
-# every gap needs an explicit `special_type: empty` placeholder to keep the
+# LAYOUT (Home) — 29 of 36 keys are used. Buttons fill left→right, top→bottom,
+# so every gap needs an explicit `special_type: empty` placeholder to keep the
 # later keys in their columns.
 #
 #   col: 1        2        3         4         5       6           7       8       9
 #   r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
 #   r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
-#   r3   Cleaning Guest    Awake     Be Smart  Fan     Apartment   Finder  Mail    Safari
-#   r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ·
+#   r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail    Safari
+#   r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ...
+#
+# LAYOUT (Settings) — sparse; a settings/debug page, not a second grid to fill.
+# Dial 1 here is the deck's OWN screen brightness (input_number, see the
+# README), not a room. Dials 2-6 are left undefined; the app blanks
+# unconfigured touchscreen segments on page switch.
+#
+#   col: 1        2         3   ...   9
+#   r1   Awake    Be Smart  ·   ...   ·
+#   r4   ·        ·         ·   ...   Home  (same corner as Home's Settings key)
 #
 # ICON PATHS ARE ABSOLUTE AND MACHINE-SPECIFIC. The app resolves a relative
 # `icon:` against its own installed package assets dir (NOT the cwd), so these
@@ -23,6 +34,19 @@
 # Images come from ../../generate_icons.py --deck plus-xl (see spec.py).
 
 brightness: 80
+# Live brightness sync: whenever this HA entity's state changes, the app
+# calls deck.set_brightness() — no button press needed. `brightness:` above
+# is just the value used before the entity's first state arrives (and if the
+# entity ever goes missing). Create this helper in HA (Settings > Devices &
+# Services > Helpers > Number, min 0 max 100 step 1) — no code on this side
+# needed once it exists.
+brightness_entity_id: input_number.streamdeck_xl_brightness
+# Turn the deck's screen on/off from HA (e.g. an automation tied to presence
+# or bedtime). This round-trips: if the deck's own inactivity timeout (below)
+# turns the screen off, it calls input_boolean.turn_off back on this entity,
+# so HA's state stays truthful even when the deck decided on its own.
+# Create this helper in HA (Settings > Devices & Services > Helpers > Toggle).
+state_entity_id: input_boolean.streamdeck_xl_on
 auto_reload: true
 inactivity_time: -1
 
@@ -153,13 +177,11 @@ pages:
         service: input_boolean.toggle
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_off.png" }}'
 
-      - entity_id: input_boolean.awake
-        service: input_boolean.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_on.png" if is_state("input_boolean.awake", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_off.png" }}'
-
-      - entity_id: input_boolean.be_smart
-        service: input_boolean.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_on.png" if is_state("input_boolean.be_smart", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_off.png" }}'
+      # cols 3-4 — empty. Awake and Be Smart used to live here; they moved to
+      # the Settings page (row 4 col 9 below is the way there now), along
+      # with the deck's own brightness dial.
+      - special_type: empty
+      - special_type: empty
 
       # Poop button: press triggers the "Keep bathroom fan on" automation, but
       # the icon reflects the input_boolean it manages. `linked_entity` makes the
@@ -227,12 +249,22 @@ pages:
       - service: script.streamdeck_audio_scene_linein
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/audio_scene_linein.png
 
-      # cols 5-9 — empty
+      # cols 5-8 — empty
       - special_type: empty
       - special_type: empty
       - special_type: empty
       - special_type: empty
-      - special_type: empty
+
+      # col 9 — bottom right corner: jump to the Settings page. No icon
+      # glyph, no label — just "..." (see spec.py's ACTION entry), so it
+      # reads as a quiet "more" affordance rather than another feature key.
+      # `text: ""` overrides the app's own default overlay text for
+      # `go-to-page` ("Go to\nPage\nSettings"), which would otherwise be
+      # drawn on top of the icon regardless of what `icon:` points at.
+      - special_type: go-to-page
+        special_type_data: Settings
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/settings.png
+        text: ""
 
     dials:
       # Six dials, ALL TURN-only — no PUSH entries. That's deliberate: the app's
@@ -333,3 +365,98 @@ pages:
           min: 0
           max: 100
           step: -5
+
+  # ══ Page 2: Settings ═══════════════════════════════════════════════════
+  # A settings/debug page, not a second grid to fill — see spec.py's
+  # docstring for the layout diagram. Buttons still get the full 36-entry
+  # treatment (explicit `special_type: empty`) rather than a short list that
+  # relies on the app's out-of-range-key blanking: pressing an undefined key
+  # hits an `assert button is not None` in the app's own key handler, so an
+  # explicit placeholder is the safe way to leave a key inert.
+  - name: Settings
+
+    buttons:
+      # col 1 — moved from Home row 3.
+      - entity_id: input_boolean.awake
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_on.png" if is_state("input_boolean.awake", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_off.png" }}'
+
+      # col 2 — moved from Home row 3.
+      - entity_id: input_boolean.be_smart
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_on.png" if is_state("input_boolean.be_smart", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_off.png" }}'
+
+      # cols 3-9 — empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+
+      # ══ Rows 2-3 — empty ═══════════════════════════════════════════════
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+
+      # ══ Row 4 ═══════════════════════════════════════════════════════════
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+
+      # col 9 — back to Home, bottom right — same position as the Home page's
+      # nav key to Settings, so it's always in the same physical spot
+      # regardless of which page you're on. Same quiet "..." treatment (no
+      # icon glyph, no label) — see spec.py. `text: ""` overrides the app's
+      # own default overlay text for `go-to-page` ("Go to\nPage\nHome"),
+      # which would otherwise be drawn on top of the icon regardless of what
+      # `icon:` points at.
+      - special_type: go-to-page
+        special_type_data: Home
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/home.png
+        text: ""
+
+    dials:
+      # Dial 1 only — the deck's OWN screen brightness, not a room. `state`
+      # (not `state_attribute`) because an input_number's value IS its main
+      # state, unlike volume_level/brightness which are attributes on a
+      # media_player/light. Negative step matches the physical-turn direction
+      # convention used by every other dial on the Home page (see there).
+      #
+      # Dials 2-6 are intentionally undefined: `update_all_dials` blanks
+      # unconfigured touchscreen segments automatically on page switch, and
+      # turning one just logs "has no valid dial_key" — harmless on a page
+      # nobody lingers on.
+      - entity_id: input_number.streamdeck_xl_brightness
+        dial_event_type: TURN
+        allow_touchscreen_events: true
+        service: input_number.set_value
+        service_data:
+          value: '{{ dial_value() | int }}'
+        delay: 0.3
+        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/deck_bright_{{ ((((dial_value() / 5) | round) * 5) | int) }}.png'
+        attributes:
+          min: 0
+          max: 100
+          step: -2

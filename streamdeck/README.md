@@ -552,30 +552,58 @@ for the full schema and helper functions (`dial_value()`, `dial_attr()`).
 
 # Stream Deck Plus XL layout (the Mac)
 
-Its own design, not a copy of the Plus: one page, 36 keys in four rows of nine,
-plus six dials. See [`decks/plus-xl/spec.py`](decks/plus-xl/spec.py) for the
-tiles and [`decks/plus-xl/configuration.yaml`](decks/plus-xl/configuration.yaml)
-for the wiring.
+Its own design, not a copy of the Plus: 36 keys in four rows of nine, plus six
+dials, across **two pages** — Home and Settings, linked by a page-nav key each
+way. See [`decks/plus-xl/spec.py`](decks/plus-xl/spec.py) for the tiles and
+[`decks/plus-xl/configuration.yaml`](decks/plus-xl/configuration.yaml) for the
+wiring.
 
-The layout populates 31 of 36 keys, kept as compact blocks rather than spread
-to the edges:
+Home populates 29 of 36 keys, kept as compact blocks rather than spread to the
+edges:
 
 ```
  col: 1        2        3         4         5       6           7       8       9
  r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
  r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
- r3   Cleaning Guest    Awake     Be Smart  Fan     Apartment   Finder  Mail    Safari
+ r3   Cleaning Guest    Settings  ·         Fan     Apartment   Finder  Mail    Safari
  r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ·
 ```
 
 Rows 1-3 are five wide so the left block squares off: **scenes**, then **room
 lights**, then the **`input_boolean` toggles** (`cleaning_mode`, `guest_mode`,
-`awake`, `be_smart`, and the bathroom fan). Column 6 is the vertical strip of
-always-reachable actions. Columns 7-9 (rows 1-3) are Mac app launchers — all
-[local Mac actions](#local-mac-control-ext), not HA calls — with 1Password kept
-in the corner since it's used constantly. Gaps are explicit
-`special_type: empty` entries and are **load-bearing**: keys fill left→right,
-top→bottom, so deleting one shifts every key after it.
+and the bathroom fan — `awake`/`be_smart` moved to Settings, see below).
+Column 6 is the vertical strip of always-reachable actions. Columns 7-9
+(rows 1-3) are Mac app launchers — all [local Mac actions](#local-mac-control-ext),
+not HA calls — with 1Password kept in the corner since it's used constantly.
+Gaps are explicit `special_type: empty` entries and are **load-bearing**: keys
+fill left→right, top→bottom, so deleting one shifts every key after it.
+
+**Settings** (row 3 col 3 on Home) is a second page, not a second grid to fill:
+
+```
+ col: 1        2         3   ...   9
+ r1   Awake    Be Smart  ·   ...   Home
+```
+
+Just the two toggles that were crowding Home's row 3, a `Home` key
+(col 9) to go back, and dial 1 wired to the deck's own screen brightness (see
+[below](#exposing-deck-settings-to-home-assistant)) — the reason this page
+exists at all. Both page-nav keys use `special_type: go-to-page` targeting the
+other page **by name**, not `next-page`/`previous-page`: with only two pages a
+dedicated key each way is clearer than cycling, and it means either key always
+does the same thing regardless of which page you're on.
+
+Dials 2-6 are left undefined on Settings — the app blanks unconfigured
+touchscreen segments automatically on page switch (`update_all_dials`), and
+nudging one by accident just logs "no valid dial_key" rather than doing
+anything. Fine for a page nobody lingers on; would need real dials defined if
+this page grew into something you actually turn things on while looking at.
+
+**Every button list is the full 36 entries, on both pages** — `special_type:
+empty` placeholders all the way to key 36, not a short list relying on the
+app's out-of-range blanking. Pressing a key past the end of a short list hits
+`assert button is not None` in the app's own key-press handler, so the
+explicit placeholder is the only way to leave a key safely inert.
 
 The mute keys are cyan-when-muted, matching the volume gauges rather than the red
 door keys. Two wrinkles worth knowing:
@@ -611,11 +639,69 @@ Keeping every dial TURN-only means **all six track your finger live**; mixing
 paired and unpaired dials would redraw the wrong segment. Mute and area-toggle
 belong on keys here — there are 36 of them.
 
-Dials, left to right: Living Room volume, Madagascar volume, **this Mac's output
-volume**, Kitchen brightness, LR shades, Kitchen shades. Same reversed turn
-direction (negative `step`) and inverted shade bar (full = closed) as the Plus.
-Dial 3 is not a Home Assistant entity at all — see below. (The LR ceiling light
-still has its own key in row 2; it just lost its brightness dial to the Mac.)
+Home's dials, left to right: Living Room volume, Madagascar volume, **this
+Mac's output volume**, Kitchen brightness, LR shades, Kitchen shades. Same
+reversed turn direction (negative `step`) and inverted shade bar (full =
+closed) as the Plus. Dial 3 is not a Home Assistant entity at all — see below.
+(The LR ceiling light still has its own key in row 2; it just lost its
+brightness dial to the Mac.) Settings' dial 1 is the deck's own screen
+brightness — see [Exposing deck settings to Home
+Assistant](#exposing-deck-settings-to-home-assistant).
+
+# Exposing deck settings to Home Assistant
+
+This is a native feature of `home_assistant_streamdeck_yaml` — no synthetic
+entity or `ext/` involvement, unlike the Mac dial. Two top-level `Config`
+fields sync a device setting *from* an HA entity, live, no button press:
+
+| Field | Points at | What it does |
+|-------|-----------|---------------|
+| `brightness_entity_id` | an `input_number` (0-100) | any state change on that entity calls `deck.set_brightness()` |
+| `state_entity_id` | an `input_boolean` (or any on/off entity, e.g. `binary_sensor.anyone_home`) | `on`/`off` state changes call the app's own `turn_on()`/`turn_off()` — screen wake/sleep |
+
+`state_entity_id` **round-trips**: when the deck's own `inactivity_time`
+timeout blanks the screen, it calls `input_boolean.turn_off` back on that
+entity (only if it's an `input_boolean`), so HA's state stays truthful even
+when the deck decided on its own, not just when HA told it to.
+
+The XL wires both (`decks/plus-xl/configuration.yaml`):
+
+```yaml
+brightness: 80                                          # startup default
+brightness_entity_id: input_number.streamdeck_xl_brightness
+state_entity_id: input_boolean.streamdeck_xl_on
+```
+
+The helpers themselves had to be created in Home Assistant by hand —
+`input_number`/`input_boolean` on this instance are YAML-defined, not
+config-entries, so there's no REST endpoint to create them over (unlike
+`script.*`, which the `config/script/config/<id>` API *can* write — see
+[Local Mac control](#local-mac-control-ext) for how that script was made).
+They were added via **Settings → Devices & Services → Helpers → Create
+Helper**:
+
+- **Number** `Stream Deck XL Brightness`, entity ID
+  `input_number.streamdeck_xl_brightness`, min 0, max 100, step 1.
+- **Toggle** `Stream Deck XL On`, entity ID `input_boolean.streamdeck_xl_on`.
+
+Any HA automation can drive them — dim the deck at night, turn the number down
+when a movie scene activates, flip the toggle off when everyone's away — and
+no `task xl:run` restart is needed, since these sync live over the same
+websocket connection as everything else. **Dial 1 on the Settings page also
+writes to the brightness helper directly** (`input_number.set_value`) — turn
+the knob there for a quick manual adjustment without leaving the deck; it's
+the same entity either way, so an automation and the physical dial can't
+disagree about the current value for long.
+
+**Other `Config` fields**, for completeness (none of these are entity-linked —
+static YAML only, read once at startup / reload):
+
+| Field | Does |
+|-------|------|
+| `auto_reload` | reload this YAML file when it changes on disk (both decks have this `true`) |
+| `inactivity_time` | seconds of no input before the screen auto-sleeps; `-1` disables (both decks) |
+| `long_press_duration` | seconds held before a press counts as "long"; default `1.0` |
+| `pages` / `anonymous_pages` | multi-page decks (not used here — the XL is one page, 36 keys, no paging key needed) |
 
 # Local Mac control (`ext/`)
 

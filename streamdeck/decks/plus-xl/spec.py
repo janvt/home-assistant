@@ -7,22 +7,46 @@ Device: 36 keys (9x4) at 112x112, 6 dials, 1200x100 touch strip. A dial segment
 is 1200/6 = 200x100 — identical to the Plus's 800/4 — so dial frames render
 from the same code at the same size.
 
-Layout populates 24 of the 36 keys, kept as compact blocks rather than spread
-to the edges:
+Two pages now: Home and Settings, reached via a page-nav key each way
+(`go-to-page` by name in both directions — with only two pages, a dedicated
+key each way reads clearer than next-page/previous-page cycling).
+
+Home populates 29 of 36 keys, kept as compact blocks rather than spread to the
+edges:
 
       col: 1        2       3         4        5       6           7        8       9
   row 1     Work S   Work    Chill     Vinyl    Pain C  Lights Off  Claude   Firefox 1Password
   row 2     Hallway  Kitchen LivingRm  Outside  Record  House       Slack    Warp    PHPStorm
-  row 3     Cleaning Guest   Awake     Be Smart Fan     Apartment   Finder   Mail    Safari
-  row 4     MuteLR   MuteMad MuteMac   Line In  ·       ·           ·        ·       ·
+  row 3     Cleaning Guest   ·         ·        Fan     Apartment   Finder   Mail    Safari
+  row 4     MuteLR   MuteMad MuteMac   Line In  ·       ·           ·        ·       ...
 
 Rows 1-3 are five wide, so the left block squares off: scenes, then lights,
-then the input_boolean toggles. Column 6 is the vertical strip of
-always-reachable actions. Columns 7-9 (rows 1-3) are Mac app launchers —
-`mac.open_app`, see ../../ext/ — with 1Password in the corner since it's used
-constantly. Row 4 col 4 groups Living Room into Madagascar's Line In
-(`script.streamdeck_audio_scene_linein`, defined in Home Assistant, not this
-repo). Everything else is `special_type: empty`.
+then the input_boolean toggles (Awake and Be Smart moved to the Settings page
+— see below). Column 6 is the vertical strip of always-reachable actions.
+Columns 7-9 (rows 1-3) are Mac app launchers — `mac.open_app`, see ../../ext/
+— with 1Password in the corner since it's used constantly. Row 4 col 4 groups
+Living Room into Madagascar's Line In (`script.streamdeck_audio_scene_linein`,
+defined in Home Assistant, not this repo). Bottom right (row 4 col 9) is the
+Settings page-nav key — deliberately just "..." (no icon glyph, no label),
+so it reads as a quiet "more" affordance rather than another feature button.
+Everything else is `special_type: empty`.
+
+Settings is a second page, not a second grid to fill — deliberately sparse:
+
+      col: 1        2         3   ...   9
+  row 1     Awake    Be Smart  ·   ...   ·
+  row 4     ·        ·         ·   ...   Home
+
+Home (row 4 col 9) is in the same physical spot as Home page's Settings key —
+same corner either way, regardless of which page you're on.
+
+Dial 1 on this page drives the deck's own screen brightness
+(`input_number.streamdeck_xl_brightness` — see the README's "Exposing deck
+settings to Home Assistant" section): the one dial here that isn't a Home
+Assistant entity in the usual sense, but a setting on the deck itself. Dials
+2-6 are intentionally undefined on this page — the app blanks unconfigured
+touchscreen segments automatically, and nudging one just logs harmlessly
+instead of doing anything, which is fine for a page nobody lingers on.
 """
 
 KEY_PX = 112  # Stream Deck Plus XL native key size
@@ -79,6 +103,13 @@ ACTION = [
     # "grouped", so there's nothing sensible to highlight.
     ("audio_scene_linein", "audio-input-rca", "Line In", "green"),
 
+    # page navigation — Home <-> Settings. Deliberately unlabelled: an empty
+    # label centers the glyph and renders no text (see generate_icons.py's
+    # render_key), so these read as a quiet "..." rather than another
+    # feature button competing for attention.
+    ("settings", "dots-horizontal", "", "blue"),
+    ("home",     "dots-horizontal", "", "blue"),
+
     # cols 7-9, rows 1-3 — Mac app launchers (mac.open_app, see ../../ext/).
     # No on/off state to track, so these are plain ACTION keys like 1Password.
     ("claude",        "creation",       "Claude",   "blue"),
@@ -102,4 +133,6 @@ DIALS = [
     ("kitchen_bright",    "bright", "Kitchen"),
     ("lr_shade",          "shade",  "Living Room"),
     ("kitchen_shade",     "shade",  "Kitchen"),
+    # Settings page, dial 1: the deck's own screen brightness.
+    ("deck_bright",       "bright", "Deck"),
 ]
