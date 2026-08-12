@@ -46,9 +46,16 @@
     <key>RunAtLoad</key>
     <true/>
 
-    <!-- Restart if it exits non-zero (crash, HA connection given up, deck
-         unplugged). ThrottleInterval keeps an unplugged deck from respawning in
-         a tight loop — launchd's default is 10s. -->
+    <!-- Restart if it exits non-zero (crash, deck unplugged, an
+         unrecoverable error like a bad token). This does NOT cover "HA was
+         unreachable": with CONNECTION_RETRY_ATTEMPTS=-1 in .env, the app
+         retries forever internally and never exits over that, so it isn't
+         relying on launchd to recover from an HA outage — see the README's
+         "Reconnect resilience" section. Without that env var (the app's own
+         default is 0 retries), a single failed connection attempt exits 0
+         ("gave up"), which KeepAlive here would NOT restart, since
+         SuccessfulExit is false. ThrottleInterval keeps an unplugged deck
+         from respawning in a tight loop — launchd's default is 10s. -->
     <key>KeepAlive</key>
     <dict>
         <key>SuccessfulExit</key>

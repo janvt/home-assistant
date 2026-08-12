@@ -8,6 +8,12 @@ services:
     #   docker inspect --format '{{index .RepoDigests 0}}' basnijholt/home-assistant-streamdeck-yaml:latest
     image: basnijholt/home-assistant-streamdeck-yaml@sha256:e9c4c523a95aee01466e360e5e969c93febe5cfe276167854185368022a593c3
     container_name: home-assistant-streamdeck
+    # `unless-stopped` restarts on ANY exit code, including 0 — this matters
+    # because the app's own reconnect loop defaults to 0 retries: an
+    # unreachable HA on the first connection attempt logs "giving up" and
+    # exits 0 (success), not a crash. Without CONNECTION_RETRY_ATTEMPTS=-1 in
+    # .env, every HA blip means a full container teardown/respawn instead of
+    # the app just reconnecting in place — see .env.example.
     restart: unless-stopped
 
     # Hardening: the container runs unprivileged. Instead of `--privileged`,

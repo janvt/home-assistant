@@ -127,14 +127,57 @@ into `~/Library/LaunchAgents/` and bootstraps it. Design notes:
   `HOMEBREW_PREFIX` (falling back to shelling out to `brew`) — without this it
   can't open the deck.
 - `KeepAlive`/`SuccessfulExit: false` restarts it if it exits non-zero (crash,
-  deck unplugged, HA unreachable). `ThrottleInterval: 30` stops an unplugged deck
-  from respawning in a tight loop.
+  deck unplugged, an unrecoverable error). `ThrottleInterval: 30` stops an
+  unplugged deck from respawning in a tight loop. This does **not** cover HA
+  being unreachable — see "Reconnect resilience" below for why that needs a
+  separate fix.
 - Re-running `task xl:service` boots it out and back in, so plist edits apply.
 - After changing images, `task xl:regen` now **restarts the service automatically**
   if it's loaded (falling back to the manual hint if you're using `xl:run`).
 
 Logs go to `~/Library/Logs/streamdeck-xl.log`. It's not rotated — if it grows,
 trim it or add a `newsyslog.d` entry.
+
+#### Reconnect resilience
+
+`home_assistant_streamdeck_yaml` has its own retry loop around the websocket
+connection (`run()`, controlled by `--connection-retry-attempts` /
+`--connection-retry-delay`, or the `CONNECTION_RETRY_ATTEMPTS`/
+`CONNECTION_RETRY_DELAY` env vars it reads via `.env`) — but its **default is
+zero retries**. That means, out of the box:
+
+1. HA is unreachable (restarting, network blip, DNS hiccup) on the one
+   connection attempt the app makes.
+2. It logs `[ERROR] Max retry attempts reached, giving up.` and `run()`
+   returns normally — **the process exits with code 0**, not a crash.
+3. launchd's `KeepAlive` here is `SuccessfulExit: false`, meaning it only
+   restarts a *failed* exit. A clean, successful "I gave up" exit is never
+   restarted.
+
+Net effect: a single HA blip leaves the deck permanently dark, silently,
+until someone notices and manually reruns `task xl:run` / `task xl:service`.
+Not a crash, not a hang — just a quiet, deliberate exit that nothing
+resurrects.
+
+The fix is two env vars in `decks/plus-xl/.env` (see `.env.example`):
+
+```bash
+CONNECTION_RETRY_ATTEMPTS=-1   # -1 = retry forever, never give up
+CONNECTION_RETRY_DELAY=10      # seconds between attempts (0 would busy-loop)
+```
+
+With these set, the app's own loop absorbs an HA outage of any length and
+reconnects on its own the moment HA comes back — `KeepAlive` is then only
+ever exercised by genuine crashes (deck unplugged, an unhandled exception),
+which is what it was already good at. Requires a service restart to pick up
+(env vars are read once at process start, same as everything else in `.env`).
+
+**The Pi's Plus deck has the same 0-retry default**, but a different outer
+safety net: `docker-compose.yaml`'s `restart: unless-stopped` restarts on
+*any* exit code (unlike launchd's `SuccessfulExit: false` above), so an HA
+blip was never permanently fatal there — just expensive, since each blip
+tears down and respawns the whole container instead of reconnecting in
+place. Same two env vars in `decks/plus/.env`, same fix, cheaper recovery.
 
 ### Task reference
 
@@ -875,3 +918,13 @@ the deck's event loop.
 - **Auth errors** — re-check `HASS_HOST`/`HASS_TOKEN` in `.env`; `HASS_HOST`
   should have no scheme (no `http://`), just `host:port`.
 - **Wrong entities** — the defaults are placeholders; edit `configuration.yaml`.
+- **Deck went dark after an HA restart/network blip and never came back, log
+  shows `Max retry attempts reached, giving up.` then nothing** — the app's
+  own retry defaults are 0 attempts, so it exits (code 0!) after the first
+  failed connection, and launchd's `KeepAlive` doesn't restart a *successful*
+  exit. Set `CONNECTION_RETRY_ATTEMPTS=-1` / `CONNECTION_RETRY_DELAY=10` in
+  `.env` — see [Reconnect resilience](#reconnect-resilience).
+- **A `go-to-page`/`next-page`/etc. key shows unwanted default text
+  ("Go to\nPage\nX") on top of a custom `icon:`** — the app overlays that
+  default text on *any* `special_type` nav key unless `text` is explicitly
+  set (even `icon:` doesn't suppress it). Add `text: ""` to the button.
