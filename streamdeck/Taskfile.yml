@@ -203,6 +203,18 @@ tasks:
     cmds:
       - '{{.XLVENV}}/bin/python -c "from StreamDeck.DeviceManager import DeviceManager; ds=DeviceManager().enumerate(); print(f\"{len(ds)} deck(s):\"); [print(f\"  {d.deck_type()}  pid=0x{d.product_id():04x}\") for d in ds]"'
 
+  xl:doctor:
+    desc: Report which local Mac controls work here (TCC permission tiers)
+    deps: [xl:install]
+    cmds:
+      - 'PYTHONPATH=. {{.XLVENV}}/bin/python -m ext.doctor'
+
+  xl:test:
+    desc: Test the local-action extension against the installed app (no hardware needed)
+    deps: [xl:install]
+    cmds:
+      - 'PYTHONPATH=. {{.XLVENV}}/bin/python -m ext.selftest'
+
   xl:run:
     desc: Run the Plus XL deck in the foreground (Ctrl-C to stop)
     deps: [xl:install, xl:font, xl:patch, xl:icons]
@@ -212,7 +224,10 @@ tasks:
       - sh: test -f .env
         msg: "No decks/plus-xl/.env — run `task xl:env` and fill it in first."
     cmds:
-      - ./.venv/bin/home-assistant-streamdeck-yaml --config configuration.yaml
+      # `python -m ext.run` rather than the console script: ext/ installs the
+      # local-action wrappers before handing off to the app's own main(). ext/
+      # lives at the streamdeck/ root, two levels up from this dir.
+      - PYTHONPATH=../.. ./.venv/bin/python -m ext.run --config configuration.yaml
 
   xl:regen:
     desc: Rebuild the Plus XL images and restart the service if it's running

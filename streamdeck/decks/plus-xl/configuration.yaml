@@ -2,15 +2,15 @@
 #
 # 36 keys (9x4) + 6 dials, on a single page — no mode/paging key needed.
 #
-# LAYOUT — deliberately sparse; only 15 of 36 keys are used. Buttons fill
-# left→right, top→bottom, so every gap needs an explicit `special_type: empty`
-# placeholder to keep the later keys in their columns.
+# LAYOUT — 24 of 36 keys are used. Buttons fill left→right, top→bottom, so
+# every gap needs an explicit `special_type: empty` placeholder to keep the
+# later keys in their columns.
 #
-#   col: 1        2        3         4        5        6        7  8  9
-#   r1   Work S   Work     Chill     Vinyl    Pain C   ·        ·  ·  Lights Off
-#   r2   Hallway  Kitchen  LivingRm  Outside  Bathrm   Record   ·  ·  House
-#   r3   ·        ·        ·         ·        ·        ·        ·  ·  Apartment
-#   r4   ·        ·        ·         ·        ·        ·        ·  ·  Fan
+#   col: 1        2        3         4         5       6           7       8       9
+#   r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
+#   r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
+#   r3   Cleaning Guest    Awake     Be Smart  Fan     Apartment   Finder  Mail    Safari
+#   r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ·
 #
 # ICON PATHS ARE ABSOLUTE AND MACHINE-SPECIFIC. The app resolves a relative
 # `icon:` against its own installed package assets dir (NOT the cwd), so these
@@ -71,15 +71,31 @@ pages:
           area: living_room
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/pain_cave_on.png" if is_state("input_select.active_scene", "pain_cave") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/pain_cave_off.png" }}'
 
-      # cols 6-8 — empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-
-      # col 9 — all lights off
+      # col 6 — all lights off (top of the vertical action strip)
       - entity_id: script.turn_off_all_lights
         service: script.turn_on
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/lights_off.png
+
+      # cols 7-8 — Mac app launchers (mac.open_app, see ../../ext/). No
+      # entity_id: there is no state to render or track.
+      - service: mac.open_app
+        service_data:
+          app: Claude
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/claude.png
+
+      - service: mac.open_app
+        service_data:
+          app: Firefox
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/firefox.png
+
+      # col 9 — top right corner: launch/focus 1Password on THIS Mac.
+      # `mac.open_app` is intercepted by ../../ext/ and never reaches HA; `open
+      # -a` needs no permission grant, unlike activating an app via System
+      # Events. No entity_id: there is no state to render or track.
+      - service: mac.open_app
+        service_data:
+          app: 1Password
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/onepassword.png
 
       # ══ Row 2 ════════════════════════════════════════════════════════════
       # Lights, cols 1-6.
@@ -99,19 +115,11 @@ pages:
         service: light.toggle
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/outside_on.png" if is_state("light.balcony_ceiling_light", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/outside_off.png" }}'
 
-      - entity_id: light.shellyplus2pm_10061ccb8718_switch_0
-        service: light.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bathroom_on.png" if is_state("light.shellyplus2pm_10061ccb8718_switch_0", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/bathroom_off.png" }}'
-
       - entity_id: light.record_player
         service: light.toggle
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/record_on.png" if is_state("light.record_player", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/record_off.png" }}'
 
-      # cols 7-8 — empty
-      - special_type: empty
-      - special_type: empty
-
-      # col 9 — unlock the house / street door (SwitchBot buzzer, one-shot
+      # col 6 — unlock the house / street door (SwitchBot buzzer, one-shot
       # toggle). `delay: 5` is the accidental-press guard: a press starts a
       # 5s countdown ring and pressing again during it cancels.
       - entity_id: switch.buzzer
@@ -119,40 +127,112 @@ pages:
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/unlock_house.png
         delay: 5
 
-      # ══ Row 3 ════════════════════════════════════════════════════════════
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
+      # cols 7-9 — more app launchers.
+      - service: mac.open_app
+        service_data:
+          app: Slack
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/slack.png
 
-      # col 9 — unlock the apartment door (Nuki, unlatches). Same 5s guard.
+      - service: mac.open_app
+        service_data:
+          app: Warp
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/warp.png
+
+      - service: mac.open_app
+        service_data:
+          app: PhpStorm
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/phpstorm.png
+
+      # ══ Row 3 ════════════════════════════════════════════════════════════
+      # cols 1-5 — input_boolean toggles. Grey when off, blue when on.
+      - entity_id: input_boolean.cleaning_mode
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_on.png" if is_state("input_boolean.cleaning_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_off.png" }}'
+
+      - entity_id: input_boolean.guest_mode
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_off.png" }}'
+
+      - entity_id: input_boolean.awake
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_on.png" if is_state("input_boolean.awake", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_off.png" }}'
+
+      - entity_id: input_boolean.be_smart
+        service: input_boolean.toggle
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_on.png" if is_state("input_boolean.be_smart", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_off.png" }}'
+
+      # Poop button: press triggers the "Keep bathroom fan on" automation, but
+      # the icon reflects the input_boolean it manages. `linked_entity` makes the
+      # key re-render when that helper changes while `entity_id` keeps
+      # automation.trigger aimed at the automation.
+      - entity_id: automation.keep_bathroom_fan_on
+        linked_entity: input_boolean.keep_bathroom_fan_on
+        service: automation.trigger
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
+
+      # col 6 — unlock the apartment door (Nuki, unlatches). Same 5s guard.
       - entity_id: lock.nuki_schmatzknauf_lock_2
         service: lock.open
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/unlock_apartment.png
         delay: 5
 
-      # ══ Row 4 ════════════════════════════════════════════════════════════
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
-      - special_type: empty
+      # cols 7-9 — more app launchers.
+      - service: mac.open_app
+        service_data:
+          app: Finder
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/finder.png
 
-      # col 9 — poop button: press triggers the "Keep bathroom fan on"
-      # automation, but the icon reflects the input_boolean it manages.
-      # `linked_entity` makes the key re-render when that helper changes while
-      # `entity_id` keeps automation.trigger aimed at the automation.
-      - entity_id: automation.keep_bathroom_fan_on
-        linked_entity: input_boolean.keep_bathroom_fan_on
-        service: automation.trigger
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
+      - service: mac.open_app
+        service_data:
+          app: Mail
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mail.png
+
+      - service: mac.open_app
+        service_data:
+          app: Safari
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/safari.png
+
+      # ══ Row 4 ════════════════════════════════════════════════════════════
+      # cols 1-3 — mute toggles, one per volume dial below (dials 1, 2 and 3).
+      # `media_player.volume_mute` has no toggle form, so invert the current
+      # state in the template. It renders to the STRING "true"/"false", which is
+      # what HA's cv.boolean accepts — do not emit Python-style True/False.
+      # Icon is cyan volume-off when muted, grey volume-high when not.
+      - entity_id: media_player.living_room
+        service: media_player.volume_mute
+        service_data:
+          entity_id: media_player.living_room
+          is_volume_muted: '{{ "false" if state_attr("media_player.living_room", "is_volume_muted") else "true" }}'
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_lr_on.png" if state_attr("media_player.living_room", "is_volume_muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_lr_off.png" }}'
+
+      - entity_id: media_player.unnamed_room
+        service: media_player.volume_mute
+        service_data:
+          entity_id: media_player.unnamed_room
+          is_volume_muted: '{{ "false" if state_attr("media_player.unnamed_room", "is_volume_muted") else "true" }}'
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_mad_on.png" if state_attr("media_player.unnamed_room", "is_volume_muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_mad_off.png" }}'
+
+      # This Mac. `mac.volume_mute` toggles on its own (no service_data needed)
+      # and is intercepted by ../../ext/ — it never reaches Home Assistant.
+      - entity_id: mac.volume
+        service: mac.volume_mute
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_mac_on.png" if state_attr("mac.volume", "muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/mute_mac_off.png" }}'
+
+      # col 4 — audio scene: group Living Room into Madagascar's Line In.
+      # `script.streamdeck_audio_scene_linein` lives in Home Assistant (not
+      # this repo, same as script.streamdeck_scene_toggle). Madagascar has no
+      # media_player.select_source support (its Line In is a fixed hardware
+      # input, not user-selectable) so the script is a plain group join —
+      # Living Room then plays whatever's on Madagascar's input.
+      - service: script.streamdeck_audio_scene_linein
+        icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/audio_scene_linein.png
+
+      # cols 5-9 — empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
+      - special_type: empty
 
     dials:
       # Six dials, ALL TURN-only — no PUSH entries. That's deliberate: the app's
@@ -190,20 +270,27 @@ pages:
           min: 0
           max: 1
           step: -0.02
-      # ── Dial 3: Living Room ceiling brightness ────────────────────────────
-      - entity_id: light.living_room_ceiling_light
+      # ── Dial 3: THIS MAC's output volume ──────────────────────────────────
+      # Not a Home Assistant entity. `mac.volume` is a synthetic entity injected
+      # by ../../ext/, and `mac.volume_set` is intercepted before it can reach
+      # HA — see ext/__init__.py. Requires `python -m ext.run` as the entry
+      # point (which is what `task xl:run` and the LaunchAgent use); under the
+      # plain console script the dial renders but the service call is a no-op
+      # that HA rejects.
+      # `delay` is short because there is no network round trip, only osascript.
+      - entity_id: mac.volume
         dial_event_type: TURN
-        state_attribute: brightness
+        state_attribute: level
         allow_touchscreen_events: true
-        service: light.turn_on
+        service: mac.volume_set
         service_data:
-          brightness: '{{ dial_value() | int }}'
-        delay: 0.3
-        icon: '/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/lr_bright_{{ ((((dial_value() / 255 * 100) / 5) | round) * 5) | int }}.png'
+          level: '{{ dial_value() | int }}'
+        delay: 0.15
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/mac_volume_muted.png" if state_attr("mac.volume", "muted") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/dials/mac_volume_" ~ ((((dial_value() / 2) | round) * 2) | int) ~ ".png" }}'
         attributes:
           min: 0
-          max: 255
-          step: -13
+          max: 100
+          step: -2
       # ── Dial 4: Kitchen ceiling brightness ────────────────────────────────
       - entity_id: light.kitchen_ceiling_light
         dial_event_type: TURN

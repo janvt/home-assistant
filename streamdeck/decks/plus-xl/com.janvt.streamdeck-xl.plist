@@ -21,7 +21,7 @@
     <array>
         <string>/bin/bash</string>
         <string>-c</string>
-        <string>set -a; . ./.env; set +a; exec ./.venv/bin/home-assistant-streamdeck-yaml --config configuration.yaml</string>
+        <string>set -a; . ./.env; set +a; exec ./.venv/bin/python -m ext.run --config configuration.yaml</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -36,6 +36,11 @@
         <string>/opt/homebrew</string>
         <key>PATH</key>
         <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- `ext` (local Mac actions) lives at the streamdeck/ root, two levels
+             up from WorkingDirectory. Run via `python -m ext.run`, not the
+             console script, so the wrappers are installed before main(). -->
+        <key>PYTHONPATH</key>
+        <string>/Users/janvt/dev/jan/home-assistant/streamdeck</string>
     </dict>
 
     <key>RunAtLoad</key>

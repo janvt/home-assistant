@@ -49,6 +49,9 @@ STYLES = {
     "blue":  ("#378ADD", "#FFFFFF", "#FFFFFF"),
     "red":   ("#E24B4A", "#FFFFFF", "#FFFFFF"),
     "green": ("#639922", "#FFFFFF", "#FFFFFF"),
+    # Same cyan as the volume dial gauges, so mute keys read as belonging to the
+    # volume dials they sit above rather than to the red door keys.
+    "cyan":  ("#38D6F2", "#06333D", "#06333D"),
 }
 
 # ── key geometry, tuned at REF_KEY px and scaled per deck ───────────────────

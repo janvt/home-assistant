@@ -10,3 +10,7 @@ decks/*/icons/
 .venv/
 venv/
 decks/*/.venv/
+
+# Python bytecode (ext/ is imported directly from the checkout)
+__pycache__/
+*.pyc

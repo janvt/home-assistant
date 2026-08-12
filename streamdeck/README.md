@@ -20,6 +20,7 @@ share the renderer, the palette, and the Home-Assistant-side helpers.
 | Path | Purpose |
 |------|---------|
 | [`generate_icons.py`](generate_icons.py) | **Shared** renderer — key chips + dial gauges for every deck |
+| [`ext/`](ext) | **Local Mac control** — run things on the laptop, not just in HA ([below](#local-mac-control-ext)) |
 | [`decks/<deck>/spec.py`](decks) | That deck's content: key size, which tiles, which dials |
 | [`decks/<deck>/configuration.yaml`](decks) | That deck's pages, buttons and dials |
 | [`decks/<deck>/.env.example`](decks) | Per-deck HA host + token template (they differ — see below) |
@@ -96,10 +97,13 @@ task xl:install        # venv + app + streamdeck from git master (verifies Plus 
 task xl:env            # decks/plus-xl/.env from the template
 nano decks/plus-xl/.env
 task xl:detect         # confirm the deck is seen (prints deck type + pid)
+task xl:doctor         # what local Mac control works here (Tier 0 must be green)
 task xl:run            # renders 112px images, then runs in the foreground
 ```
 
-`task xl:run` runs in the foreground (Ctrl-C to stop) — handy while iterating.
+`task xl:run` runs in the foreground (Ctrl-C to stop) — handy while iterating. It
+launches `python -m ext.run`, not the console script, so [local Mac
+control](#local-mac-control-ext) is active.
 
 #### Running it automatically at login
 
@@ -147,6 +151,8 @@ trim it or add a `newsyslog.d` entry.
 | `task xl:regen` | rebuild Plus XL images (restarts the service if loaded) |
 | `task xl:env` | scaffold `decks/plus-xl/.env` |
 | `task xl:patch` | patch the app for Plus XL touchscreen rendering (see below) |
+| `task xl:doctor` | report which local Mac controls work here (permission tiers) |
+| `task xl:test` | test the local-action extension — no hardware needed |
 | `task xl:service` | install + start the login LaunchAgent |
 | `task xl:service:status` / `logs` / `restart` / `stop` | service lifecycle |
 | `task icons DECK=plus\|plus-xl` / `task icons:all` | just render images |
@@ -551,17 +557,52 @@ plus six dials. See [`decks/plus-xl/spec.py`](decks/plus-xl/spec.py) for the
 tiles and [`decks/plus-xl/configuration.yaml`](decks/plus-xl/configuration.yaml)
 for the wiring.
 
-| Row | Contents |
-|-----|----------|
-| 1 | Scenes — Chill, Vinyl, Pain Cave, Work, Work S, Clean, Sleep, then Lights Off + Open All |
-| 2 | Room lights — Living Rm, Kitchen, Hallway, Outside, Bedroom, Bathroom, Reading, Record, Signe |
-| 3 | Close All, media transport (Play/Prev/Next), TV / Apple TV / Xbox, then both doors |
-| 4 | Modes (Guest, Cleaning, Be Smart, Fan), routines (Come Home, Leave, Wake Up), Unlock |
+The layout populates 31 of 36 keys, kept as compact blocks rather than spread
+to the edges:
 
-Scenes here simply **activate** (`scene.turn_on`) and highlight from
-`input_select.active_scene` — no toggle-off semantics, since the XL has a
-dedicated key per room light for turning things off. Doors and Unlock keep the
-same `delay: 5` cancel guard as the Plus.
+```
+ col: 1        2        3         4         5       6           7       8       9
+ r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
+ r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
+ r3   Cleaning Guest    Awake     Be Smart  Fan     Apartment   Finder  Mail    Safari
+ r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ·
+```
+
+Rows 1-3 are five wide so the left block squares off: **scenes**, then **room
+lights**, then the **`input_boolean` toggles** (`cleaning_mode`, `guest_mode`,
+`awake`, `be_smart`, and the bathroom fan). Column 6 is the vertical strip of
+always-reachable actions. Columns 7-9 (rows 1-3) are Mac app launchers — all
+[local Mac actions](#local-mac-control-ext), not HA calls — with 1Password kept
+in the corner since it's used constantly. Gaps are explicit
+`special_type: empty` entries and are **load-bearing**: keys fill left→right,
+top→bottom, so deleting one shifts every key after it.
+
+The mute keys are cyan-when-muted, matching the volume gauges rather than the red
+door keys. Two wrinkles worth knowing:
+
+- **`media_player.volume_mute` has no toggle form**, so the Sonos keys invert the
+  current state in the template. It must render the *string* `"true"`/`"false"`
+  (HA's `cv.boolean` accepts those) — not Python's `True`/`False`.
+- They are **ACTION pairs, not STATEFUL tiles**. `STATEFUL` renders one mdi glyph
+  in two styles, but mute needs two different glyphs — a greyed `volume-off`
+  would read as "muted" when it means the opposite — so the config picks between
+  `mute_*_on.png` and `mute_*_off.png`.
+
+Row 4 col 4 (Line In) sits next to the mutes: it calls
+`script.streamdeck_audio_scene_linein`, an HA script (defined in Home
+Assistant itself, not this repo — same as `script.streamdeck_scene_toggle`)
+that joins Living Room into Madagascar's Sonos group. Madagascar's Line In is
+a fixed hardware input with no `media_player.select_source` support (calling
+it 500s), so the script is a plain `media_player.join` — Living Room then
+plays whatever's on Madagascar's input. Plain ACTION key, no on/off state:
+Sonos exposes nothing boolean for "grouped" to highlight.
+
+Scenes **toggle** exactly like the Plus — each calls
+`script.streamdeck_scene_toggle`, so pressing the active scene turns the area off
+and clears `input_select.active_scene` (see [scene toggle
+behaviour](#scene-toggle-behaviour)). House and Apartment keep the same
+`delay: 5` cancel guard as the Plus. Fan triggers the automation while rendering
+the `input_boolean` it manages, via `linked_entity`.
 
 **All six dials are TURN-only, deliberately.** The eager local re-render looks a
 dial up by raw list index while being handed the *sorted* index (see the
@@ -570,9 +611,120 @@ Keeping every dial TURN-only means **all six track your finger live**; mixing
 paired and unpaired dials would redraw the wrong segment. Mute and area-toggle
 belong on keys here — there are 36 of them.
 
-Dials, left to right: Living Room volume, Madagascar volume, LR ceiling
-brightness, Kitchen brightness, LR shades, Kitchen shades. Same reversed turn
+Dials, left to right: Living Room volume, Madagascar volume, **this Mac's output
+volume**, Kitchen brightness, LR shades, Kitchen shades. Same reversed turn
 direction (negative `step`) and inverted shade bar (full = closed) as the Plus.
+Dial 3 is not a Home Assistant entity at all — see below. (The LR ceiling light
+still has its own key in row 2; it just lost its brightness dial to the Mac.)
+
+# Local Mac control (`ext/`)
+
+The upstream app is a pure Home Assistant client: every press and turn becomes a
+websocket `call_service`, and there is no way to run anything on the machine the
+deck is plugged into. [`ext/`](ext) adds that **without editing upstream
+source**, which is why dial 4 can drive this laptop's volume.
+
+## How it works
+
+Three module-level functions are replaced by reassignment (Python resolves module
+globals at call time, so in-module callers pick them up):
+
+| Wrapped | Buys us |
+|---------|---------|
+| `call_service` | intercept the reserved `mac.` domain — the single chokepoint for button presses, long presses **and** dial turns |
+| `get_states` | inject synthetic `mac.*` entities into `complete_state` |
+| `handle_changes` | run a state poller alongside the app's own asyncio tasks |
+
+The synthetic-entity trick is what keeps this small. Once `complete_state`
+contains a `mac.volume` entity, the app cannot tell it from a real HA entity, so
+`state_attr()` templates, `Dial.update_attributes()`, `render_lcd_image()` and
+the eager local redraw all work untouched. The poller fabricates `state_changed`
+events and feeds them to the app's own `_update_state()`, so pressing the Mac's
+own volume keys moves the dial by exactly the path an HA change would take.
+
+Actions ride on the existing `service:` field, because `Button`/`Dial` are
+`extra="forbid"` pydantic models and **cannot gain new YAML fields** without
+patching source:
+
+```yaml
+- entity_id: mac.volume          # synthetic — provided by ext/state.py
+  dial_event_type: TURN
+  state_attribute: level
+  service: mac.volume_set        # intercepted; never reaches Home Assistant
+  service_data:
+    level: '{{ dial_value() | int }}'
+  attributes: {min: 0, max: 100, step: -2}
+```
+
+Currently implemented, all Tier 0:
+
+| Action | `service_data` | Used by |
+|--------|----------------|---------|
+| `mac.volume_set` | `level: 0-100` | dial 3 |
+| `mac.volume_mute` | none (toggles), or `muted: true\|false` | Mute Mac key |
+| `mac.open_app` | `app: 1Password` — name, bundle id or path | 1Password, Claude, Firefox, Slack, Warp, PhpStorm, Finder, Mail, Safari keys |
+
+Unlike `media_player.volume_mute`, `mac.volume_mute` needs no `service_data` at
+all: it toggles. `mac.open_app` uses `open -a`, which launches or fronts an app
+with no permission grant — activating one via System Events would be Tier 1.
+
+**This requires `python -m ext.run` as the entry point** — it installs the
+wrappers, then defers to the app's own `main()` so all CLI flags, `.env`
+handling, signal handlers and reconnect logic stay upstream's. `task xl:run` and
+the LaunchAgent both do this. Under the plain console script the dial still
+renders, but the service call becomes a no-op that HA rejects.
+
+## Why wrappers instead of a patch
+
+[`patch_touchscreen_rotation.py`](decks/plus-xl/patch_touchscreen_rotation.py)
+edits installed source because it fixes a bug *inside* one function. This is a
+feature spanning several, so string surgery would be fragile. Wrapping keeps it
+as ordinary reviewable Python in this repo that survives `task xl:install`
+recreating the venv.
+
+The safety net is [`ext/wrap.py`](ext/wrap.py)'s `_check()`: it asserts each
+wrapped symbol exists, is a coroutine function, and still has the expected
+leading parameters — **before** touching anything. An upstream rename fails
+loudly at startup instead of silently posting `mac.volume_set` to Home
+Assistant. `task xl:test` runs 16 tests covering exactly that, plus interception
+on all three action paths, the poller and the settle window. No hardware needed.
+
+## Permissions (TCC)
+
+macOS gates a lot of this, and for a LaunchAgent the grant attaches to the
+responsible binary rather than to a script, so it can't be arranged
+non-interactively. `task xl:doctor` probes and reports the truth:
+
+| Tier | Needs | Examples |
+|------|-------|----------|
+| 0 | nothing | volume + mute (`set volume` is a Standard Addition, not an Apple event), `open -a`, `shortcuts run`, `pmset` |
+| 1 | Automation, per target app | AppleScript to Spotify / Music / Chrome |
+| 2 | Accessibility | keystrokes, hotkeys, media keys, UI scripting |
+
+**Everything implemented today is Tier 0**, so it works unattended. Tiers 1 and 2
+are currently *denied* on this machine (`-1743 Not authorised to send Apple
+events`). Prompts only surface for a process in your GUI login session, so grant
+them while running `task xl:run` in a terminal rather than under the service.
+
+## Adding an action
+
+1. Add the OS call to [`ext/mac.py`](ext/mac.py) (keep it Tier 0 where possible).
+2. Register a handler in [`ext/actions.py`](ext/actions.py) with
+   `@action("mac.<name>")`. Take `**kwargs` and ignore extras — the app injects
+   `entity_id` into `service_data` — and coerce values, since anything from a
+   template arrives as a **string**.
+   **If the action changes state that a key or dial displays, return a
+   `(entity_id, new_state)` hint.** `dispatch` publishes it on the event loop,
+   which is what redraws the affected keys. Handlers run in a worker thread, so
+   they must not publish (or touch the deck) themselves. Skipping the hint is the
+   bug that left the Mute Mac key stale while the Mac really did mute: a dial
+   redraws eagerly on turn and hides it, a button does not.
+3. For something a key or dial should *display*, add a `Provider` in
+   [`ext/state.py`](ext/state.py); the poller and rendering come for free.
+4. `task xl:test`, then reference `service: mac.<name>` from YAML.
+
+Handlers are sync and run in a thread, so a slow `osascript` (~150ms) can't stall
+the deck's event loop.
 
 ## Troubleshooting
 
@@ -605,6 +757,23 @@ direction (negative `step`) and inverted shade bar (full = closed) as the Plus.
   `special_type: next-page` button *needs* `text: ''` to suppress its default
   "Next Page" label — so if you add one to the XL, run `task xl:font` first.
 
+- **`FileNotFoundError` on an icon right after regenerating** — harmless race.
+  `auto_reload: true` picked up a config change while images were still being
+  written. `generate_icons.py` renders in place and prunes only what the spec
+  dropped (never wiping the directory) specifically to avoid this, so just let it
+  reload; touching `configuration.yaml` forces it.
+- **Mac dial renders but the volume doesn't change** — the deck is running under
+  the plain console script instead of `python -m ext.run`, so `mac.volume_set` is
+  being posted to Home Assistant, which rejects it. Check the log for
+  `ext: local actions installed`; if it's absent, re-run `task xl:service` (the
+  plist sets both the entry point and `PYTHONPATH`) or use `task xl:run`.
+- **`ext: ... no longer matches the seams this extension wraps`** — an app upgrade
+  moved one of the three wrapped functions. This is the guard doing its job
+  rather than silently leaking local actions to HA. Run `task xl:test` for the
+  detail and reconcile [`ext/wrap.py`](ext/wrap.py) against the installed
+  version.
+- **`Not authorised to send Apple events` (-1743)** — a Tier 1/2 action without
+  TCC approval; run `task xl:doctor`. Nothing in the current feature set needs it.
 - **Stream Deck not detected** — check `docker compose logs`, confirm it shows
   up in `lsusb` on the host, and verify the udev rule is installed (see
   [USB access](#usb-access)).
