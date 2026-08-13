@@ -18,7 +18,7 @@ edges:
   row 1     Work S   Work    Chill     Vinyl    Pain C  Lights Off  Claude   Firefox 1Password
   row 2     Hallway  Kitchen LivingRm  Outside  Record  House       Slack    Warp    PHPStorm
   row 3     Cleaning Guest   ·         ·        Fan     Apartment   Finder   Mail    Safari
-  row 4     MuteLR   MuteMad MuteMac   Line In  ·       ·           ·        ·       ...
+  row 4     MuteLR   MuteMad MuteMac   Line In  CO2     PowerUse    ·        ·       ...
 
 Rows 1-3 are five wide, so the left block squares off: scenes, then lights,
 then the input_boolean toggles (Awake and Be Smart moved to the Settings page
@@ -26,9 +26,11 @@ then the input_boolean toggles (Awake and Be Smart moved to the Settings page
 Columns 7-9 (rows 1-3) are Mac app launchers — `mac.open_app`, see ../../ext/
 — with 1Password in the corner since it's used constantly. Row 4 col 4 groups
 Living Room into Madagascar's Line In (`script.streamdeck_audio_scene_linein`,
-defined in Home Assistant, not this repo). Bottom right (row 4 col 9) is the
-Settings page-nav key — deliberately just "..." (no icon glyph, no label),
-so it reads as a quiet "more" affordance rather than another feature button.
+defined in Home Assistant, not this repo). Row 4 cols 5-6 are no-op display
+tiles — indoor CO2, then (under the Apartment lock key) live apartment power
+draw — see the `INFO` list below. Bottom right (row 4 col 9) is the Settings
+page-nav key — deliberately just "..." (no icon glyph, no label), so it
+reads as a quiet "more" affordance rather than another feature button.
 Everything else is `special_type: empty`.
 
 Settings is a second page, not a second grid to fill — deliberately sparse:
@@ -120,6 +122,21 @@ ACTION = [
     ("finder",        "apple-finder",   "Finder",   "blue"),
     ("mail",          "mail",           "Mail",     "blue"),
     ("safari",        "apple-safari",   "Safari",   "blue"),
+]
+
+# INFO renders <slug>_<green|amber|red> via render_info_key: icon high, unit
+# label low, a gap left in between for the app's own live `text:` template —
+# a read-only readout, not a button. The matching configuration.yaml entry
+# has no `service:`, so pressing it is a no-op (see _handle_key_press:
+# nothing runs unless special_type or service is set). configuration.yaml
+# picks which of the 3 colour variants to show based on that sensor's own
+# thresholds — see the comments there for the actual numbers.
+# (slug, mdi icon, label — label is the UNIT, e.g. "ppm", not a place name)
+INFO = [
+    # row 4 col 5, left of the power tile — indoor CO2 from the desk sensor.
+    ("co2", "molecule-co2", "ppm"),
+    # row 4 col 6, under the Apartment lock key.
+    ("apartment_power", "lightning-bolt", "W"),
 ]
 
 # ── dials ───────────────────────────────────────────────────────────────────

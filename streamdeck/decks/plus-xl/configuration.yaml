@@ -12,7 +12,7 @@
 #   r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
 #   r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
 #   r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail    Safari
-#   r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ...
+#   r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       ·       ...
 #
 # LAYOUT (Settings) — sparse; a settings/debug page, not a second grid to fill.
 # Dial 1 here is the deck's OWN screen brightness (input_number, see the
@@ -249,9 +249,39 @@ pages:
       - service: script.streamdeck_audio_scene_linein
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/audio_scene_linein.png
 
-      # cols 5-8 — empty
-      - special_type: empty
-      - special_type: empty
+      # col 5 — indoor CO2 (desk sensor). Same no-op display pattern as col 6.
+      # Thresholds (ppm): green < 800, amber 800-1000, red > 1000. Three
+      # pre-rendered backgrounds (co2_green/amber/red.png, see spec.py/
+      # generate_icons.py's INFO_THRESHOLD_STYLES) — `icon:` just picks
+      # between them, same on/off-selection pattern as STATEFUL tiles.
+      - entity_id: sensor.ultimatesensor_scd41_co2
+        icon: >-
+          {{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/co2_red.png" if states("sensor.ultimatesensor_scd41_co2") | float(0) > 1000
+             else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/co2_amber.png" if states("sensor.ultimatesensor_scd41_co2") | float(0) >= 800
+             else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/co2_green.png" }}
+        text: '{{ states("sensor.ultimatesensor_scd41_co2") | float(0) | round(0) | int }}'
+        text_size: 26
+        text_offset: 14
+
+      # col 6, under the Apartment lock key — live apartment power draw.
+      # No-op: no `service:` and no `special_type:`, so a press does nothing
+      # (see _handle_key_press upstream — nothing runs unless one of those is
+      # set). `entity_id` alone is enough to re-render the key when the
+      # sensor updates. `text:` is the app's OWN live template overlay drawn
+      # on top of icons/apartment_power_<colour>.png (icon high, unit label
+      # low, gap left in the middle for this text — see generate_icons.py's
+      # render_info_key) — no per-value image to pre-render, unlike the dial
+      # gauges. Thresholds (W): green < 300, amber 300-600, red > 600.
+      - entity_id: sensor.apartment_consumption_total_active_power
+        icon: >-
+          {{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/apartment_power_red.png" if states("sensor.apartment_consumption_total_active_power") | float(0) > 600
+             else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/apartment_power_amber.png" if states("sensor.apartment_consumption_total_active_power") | float(0) >= 300
+             else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/apartment_power_green.png" }}
+        text: '{{ states("sensor.apartment_consumption_total_active_power") | float(0) | round(0) | int }}'
+        text_size: 28
+        text_offset: 14
+
+      # cols 7-8 — empty
       - special_type: empty
       - special_type: empty
 

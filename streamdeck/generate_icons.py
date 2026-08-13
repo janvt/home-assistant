@@ -6,6 +6,10 @@ via its templated `icon:` field:
 
   * keys        — a coloured chip with a smaller icon and a label below it,
                   at the deck's native key size (Plus 120px, Plus XL 112px).
+  * info keys   — same chip, but icon high / label low with a gap between,
+                  left for the app's OWN live `text:` template overlay (a
+                  sensor reading). For no-op, display-only tiles — no
+                  `service:` in that key's YAML, so pressing it does nothing.
   * dial frames — a vertical fill bar + icon/value/label, one PNG per step.
                   Always 200x100: the Plus strip is 800x100 over 4 dials and
                   the Plus XL's is 1200x100 over 6, so a segment is 200x100 on
@@ -53,6 +57,12 @@ STYLES = {
     # volume dials they sit above rather than to the red door keys.
     "cyan":  ("#38D6F2", "#06333D", "#06333D"),
 }
+
+# INFO tiles (render_info_key) render one file per threshold colour, good/
+# warning/bad — the deck-side config picks between them with a templated
+# `icon:` based on wherever that sensor's own thresholds fall. "amber" is
+# reused as the warning colour rather than adding a near-duplicate "orange".
+INFO_THRESHOLD_STYLES = ("green", "amber", "red")
 
 # ── key geometry, tuned at REF_KEY px and scaled per deck ───────────────────
 REF_KEY = 120
@@ -157,6 +167,34 @@ def render_key(name: str, mdi: str, label: str, style: str, *,
     img.save(out / f"{name}.png")
 
 
+def render_info_key(name: str, mdi: str, label: str, style: str, *,
+                     geo: SimpleNamespace, out: Path, cps: dict[str, str],
+                     icon_font: ImageFont.FreeTypeFont,
+                     label_font: ImageFont.FreeTypeFont) -> None:
+    """Like render_key, but the icon sits higher and the label sits lower,
+    leaving a gap in the vertical middle for the app's OWN live `text:`
+    template overlay (e.g. a sensor reading) — for read-only info tiles with
+    no `service:`, where the button press is a no-op and the point is display,
+    not action. `label` is meant to be the unit (e.g. "ppm", "W"), not a
+    place name — the live value in the gap above it is the actual reading.
+
+    The label sits at 0.80 (was 0.92 — moved up >10px at the XL's 112px key)
+    so there's real room between it and the live value, which the
+    configuration.yaml side positions lower and larger via `text_offset` /
+    `text_size` than the app's own default (dead centre, modest size)."""
+    if mdi not in cps:
+        sys.exit(f"unknown MDI icon: {mdi}")
+    bg, icon_c, label_c = STYLES[style]
+    img = Image.new("RGB", (geo.key, geo.key), "#000000")
+    draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle((0, 0, geo.key - 1, geo.key - 1), radius=geo.radius, fill=bg)
+    glyph = chr(int(cps[mdi], 16))
+    draw.text((geo.key / 2, geo.key * 0.20), glyph, font=icon_font, fill=icon_c, anchor="mm")
+    draw.text((geo.key / 2, geo.key * 0.80), label, font=label_font, fill=label_c, anchor="mm")
+    out.mkdir(parents=True, exist_ok=True)
+    img.save(out / f"{name}.png")
+
+
 def render_gauge(slug: str, style: str, label: str, pct: int, *,
                  out: Path, cps: dict[str, str], mdi_ttf: str, label_ttf: str,
                  muted: bool = False) -> None:
@@ -231,6 +269,15 @@ def build(deck: str) -> None:
     for name, mdi, label, style in getattr(spec, "ACTION", []):
         render_key(name, mdi, label, style, **common)
         keys.add(f"{name}.png")
+    # INFO tiles render one variant per threshold colour rather than a single
+    # style: the app picks between them live via a templated `icon:` in
+    # configuration.yaml (same on/off-selection pattern as STATEFUL, just
+    # 3-way instead of 2-way), so the tile's background reflects how the
+    # live value compares to whatever thresholds that sensor's config uses.
+    for name, mdi, label in getattr(spec, "INFO", []):
+        for style in INFO_THRESHOLD_STYLES:
+            render_info_key(f"{name}_{style}", mdi, label, style, **common)
+            keys.add(f"{name}_{style}.png")
 
     label_ttf = label_font.path
     for slug, style, label in getattr(spec, "DIALS", []):

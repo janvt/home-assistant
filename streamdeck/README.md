@@ -608,8 +608,8 @@ edges:
  col: 1        2        3         4         5       6           7       8       9
  r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
  r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
- r3   Cleaning Guest    Settings  ·         Fan     Apartment   Finder  Mail    Safari
- r4   Mute LR  Mute Mad Mute Mac  Line In   ·       ·           ·       ·       ·
+ r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail    Safari
+ r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       ·       ...
 ```
 
 Rows 1-3 are five wide so the left block squares off: **scenes**, then **room
@@ -621,20 +621,26 @@ not HA calls — with 1Password kept in the corner since it's used constantly.
 Gaps are explicit `special_type: empty` entries and are **load-bearing**: keys
 fill left→right, top→bottom, so deleting one shifts every key after it.
 
-**Settings** (row 3 col 3 on Home) is a second page, not a second grid to fill:
+**Settings** (bottom right, row 4 col 9 — the `...` key) is a second page,
+not a second grid to fill:
 
 ```
  col: 1        2         3   ...   9
- r1   Awake    Be Smart  ·   ...   Home
+ r1   Awake    Be Smart  ·   ...   ·
+ r4   ·        ·         ·   ...   Home
 ```
 
-Just the two toggles that were crowding Home's row 3, a `Home` key
-(col 9) to go back, and dial 1 wired to the deck's own screen brightness (see
+Just the two toggles that were crowding Home's row 3, a `Home` key in the
+same bottom-right corner to go back, and dial 1 wired to the deck's own
+screen brightness (see
 [below](#exposing-deck-settings-to-home-assistant)) — the reason this page
 exists at all. Both page-nav keys use `special_type: go-to-page` targeting the
 other page **by name**, not `next-page`/`previous-page`: with only two pages a
 dedicated key each way is clearer than cycling, and it means either key always
-does the same thing regardless of which page you're on.
+does the same thing regardless of which page you're on. Both render as a
+plain "..." — `dots-horizontal`, no label — rather than a labelled nav
+button; see the troubleshooting entry on `go-to-page`'s default text for why
+that needs an explicit `text: ""`.
 
 Dials 2-6 are left undefined on Settings — the app blanks unconfigured
 touchscreen segments automatically on page switch (`update_all_dials`), and
@@ -667,6 +673,40 @@ a fixed hardware input with no `media_player.select_source` support (calling
 it 500s), so the script is a plain `media_player.join` — Living Room then
 plays whatever's on Madagascar's input. Plain ACTION key, no on/off state:
 Sonos exposes nothing boolean for "grouped" to highlight.
+
+Row 4 cols 5-6 are **no-op display tiles** — indoor CO2
+(`sensor.ultimatesensor_scd41_co2`) and, under the Apartment lock key, live
+apartment power draw (`sensor.apartment_consumption_total_active_power`).
+These are a third key archetype alongside `STATEFUL`/`ACTION`, rendered by a
+new `render_info_key()` in `generate_icons.py`: icon high, a unit label
+low (`ppm`, `W` — not a place name), with a gap left in the vertical middle
+for the app's **own** live `text:` template overlay
+(`{{ states("sensor...") | ... }}`), which HA re-renders on every state
+change with no per-value image needed (unlike the dial gauges, which
+pre-render a frame per value). The button has no `service:` and no
+`special_type:`, so pressing it is a genuine no-op — `_handle_key_press`
+upstream runs nothing unless one of those is set. `entity_id` alone is
+enough to make the key re-render when the sensor updates.
+
+**Background colour reflects the live value against per-sensor thresholds**:
+green/amber/red, chosen with the same templated-`icon:` on/off-selection
+pattern as `STATEFUL` tiles, just 3-way instead of 2-way (`INFO_THRESHOLD_STYLES`
+in `generate_icons.py`, so each `INFO` tile gets 3 pre-rendered PNGs —
+`co2_green.png`/`_amber.png`/`_red.png`, and the same for
+`apartment_power_*`). Thresholds live only in `configuration.yaml`'s `icon:`
+template, not in `spec.py`, since they're a per-sensor judgement call, not a
+rendering concern:
+
+| Tile | green | amber | red |
+|------|-------|-------|-----|
+| CO2 (ppm) | < 800 | 800–1000 | > 1000 |
+| Apartment power (W) | < 300 | 300–600 | > 600 |
+
+The live value itself sits lower and larger (`text_size: 26`–`28`,
+`text_offset: 14`) than the app's own default (dead centre, modest size) —
+tested against both real live values and synthetic 4-digit extremes
+(`1450`/`1875`) to confirm nothing clips or overlaps the icon or the unit
+label above/below it.
 
 Scenes **toggle** exactly like the Plus — each calls
 `script.streamdeck_scene_toggle`, so pressing the active scene turns the area off
