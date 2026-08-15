@@ -601,15 +601,15 @@ way. See [`decks/plus-xl/spec.py`](decks/plus-xl/spec.py) for the tiles and
 [`decks/plus-xl/configuration.yaml`](decks/plus-xl/configuration.yaml) for the
 wiring.
 
-Home populates 29 of 36 keys, kept as compact blocks rather than spread to the
+Home populates 33 of 36 keys, kept as compact blocks rather than spread to the
 edges:
 
 ```
- col: 1        2        3         4         5       6           7       8       9
- r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
- r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
- r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail    Safari
- r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       ·       ...
+ col: 1        2        3         4         5       6           7       8        9
+ r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox  1Password
+ r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp     PHPStorm
+ r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail     Safari
+ r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       Caffein  ...
 ```
 
 Rows 1-3 are five wide so the left block squares off: **scenes**, then **room
@@ -618,8 +618,11 @@ and the bathroom fan — `awake`/`be_smart` moved to Settings, see below).
 Column 6 is the vertical strip of always-reachable actions. Columns 7-9
 (rows 1-3) are Mac app launchers — all [local Mac actions](#local-mac-control-ext),
 not HA calls — with 1Password kept in the corner since it's used constantly.
-Gaps are explicit `special_type: empty` entries and are **load-bearing**: keys
-fill left→right, top→bottom, so deleting one shifts every key after it.
+Row 4 col 8 is a keep-awake toggle (drives KeepingYouAwake — see
+[Keep-awake](#keep-awake-maccaffeinate)), placed next to the Settings
+page-nav key since they're reached together. Gaps are explicit
+`special_type: empty` entries and are **load-bearing**: keys fill
+left→right, top→bottom, so deleting one shifts every key after it.
 
 **Settings** (bottom right, row 4 col 9 — the `...` key) is a second page,
 not a second grid to fill:
@@ -831,11 +834,40 @@ Currently implemented, all Tier 0:
 |--------|----------------|---------|
 | `mac.volume_set` | `level: 0-100` | dial 3 |
 | `mac.volume_mute` | none (toggles), or `muted: true\|false` | Mute Mac key |
+| `mac.caffeinate_set` | none (toggles), or `on: true\|false` | Caffeinate key |
 | `mac.open_app` | `app: 1Password` — name, bundle id or path | 1Password, Claude, Firefox, Slack, Warp, PhpStorm, Finder, Mail, Safari keys |
 
 Unlike `media_player.volume_mute`, `mac.volume_mute` needs no `service_data` at
-all: it toggles. `mac.open_app` uses `open -a`, which launches or fronts an app
-with no permission grant — activating one via System Events would be Tier 1.
+all: it toggles — `mac.caffeinate_set` follows the same pattern. `mac.open_app`
+uses `open -a`, which launches or fronts an app with no permission grant —
+activating one via System Events would be Tier 1.
+
+### Keep-awake (`mac.caffeinate`)
+
+The Caffeinate key drives **[KeepingYouAwake](https://github.com/newmarcel/KeepingYouAwake)**
+(`brew install --cask keepingyouawake`) rather than managing sleep itself, so
+the deck key and KYA's menu bar icon are one shared state — flip it either way
+and both agree.
+
+- **Write** is KYA's URL scheme, `open -g keepingyouawake:///activate` (or
+  `deactivate`). LaunchServices dispatches it, so it stays **Tier 0** — no
+  Automation grant, unlike AppleScript. `activate` honours *KYA's* configured
+  default duration (indefinite unless you change it), deliberately its setting
+  to own rather than something this repo overrides.
+- **Read** works because KYA implements keep-awake by spawning
+  `/usr/bin/caffeinate -di -w <its pid>` — so the state is just a process
+  lookup, no Apple event needed. The check is **scoped to KYA's own children**
+  (`pgrep -P <kya pid> -x caffeinate`), not a bare `pgrep -x caffeinate`: an
+  unrelated caffeinate (started in a Terminal, say) would otherwise make the
+  key read "on" while the off press — which only talks to KYA — couldn't turn
+  it off, leaving the button stuck.
+
+Worth knowing: macOS keep-awake apps differ a lot in how scriptable they are.
+Caffeine.app by Domzilla, for instance, exposes **no** automation surface at
+all (no AppleScript, no URL scheme, no hotkey), so driving it would need
+Accessibility-tier UI scripting — which a LaunchAgent cannot arrange
+non-interactively. KYA was chosen specifically because its URL scheme keeps
+this Tier 0.
 
 **This requires `python -m ext.run` as the entry point** — it installs the
 wrappers, then defers to the app's own `main()` so all CLI flags, `.env`
@@ -855,8 +887,8 @@ The safety net is [`ext/wrap.py`](ext/wrap.py)'s `_check()`: it asserts each
 wrapped symbol exists, is a coroutine function, and still has the expected
 leading parameters — **before** touching anything. An upstream rename fails
 loudly at startup instead of silently posting `mac.volume_set` to Home
-Assistant. `task xl:test` runs 16 tests covering exactly that, plus interception
-on all three action paths, the poller and the settle window. No hardware needed.
+Assistant. `task xl:test` runs 28 tests covering exactly that, plus interception
+on all action paths, the poller and the settle window. No hardware needed.
 
 ## Permissions (TCC)
 
@@ -866,7 +898,7 @@ non-interactively. `task xl:doctor` probes and reports the truth:
 
 | Tier | Needs | Examples |
 |------|-------|----------|
-| 0 | nothing | volume + mute (`set volume` is a Standard Addition, not an Apple event), `open -a`, `shortcuts run`, `pmset` |
+| 0 | nothing | volume + mute (`set volume` is a Standard Addition, not an Apple event), `open -a` and `open -g <url-scheme>` (LaunchServices, not an Apple event), `shortcuts run`, `pmset`, `pgrep` |
 | 1 | Automation, per target app | AppleScript to Spotify / Music / Chrome |
 | 2 | Accessibility | keystrokes, hotkeys, media keys, UI scripting |
 

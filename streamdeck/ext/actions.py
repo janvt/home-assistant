@@ -66,6 +66,19 @@ def volume_mute(muted: Any = None, **_: Any) -> Hint:
     return _volume_hint(muted=new)
 
 
+# ── caffeinate (keep-awake) ─────────────────────────────────────────────────
+@action("mac.caffeinate_set")
+def caffeinate_set(on: Any = None, **_: Any) -> Hint:
+    """Toggle keep-awake, or set it explicitly when `on` is given."""
+    if on is None:
+        new = not mac.caffeinate_running()
+    else:
+        new = str(on).strip().lower() in ("1", "true", "yes", "on")
+    mac.set_caffeinate(new)
+    state.settle("mac.caffeinate")
+    return "mac.caffeinate", {"state": "on" if new else "off", "attributes": {}}
+
+
 # ── applications ────────────────────────────────────────────────────────────
 @action("mac.open_app")
 def open_app(app: Any = None, **_: Any) -> Hint:

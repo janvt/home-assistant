@@ -12,7 +12,7 @@
 #   r1   Work S   Work     Chill     Vinyl     Pain C  Lights Off  Claude  Firefox 1Password
 #   r2   Hallway  Kitchen  LivingRm  Outside   Record  House       Slack   Warp    PHPStorm
 #   r3   Cleaning Guest    ·         ·         Fan     Apartment   Finder  Mail    Safari
-#   r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       ·       ...
+#   r4   Mute LR  Mute Mad Mute Mac  Line In   CO2     PowerUse    ·       Caffein ...
 #
 # LAYOUT (Settings) — sparse; a settings/debug page, not a second grid to fill.
 # Dial 1 here is the deck's OWN screen brightness (input_number, see the
@@ -281,9 +281,18 @@ pages:
         text_size: 28
         text_offset: 14
 
-      # cols 7-8 — empty
+      # col 7 — empty
       - special_type: empty
-      - special_type: empty
+
+      # col 8 — keep the Mac awake. `mac.caffeinate` is a synthetic entity
+      # (../../ext/) that drives KeepingYouAwake.app rather than an HA helper,
+      # so this key and KYA's menu bar icon show the SAME state: flip it from
+      # the menu bar and the deck follows within a poll. Self-toggles like
+      # `mac.volume_mute` above (no `service_data` needed). Placed here, right
+      # next to the Settings page-nav key, since both get reached together.
+      - entity_id: mac.caffeinate
+        service: mac.caffeinate_set
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/caffeinate_on.png" if is_state("mac.caffeinate", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/caffeinate_off.png" }}'
 
       # col 9 — bottom right corner: jump to the Settings page. No icon
       # glyph, no label — just "..." (see spec.py's ACTION entry), so it

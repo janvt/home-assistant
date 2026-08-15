@@ -18,7 +18,7 @@ edges:
   row 1     Work S   Work    Chill     Vinyl    Pain C  Lights Off  Claude   Firefox 1Password
   row 2     Hallway  Kitchen LivingRm  Outside  Record  House       Slack    Warp    PHPStorm
   row 3     Cleaning Guest   ·         ·        Fan     Apartment   Finder   Mail    Safari
-  row 4     MuteLR   MuteMad MuteMac   Line In  CO2     PowerUse    ·        ·       ...
+  row 4     MuteLR   MuteMad MuteMac   Line In  CO2     PowerUse    ·        Caffein ...
 
 Rows 1-3 are five wide, so the left block squares off: scenes, then lights,
 then the input_boolean toggles (Awake and Be Smart moved to the Settings page
@@ -28,10 +28,12 @@ Columns 7-9 (rows 1-3) are Mac app launchers — `mac.open_app`, see ../../ext/
 Living Room into Madagascar's Line In (`script.streamdeck_audio_scene_linein`,
 defined in Home Assistant, not this repo). Row 4 cols 5-6 are no-op display
 tiles — indoor CO2, then (under the Apartment lock key) live apartment power
-draw — see the `INFO` list below. Bottom right (row 4 col 9) is the Settings
-page-nav key — deliberately just "..." (no icon glyph, no label), so it
-reads as a quiet "more" affordance rather than another feature button.
-Everything else is `special_type: empty`.
+draw — see the `INFO` list below. Row 4 col 8 is a keep-awake toggle
+(`caffeinate`, a real macOS process — see ../../ext/'s `mac.caffeinate`),
+placed next to the page-nav key since both live in the same reach. Bottom
+right (row 4 col 9) is the Settings page-nav key — deliberately just "..."
+(no icon glyph, no label), so it reads as a quiet "more" affordance rather
+than another feature button. Everything else is `special_type: empty`.
 
 Settings is a second page, not a second grid to fill — deliberately sparse:
 
@@ -78,6 +80,12 @@ STATEFUL = [
     ("awake",       "eye",              "Awake",     "blue"),
     ("be_smart",    "brain",            "Be Smart",  "blue"),
     ("fan",         "emoticon-poop",    "Fan",       "blue"),
+
+    # row 4 col 8 — keep-awake toggle, next to the Settings page-nav key.
+    # Drives KeepingYouAwake.app on this Mac, not an HA entity
+    # (mac.caffeinate is synthetic, see ../../ext/), so this key and KYA's
+    # menu bar icon are the same state — toggle either, both agree.
+    ("caffeinate",  "coffee",           "Caffeinate", "blue"),
 ]
 ACTION = [
     # col 6 — the vertical strip of always-reachable actions

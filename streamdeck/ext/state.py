@@ -62,7 +62,16 @@ class Volume(Provider):
         }
 
 
-PROVIDERS: list[Provider] = [Volume()]
+class Caffeinate(Provider):
+    """Whether a `caffeinate` process is keeping this Mac awake, as `mac.caffeinate`."""
+
+    entity_id = "mac.caffeinate"
+
+    def read(self) -> dict[str, Any]:
+        return {"state": "on" if mac.caffeinate_running() else "off", "attributes": {}}
+
+
+PROVIDERS: list[Provider] = [Volume(), Caffeinate()]
 
 # entity_id -> monotonic deadline before which polls are ignored
 _settle_until: dict[str, float] = {}

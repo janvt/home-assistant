@@ -12,6 +12,7 @@ loudly here instead of silently sending `mac.volume_set` to Home Assistant.
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import unittest
 from typing import Any
 from unittest import mock
@@ -373,6 +374,72 @@ class Handlers(unittest.IsolatedAsyncioTestCase):
     async def test_handler_failure_is_contained(self) -> None:
         with mock.patch.object(actions.mac, "set_volume", side_effect=OSError("boom")):
             await actions.dispatch("mac.volume_set", {"level": 10})  # must not raise
+
+    async def test_caffeinate_self_toggles_like_mute(self) -> None:
+        with mock.patch.object(actions.mac, "caffeinate_running", return_value=False), \
+             mock.patch.object(actions.mac, "set_caffeinate") as set_caffeinate:
+            hint = actions.caffeinate_set()
+        set_caffeinate.assert_called_once_with(True)
+        self.assertEqual(hint, ("mac.caffeinate", {"state": "on", "attributes": {}}))
+
+    async def test_caffeinate_accepts_an_explicit_value(self) -> None:
+        with mock.patch.object(actions.mac, "set_caffeinate") as set_caffeinate:
+            hint = actions.caffeinate_set(on="false")
+        set_caffeinate.assert_called_once_with(False)
+        self.assertEqual(hint, ("mac.caffeinate", {"state": "off", "attributes": {}}))
+
+    async def test_keepawake_goes_through_launchservices(self) -> None:
+        """Tier 0 is the whole point: it must drive KeepingYouAwake with
+        `open` (LaunchServices), never osascript. An Apple event would need
+        Automation approval, which for a LaunchAgent attaches to the
+        responsible binary and cannot be granted non-interactively.
+        """
+        ok = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(mac_mod.subprocess, "run", return_value=ok) as run:
+            mac_mod.set_caffeinate(True)
+            mac_mod.set_caffeinate(False)
+        self.assertEqual(
+            [c.args[0] for c in run.call_args_list],
+            [
+                ["/usr/bin/open", "-g", "keepingyouawake:///activate"],
+                ["/usr/bin/open", "-g", "keepingyouawake:///deactivate"],
+            ],
+        )
+
+    async def test_keepawake_failure_is_reported(self) -> None:
+        """e.g. KeepingYouAwake not installed — `open` exits non-zero."""
+        bad = subprocess.CompletedProcess([], 1, "", "Unable to find application")
+        with mock.patch.object(mac_mod.subprocess, "run", return_value=bad), \
+             self.assertRaises(mac_mod.MacError):
+            mac_mod.set_caffeinate(True)
+
+    async def test_state_is_scoped_to_keepingyouawake(self) -> None:
+        """Regression guard: a bare `pgrep -x caffeinate` also matches an
+        UNRELATED caffeinate (one started in a Terminal, or a leftover from an
+        older build of this repo). The key would then read "on" while the off
+        press — which only talks to KYA — could not turn it off, leaving the
+        button visibly stuck.
+        """
+        seen: list[tuple[str, ...]] = []
+
+        def fake_pgrep(*args: str) -> list[str]:
+            seen.append(args)
+            return ["4242"] if args == ("-x", "KeepingYouAwake") else []
+
+        with mock.patch.object(mac_mod, "_pgrep", fake_pgrep):
+            self.assertFalse(mac_mod.caffeinate_running())
+        self.assertIn(
+            ("-P", "4242", "-x", "caffeinate"), seen,
+            "state was not scoped to KYA's own child processes",
+        )
+
+    async def test_state_true_only_when_kya_holds_caffeinate(self) -> None:
+        with mock.patch.object(mac_mod, "_pgrep", side_effect=[["4242"], ["4243"]]):
+            self.assertTrue(mac_mod.caffeinate_running())
+        # KYA not running at all — must not even look for a caffeinate child
+        with mock.patch.object(mac_mod, "_pgrep", return_value=[]) as pg:
+            self.assertFalse(mac_mod.caffeinate_running())
+        self.assertEqual(pg.call_count, 1)
 
 
 async def _fake_get_states(websocket: Any) -> dict[str, Any]:  # noqa: ARG001
