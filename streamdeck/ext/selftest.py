@@ -279,6 +279,110 @@ class Poller(unittest.IsolatedAsyncioTestCase):
                                                "attributes": {"level": 55, "muted": False}}))
 
 
+class WakeReconnect(unittest.IsolatedAsyncioTestCase):
+    """After a sleep the websocket is dead but nothing knows for ~40s, so every
+    press and dial turn is silently lost. The poller drops it instead.
+    """
+
+    def setUp(self) -> None:
+        state._last.clear()  # noqa: SLF001
+        state._settle_until.clear()  # noqa: SLF001
+
+    async def asyncTearDown(self) -> None:
+        state.unbind()
+
+    def test_suspend_is_measured_by_clock_divergence(self) -> None:
+        """Real sleep pauses monotonic but not the wall clock; a merely-slow
+        event loop delays BOTH and must read as no sleep at all.
+        """
+        with mock.patch.object(state.time, "time", return_value=1_000.0), \
+             mock.patch.object(state.time, "monotonic", return_value=500.0):
+            # wall advanced 60s, monotonic only 1s -> ~59s suspended
+            self.assertAlmostEqual(state.suspended_for(940.0, 499.0), 59.0)
+            # both advanced 30s (a stalled loop, not sleep) -> 0
+            self.assertAlmostEqual(state.suspended_for(970.0, 470.0), 0.0)
+
+    async def test_stale_socket_is_closed_after_a_sleep(self) -> None:
+        closed = []
+
+        class WS:
+            async def close(self) -> None:
+                closed.append(True)
+
+        state.bind({}, make_config(), FakeDeck(), WS())
+        with mock.patch.object(state, "suspended_for", return_value=120.0):
+            dropped = await state._reconnect_if_woken(0.0, 0.0)  # noqa: SLF001
+        self.assertTrue(dropped)
+        self.assertEqual(closed, [True], "stale websocket was not closed")
+
+    async def test_short_gap_leaves_the_socket_alone(self) -> None:
+        closed = []
+
+        class WS:
+            async def close(self) -> None:
+                closed.append(True)
+
+        state.bind({}, make_config(), FakeDeck(), WS())
+        with mock.patch.object(state, "suspended_for",
+                               return_value=state.SUSPEND_THRESHOLD - 0.1):
+            dropped = await state._reconnect_if_woken(0.0, 0.0)  # noqa: SLF001
+        self.assertFalse(dropped)
+        self.assertEqual(closed, [], "closed a healthy websocket")
+
+    async def test_already_dead_socket_does_not_raise(self) -> None:
+        """Closing a socket that is already gone is the NORMAL case here — it
+        must not take the poller down with it."""
+        class WS:
+            async def close(self) -> None:
+                raise ConnectionResetError("already gone")
+
+        state.bind({}, make_config(), FakeDeck(), WS())
+        with mock.patch.object(state, "suspended_for", return_value=120.0):
+            self.assertTrue(await state._reconnect_if_woken(0.0, 0.0))  # noqa: SLF001
+
+    async def test_wrapper_hands_the_websocket_to_the_poller(self) -> None:
+        """Seam guard: the poller can only drop the connection if wrap.py binds
+        it. If that call or bind()'s signature changes, the whole feature dies
+        silently — nothing else would fail.
+        """
+        seen: dict[str, Any] = {}
+
+        async def fake_handle_changes(
+            websocket: Any, complete_state: Any, deck: Any, config: Any,
+        ) -> None:
+            seen["ws"] = state._ws  # noqa: SLF001
+
+        wrap.uninstall()
+        try:
+            with mock.patch.object(app, "handle_changes", new=fake_handle_changes):
+                wrap.install()  # wraps the stub, as the get_states test does
+                ws = FakeWS()
+                await app.handle_changes(ws, {}, FakeDeck(), make_config())
+            self.assertIs(seen.get("ws"), ws, "wrap.py did not bind the websocket")
+        finally:
+            wrap._installed = False  # noqa: SLF001
+            wrap._originals.clear()  # noqa: SLF001
+            wrap.install()
+
+    async def test_poller_exits_after_forcing_a_reconnect(self) -> None:
+        """The session is over once the socket is dropped; a poller left running
+        would keep polling a connection that no longer exists (the reconnect
+        starts a fresh one).
+        """
+        class WS:
+            async def close(self) -> None:
+                pass
+
+        cfg = make_config()
+        state.bind({}, cfg, FakeDeck(), WS())
+        with mock.patch.object(state, "POLL_INTERVAL", 0.01), \
+             mock.patch.object(state, "suspended_for", return_value=99.0), \
+             mock.patch.object(state.mac, "read_volume", return_value=(5, False)), \
+             mock.patch.object(state.mac, "caffeinate_running", return_value=False):
+            await asyncio.wait_for(state.poll_loop({}, cfg, FakeDeck()), timeout=2.0)
+        # returning at all is the assertion: the loop is `while True` otherwise
+
+
 class Redraw(unittest.IsolatedAsyncioTestCase):
     """A local action must redraw the keys that render its entity.
 

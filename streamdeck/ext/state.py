@@ -12,6 +12,11 @@ To push a change we fabricate the same websocket payload HA would have sent and
 hand it to the app's own `_update_state()`. That reuses the real code path —
 including `_keys()` matching and `Dial.update_attributes()` — rather than
 reimplementing rendering.
+
+The poller does one job beyond polling: it notices when the Mac has been asleep
+and drops the (now dead) Home Assistant websocket so the app reconnects at
+once. Without that, presses and dial turns are silently swallowed for ~40s
+after every wake — see `_reconnect_if_woken`.
 """
 from __future__ import annotations
 
@@ -33,6 +38,11 @@ POLL_INTERVAL = 1.0
 # poll landing mid-turn would read a stale level and yank the dial back under
 # the user's finger.
 SETTLE = 1.5
+
+# Treat this much suspended time as "the websocket did not survive". Well above
+# any plausible event-loop stall, well below the shortest real sleep — and a
+# false positive only costs a ~1s reconnect, so err on the low side.
+SUSPEND_THRESHOLD = 5.0
 
 
 class Provider:
@@ -80,16 +90,26 @@ _last: StateDict = {}
 # The live session, bound for the lifetime of a connection so an action handler
 # can publish its result without threading these three through every call.
 _session: tuple[StateDict, Any, Any] | None = None
+# The live websocket, so the poller can drop it after the Mac wakes — see
+# _force_reconnect(). Optional: the tests bind without one.
+_ws: Any = None
 
 
-def bind(complete_state: StateDict, config: Config, deck: StreamDeck) -> None:
-    global _session  # noqa: PLW0603
+def bind(
+    complete_state: StateDict,
+    config: Config,
+    deck: StreamDeck,
+    websocket: Any = None,
+) -> None:
+    global _session, _ws  # noqa: PLW0603
     _session = (complete_state, config, deck)
+    _ws = websocket
 
 
 def unbind() -> None:
-    global _session  # noqa: PLW0603
+    global _session, _ws  # noqa: PLW0603
     _session = None
+    _ws = None
 
 
 def publish_now(entity_id: str, new_state: dict[str, Any]) -> None:
@@ -158,6 +178,51 @@ def publish(
     )
 
 
+def suspended_for(wall_before: float, mono_before: float) -> float:
+    """Seconds the machine spent asleep across an interval, 0.0 if it did not.
+
+    macOS pauses `time.monotonic()` (mach_absolute_time) while the machine is
+    suspended but keeps CLOCK_REALTIME running, so the DIFFERENCE between the
+    two clocks over the same interval is the time spent asleep. That is much
+    sharper than watching for a long gap in one clock: a busy event loop or a
+    slow osascript delays both clocks equally and reads as 0 here, while real
+    sleep shows up in full.
+    """
+    return (time.time() - wall_before) - (time.monotonic() - mono_before)
+
+
+async def _reconnect_if_woken(wall_before: float, mono_before: float) -> bool:
+    """Drop a websocket that cannot have survived a sleep. True if dropped.
+
+    After the Mac wakes, the old connection is dead but nothing knows yet:
+    `websockets` only finds out via its keepalive ping (20s interval + 20s
+    timeout by default, so ~40s), and until then every key press and dial turn
+    is silently lost. The exception surfaces only as an unretrieved task
+    exception, so the deck sits there looking alive with its cached icons while
+    doing nothing — which is exactly what a stale dial feels like.
+
+    Closing the socket makes the app's own `recv()` raise ConnectionClosed,
+    which propagates out of handle_changes into run()'s retry loop — the same
+    path every other drop already takes, so this adds no recovery logic of its
+    own. A clean close is safe: `recv()` raises ConnectionClosedOK rather than
+    returning, so the session never ends "cleanly" (which would make run()
+    break out and exit instead of reconnecting).
+    """
+    slept = suspended_for(wall_before, mono_before)
+    if slept <= SUSPEND_THRESHOLD:
+        return False
+    if _ws is None:
+        _log(f"[yellow]woke after {slept:.0f}s asleep; no websocket bound[/]")
+        return False
+    _log(
+        f"[yellow]woke after {slept:.0f}s asleep — dropping the stale Home "
+        f"Assistant connection so it reconnects now rather than in ~40s[/]",
+    )
+    with contextlib.suppress(Exception):  # already-dead socket is the normal case
+        await _ws.close()
+    return True
+
+
 async def poll_loop(
     complete_state: StateDict,
     config: Config,
@@ -172,7 +237,10 @@ async def poll_loop(
     loop = asyncio.get_running_loop()
     _log(f"local state poller started ({', '.join(p.entity_id for p in PROVIDERS)})")
     while True:
+        wall_before, mono_before = time.time(), time.monotonic()
         await asyncio.sleep(POLL_INTERVAL)
+        if await _reconnect_if_woken(wall_before, mono_before):
+            return  # session is over; the reconnect starts a fresh poller
         now = time.monotonic()
         for p in PROVIDERS:
             if _settle_until.get(p.entity_id, 0.0) > now:

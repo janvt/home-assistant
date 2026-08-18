@@ -179,6 +179,40 @@ blip was never permanently fatal there — just expensive, since each blip
 tears down and respawns the whole container instead of reconnecting in
 place. Same two env vars in `decks/plus/.env`, same fix, cheaper recovery.
 
+#### Waking from sleep (the Mac)
+
+The retry loop above handles an outage once something *notices* it. Sleep is
+the case where nothing does, for a surprisingly long time:
+
+1. The Mac sleeps. The websocket to HA dies with it.
+2. On wake, `websockets` only discovers this via its keepalive ping — default
+   20s interval + 20s timeout, so **~40s**.
+3. Until then the deck looks completely fine (it still has its cached icons),
+   but every key press and dial turn is silently dropped. The exception is
+   raised inside a fire-and-forget task, so it surfaces only as a
+   `Task exception was never retrieved` traceback — easy to miss entirely,
+   and indistinguishable from "that dial is broken".
+
+[`ext/state.py`](ext/state.py)'s poller closes that window. It already ticks
+once a second, so it measures how long the machine was suspended and drops a
+connection that cannot have survived:
+
+- **Detection** compares the two clocks. macOS pauses `time.monotonic()`
+  (`mach_absolute_time`) while suspended but keeps `CLOCK_REALTIME` running, so
+  the *divergence* between them over one tick is the sleep duration. A busy
+  event loop or a slow `osascript` delays both clocks equally and correctly
+  reads as zero — which a naive "was the gap big?" check would not.
+- **Recovery** reuses the existing path rather than adding one: closing the
+  socket makes the app's own `recv()` raise `ConnectionClosed`, which
+  propagates out of `handle_changes` into `run()`'s retry loop. A clean close
+  is safe here — `recv()` raises `ConnectionClosedOK` (still a
+  `ConnectionClosed`) rather than returning, so the session never ends
+  "cleanly", which *would* make `run()` break out and exit.
+
+Net effect: the dead window after a wake goes from ~40s to about a second. The
+Caffeinate key is the other half of this — a Mac that never sleeps never drops
+the connection in the first place.
+
 ### Task reference
 
 | Task | Does |
@@ -787,7 +821,7 @@ static YAML only, read once at startup / reload):
 | `auto_reload` | reload this YAML file when it changes on disk (both decks have this `true`) |
 | `inactivity_time` | seconds of no input before the screen auto-sleeps; `-1` disables (both decks) |
 | `long_press_duration` | seconds held before a press counts as "long"; default `1.0` |
-| `pages` / `anonymous_pages` | multi-page decks (not used here — the XL is one page, 36 keys, no paging key needed) |
+| `pages` / `anonymous_pages` | multi-page decks (the XL has two — Home and Settings, linked by a `go-to-page` key each way; the Plus is single-page) |
 
 # Local Mac control (`ext/`)
 
@@ -887,7 +921,7 @@ The safety net is [`ext/wrap.py`](ext/wrap.py)'s `_check()`: it asserts each
 wrapped symbol exists, is a coroutine function, and still has the expected
 leading parameters — **before** touching anything. An upstream rename fails
 loudly at startup instead of silently posting `mac.volume_set` to Home
-Assistant. `task xl:test` runs 28 tests covering exactly that, plus interception
+Assistant. `task xl:test` runs 34 tests covering exactly that, plus interception
 on all action paths, the poller and the settle window. No hardware needed.
 
 ## Permissions (TCC)

@@ -84,8 +84,10 @@ def install() -> None:
         config: Any,
     ) -> None:
         # Bind before starting anything: an action handler needs these to
-        # publish its result (and so redraw the keys that render it).
-        state.bind(complete_state, config, deck)
+        # publish its result (and so redraw the keys that render it). The
+        # websocket goes in too, so the poller can drop a connection that did
+        # not survive a sleep — see state._reconnect_if_woken.
+        state.bind(complete_state, config, deck, websocket)
         stop = state.run_poller(complete_state, config, deck)
         try:
             await orig_handle_changes(websocket, complete_state, deck, config)
