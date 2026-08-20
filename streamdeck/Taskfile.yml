@@ -61,6 +61,50 @@ tasks:
     desc: Idempotently apply host-level hardening/resilience on the Pi (needs sudo)
     cmds: [bash harden.sh]
 
+  # ── tests (whole repo, no hardware) ───────────────────────────────────────
+  # The suite lives at the repo root because it covers all of it: the deck
+  # extension and renderer here, the ESPHome device configs in m5stack/, and
+  # the Home Assistant YAML at the top level. `dir: ..` runs from there.
+  test:venv:
+    desc: Create the venv the repo test suite runs in
+    dir: ..
+    status:
+      - test -x .venv-test/bin/pytest
+      - .venv-test/bin/python -c "import home_assistant_streamdeck_yaml"
+    cmds:
+      - '{{.XLPY}} -m venv .venv-test'
+      - .venv-test/bin/pip install --quiet --upgrade pip
+      - .venv-test/bin/pip install --quiet -r requirements-test.txt
+
+  test:
+    desc: Run the whole repo test suite (no hardware needed; pass pytest args after --)
+    deps: [test:venv]
+    dir: ..
+    cmds:
+      - .venv-test/bin/python -m pytest {{.CLI_ARGS}}
+
+  # ESPHome gets its OWN venv, and must: it requires pydantic v2 while the
+  # Stream Deck app pins pydantic<2, so installing both in one venv silently
+  # breaks whichever was there first. (CI keeps them in separate jobs for the
+  # same reason.) This venv needs no Stream Deck app — these tests only shell
+  # out to `esphome config`.
+  test:esphome:venv:
+    desc: Create the separate venv ESPHome validation runs in
+    dir: ..
+    status:
+      - test -x .venv-esphome/bin/esphome
+    cmds:
+      - '{{.XLPY}} -m venv .venv-esphome'
+      - .venv-esphome/bin/pip install --quiet --upgrade pip
+      - .venv-esphome/bin/pip install --quiet esphome pytest pyyaml
+
+  test:esphome:
+    desc: Validate the m5stack configs with ESPHome itself (slow, needs network)
+    deps: [test:esphome:venv]
+    dir: ..
+    cmds:
+      - .venv-esphome/bin/python -m pytest -m esphome tests/test_esphome_configs.py {{.CLI_ARGS}}
+
   # ── plus (Raspberry Pi, Docker) ───────────────────────────────────────────
   plus:env:
     desc: Create decks/plus/.env from the template

@@ -46,7 +46,7 @@ esphome:
   name: ${name}
   friendly_name: ${friendly_name}
   includes:
-    - m5core2_helpers.h
+    - m5core_helpers.h
   on_boot:
     # Priority 800: pulse GPIO33 (ILI9342C RESET, active-low) before mipi_spi
     # component setup() at ~priority 600.  On Core Basic v2.7 the reset line is
@@ -1003,7 +1003,7 @@ display:
           } else {
             it.printf(160, 120, id(volume_font), id(color_white), TextAlign::CENTER, "%d%%", vol_pct);
           }
-          // Horizontal progress bar (draw_arc is repurposed in m5core2_helpers.h)
+          // Horizontal progress bar (draw_arc is repurposed in m5core_helpers.h)
           draw_arc(it, is_muted ? 0.0f : id(volume_level), id(color_accent), id(color_arc_bg));
           // Media state indicator
           if (id(media_player_state).has_state()) {

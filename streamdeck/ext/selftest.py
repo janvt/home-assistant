@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
 import unittest
 from typing import Any
 from unittest import mock
@@ -467,8 +468,14 @@ class Handlers(unittest.IsolatedAsyncioTestCase):
     async def test_open_app_without_a_name_is_contained(self) -> None:
         await actions.dispatch("mac.open_app", {})  # must not raise
 
+    @unittest.skipUnless(sys.platform == "darwin", "needs the real /usr/bin/open")
     async def test_open_app_reports_an_unknown_app(self) -> None:
-        """Real subprocess, no mock — a bad name must raise MacError, not hang."""
+        """Real subprocess, no mock — a bad name must raise MacError, not hang.
+
+        The only test here that touches a real macOS binary, so it is the only
+        one that cannot run on CI's Linux runners; everything else stubs the
+        bridge and runs anywhere.
+        """
         with self.assertRaises(mac_mod.MacError):
             mac_mod.open_app("ZZZ-no-such-application-here")
 

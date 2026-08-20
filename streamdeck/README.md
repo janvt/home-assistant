@@ -230,6 +230,8 @@ the connection in the first place.
 | `task xl:patch` | patch the app for Plus XL touchscreen rendering (see below) |
 | `task xl:doctor` | report which local Mac controls work here (permission tiers) |
 | `task xl:test` | test the local-action extension — no hardware needed |
+| `task test` | run the whole repo's test suite (this deck, the Pi deck, the renderer, the ESPHome + HA YAML) |
+| `task test:esphome` | validate the `m5stack/` configs with ESPHome itself (slow, needs network) |
 | `task xl:service` | install + start the login LaunchAgent |
 | `task xl:service:status` / `logs` / `restart` / `stop` | service lifecycle |
 | `task icons DECK=plus\|plus-xl` / `task icons:all` | just render images |
@@ -923,6 +925,14 @@ leading parameters — **before** touching anything. An upstream rename fails
 loudly at startup instead of silently posting `mac.volume_set` to Home
 Assistant. `task xl:test` runs 34 tests covering exactly that, plus interception
 on all action paths, the poller and the settle window. No hardware needed.
+
+Those tests are about `ext/` specifically. The repo-wide suite (`task test`, and
+[`.github/workflows/ci.yml`](../.github/workflows/ci.yml) on every push) adds
+the checks that span files and so have no natural home in either: that every
+icon this config names is one the renderer actually produces, that every
+position a dial can reach resolves to a frame that exists, that every `mac.*`
+service in the YAML has a handler, and that the LaunchAgent still launches via
+`python -m ext.run`. See [`../tests/`](../tests/).
 
 ## Permissions (TCC)
 

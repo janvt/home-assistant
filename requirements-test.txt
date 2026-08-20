@@ -1,0 +1,11 @@
+# Test-only dependencies. Install with:
+#   python3 -m venv .venv-test && .venv-test/bin/pip install -r requirements-test.txt
+# or let the task runner do it: `task -d streamdeck test`
+pytest>=8
+pillow                     # the icon renderer
+pyyaml                     # ESPHome / Home Assistant config parsing
+
+# The upstream Stream Deck app, from git rather than PyPI: Plus XL support is
+# not in any release. Tests that need it skip when it is absent, so this is
+# optional — but CI installs it, and so should you if you touch ext/.
+home-assistant-streamdeck-yaml @ git+https://github.com/basnijholt/home-assistant-streamdeck-yaml@main

@@ -1,0 +1,12 @@
+# Test venvs and caches (the streamdeck/ subtree has its own .gitignore).
+# Two of them: esphome needs pydantic v2, the Stream Deck app pins <2.
+.venv-test/
+.venv-esphome/
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# ESPHome build/validation artefacts. secrets.yaml is real credentials on a
+# workstation and a generated stub in CI — never commit either.
+.esphome/
+m5stack/*/secrets.yaml
