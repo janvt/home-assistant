@@ -26,7 +26,9 @@ TASKFILE = STREAMDECK / "Taskfile.yml"
 
 # A Home Assistant long-lived token is a JWT, so it always starts this way.
 JWT = re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}")
-TOKEN_ASSIGNMENT = re.compile(r"HASS_TOKEN\s*=\s*(\S+)")
+# A value opening with `{` is an f-string placeholder (this file builds such
+# strings itself), not a literal token, so it is left out of the match.
+TOKEN_ASSIGNMENT = re.compile(r"HASS_TOKEN\s*=\s*([^\s{]\S*)")
 PLACEHOLDER = "your-long-lived-access-token"
 
 TEXT_SUFFIXES = {".py", ".yaml", ".yml", ".md", ".sh", ".plist", ".h", ".example", ""}
