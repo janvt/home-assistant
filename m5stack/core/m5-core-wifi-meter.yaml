@@ -11,7 +11,8 @@ substitutions:
 # Standalone: flashing this replaces m5-core.yaml on the device.
 #
 # Buttons:  A (left) = switch network (home <-> Shrek)   B (centre) = reset graph and min/max
-# Screen brightness is the "Backlight" light in Home Assistant.
+# Screen brightness is the "Backlight" light in Home Assistant; the M5GO base's
+# LED bars glow the signal colour and are the "Signal LEDs" light.
 ################################################################################################################
 esphome:
   name: ${name}
@@ -206,6 +207,42 @@ light:
     default_transition_length: 0s
     # Brightness is set from Home Assistant and remembered across reboots.
     restore_mode: RESTORE_DEFAULT_ON
+
+  # M5GO base: 10 SK6812s (5 per side bar) on GPIO15. They mirror the screen's
+  # signal colour so it reads from across a room, and go dark while
+  # disconnected. Brightness/off from Home Assistant; starts at 30% because
+  # the bars are bright and draw real current on battery.
+  - platform: esp32_rmt_led_strip
+    name: "Signal LEDs"
+    id: signal_leds
+    pin:
+      number: GPIO15
+      ignore_strapping_warning: true  # output-only; the base is wired here
+    num_leds: 10
+    chipset: SK6812
+    channel_colors: GRB
+    default_transition_length: 0s
+    restore_mode: RESTORE_DEFAULT_ON
+    initial_state:
+      state: true
+      brightness: 30%
+    effects:
+      - addressable_lambda:
+          name: "Signal"
+          update_interval: 250ms
+          lambda: |-
+            float dbm = id(wifi_rssi).has_state() ? id(wifi_rssi).state : NAN;
+            if (!wifi::global_wifi_component->is_connected() || std::isnan(dbm)) {
+              it.all() = Color::BLACK;
+              return;
+            }
+            it.all() = dbm >= -67 ? id(color_good) : dbm >= -75 ? id(color_fair) : id(color_weak);
+    # Turning a light off drops its effect, so turning it back on (from HA or
+    # on boot) would otherwise come up plain white instead of the signal.
+    on_turn_on:
+      - light.turn_on:
+          id: signal_leds
+          effect: "Signal"
 
 color:
   - id: color_bg
