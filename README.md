@@ -5,7 +5,7 @@ My Home Assistant setup: the bits that live in files rather than in the HA UI.
 | Directory | What it is |
 |-----------|------------|
 | [`streamdeck/`](streamdeck/) | Two Stream Decks — a Plus on a Raspberry Pi (Docker) and a Plus XL on the Mac (native, with a local-action extension for controlling macOS). Has its own [README](streamdeck/README.md). |
-| [`m5stack/`](m5stack/) | ESPHome configs for three M5Stack devices (Core, CoreS3, Dial) used as wall/desk controllers. |
+| [`m5stack/`](m5stack/) | ESPHome configs for three M5Stack devices (Core, CoreS3, Dial) used as wall/desk controllers, plus [`core/m5-core-wifi-meter.yaml`](m5stack/core/m5-core-wifi-meter.yaml): an alternative firmware that turns the Core into a handheld Wi-Fi signal meter. |
 | [`automations/`](automations/) | Home Assistant automations kept in version control. |
 | [`ha-scene-tracker.yaml`](ha-scene-tracker.yaml) | The `input_select.active_scene` helper plus one automation per scene. Both Stream Decks read this to highlight the active scene. |
 

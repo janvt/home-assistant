@@ -40,6 +40,8 @@ IDS = [str(p.relative_to(M5STACK)) for p in CONFIGS]
 KNOWN_SECRETS = {
     "wifi_ssid", "wifi_password", "m5fallbackpassword",
     "m5core2encryption", "m5cores3encryption", "m5dialencryption",
+    "m5stack_core_basic__encryption", "m5stack_core_basic__ap_password",
+    "wifi_shrek_ssid", "wifi_shrek_password",
 }
 
 # Fields that must never hold a literal value.
@@ -223,7 +225,10 @@ def test_esphome_validates_the_config(config: Path, tmp_path: Path) -> None:
     (work / "secrets.yaml").write_text(
         'wifi_ssid: "ci-ssid"\n'
         'wifi_password: "ci-password"\n'
+        'wifi_shrek_ssid: "ci-shrek"\n'
+        'wifi_shrek_password: "ci-shrek-password"\n'
         'm5fallbackpassword: "ci-fallback"\n'
+        'm5stack_core_basic__ap_password: "ci-fallback"\n'
         + "".join(
             f'{name}: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="\n'
             for name in sorted(KNOWN_SECRETS)
