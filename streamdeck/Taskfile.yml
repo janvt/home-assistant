@@ -17,12 +17,15 @@ vars:
   PIP: '{{.VENV}}/bin/pip'
   XLVENV: decks/plus-xl/.venv
   XLLABEL: com.janvt.streamdeck-xl
-  # The app needs Python >= 3.10, but macOS ships 3.9 as `python3` (Xcode CLT).
-  # Pick the newest suitable interpreter on PATH; override with XLPY=... if you
-  # want a specific one.
+  # Oldest Python we run and test (CI's matrix floor — keep them in step). The
+  # upstream app still allows 3.10, but nothing here runs it any more.
+  MINPY: '3.11'
+  # macOS ships 3.9 as `python3` (Xcode CLT), so pick the newest suitable
+  # interpreter on PATH; override with XLPY=... if you want a specific one.
+  # Used for every venv here, the image renderer's included.
   XLPY:
     sh: |
-      for p in python3.13 python3.12 python3.11 python3.10; do
+      for p in python3.13 python3.12 python3.11; do
         command -v "$p" 2>/dev/null && exit 0
       done
       command -v python3
@@ -39,8 +42,13 @@ tasks:
     status:
       - test -x {{.PY}}
       - '{{.PY}} -c "import PIL"'
+      # Rebuilds a venv left on an older interpreter (it used to be macOS's 3.9).
+      - '{{.PY}} -c "import sys; sys.exit(sys.version_info < ({{replace "." "," .MINPY}},))"'
+    preconditions:
+      - sh: '{{.XLPY}} -c "import sys; sys.exit(sys.version_info < ({{replace "." "," .MINPY}},))"'
+        msg: "{{.XLPY}} is too old — this repo needs Python >= {{.MINPY}}. Install one (brew install python@3.13) or pass XLPY=/path/to/python3.13."
     cmds:
-      - python3 -m venv {{.VENV}}
+      - '{{.XLPY}} -m venv --clear {{.VENV}}'
       - '{{.PIP}} install --quiet --upgrade pip pillow'
 
   icons:
@@ -185,9 +193,9 @@ tasks:
       - test -x {{.XLVENV}}/bin/home-assistant-streamdeck-yaml
       - '{{.XLVENV}}/bin/python -c "from StreamDeck.Devices.StreamDeckPlusXL import StreamDeckPlusXL"'
     preconditions:
-      # macOS ships Python 3.9 as `python3`; the app requires >= 3.10.
-      - sh: '{{.XLPY}} -c "import sys; sys.exit(0 if sys.version_info >= (3,10) else 1)"'
-        msg: "{{.XLPY}} is too old — the app needs Python >= 3.10. Install one (brew install python@3.12) or pass XLPY=/path/to/python3.12."
+      # macOS ships Python 3.9 as `python3`.
+      - sh: '{{.XLPY}} -c "import sys; sys.exit(sys.version_info < ({{replace "." "," .MINPY}},))"'
+        msg: "{{.XLPY}} is too old — this repo needs Python >= {{.MINPY}}. Install one (brew install python@3.13) or pass XLPY=/path/to/python3.13."
     cmds:
       - 'echo "using {{.XLPY}} ($({{.XLPY}} --version))"'
       - rm -rf {{.XLVENV}}

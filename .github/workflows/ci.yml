@@ -32,7 +32,7 @@ env:
 # Linux jobs pin the runner image rather than use ubuntu-latest, so an image
 # migration (ubuntu-latest -> 26.04 from 2026-10-19) is a deliberate bump here
 # instead of a surprise: the apt package names below and the setup-python
-# builds for the 3.10 floor both depend on the image.
+# builds for the Python floor both depend on the image.
 jobs:
   tests:
     name: tests (python ${{ matrix.python }})
@@ -40,9 +40,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor is set by the upstream app (requires >= 3.10); the ceiling
-        # is what the Mac deck actually runs on.
-        python: ["3.10", "3.13"]
+        # The floor is the oldest Python a deck actually runs on: the Pi's
+        # Raspberry Pi OS Bookworm ships 3.11 (the upstream app itself still
+        # allows >= 3.10, which went end-of-life in October 2026). The ceiling
+        # is what the Mac deck runs on. Raise both with the hosts, and keep
+        # MINPY in streamdeck/Taskfile.yml in step with the floor.
+        python: ["3.11", "3.13"]
     steps:
       - uses: actions/checkout@v7
 
