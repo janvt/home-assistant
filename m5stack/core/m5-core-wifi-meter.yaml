@@ -1,0 +1,258 @@
+substitutions:
+  name: m5stack-wifi-meter
+  friendly_name: M5Stack WiFi Meter
+
+################################################################################################################
+# Handheld Wi-Fi signal meter for the M5GO / Core Basic v2.7 (the controller in
+# the M5Stack Starter Kit V2.7 M5GO IoT). Shows live RSSI in dBm, the network and
+# access point it's reading, and the min/max seen since the last reset — carry it
+# around the house to find dead spots.
+#
+# Standalone: flashing this replaces m5-core.yaml on the device.
+#
+# Buttons:  A (left) = dimmer   B (centre) = reset min/max   C (right) = brighter
+################################################################################################################
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    - priority: -100
+      then:
+        - light.turn_on:
+            id: backlight
+            brightness: !lambda 'return id(brightness_level);'
+
+# M5Stack Core Basic v2.7: ESP32, 16 MB flash, no PSRAM
+esp32:
+  board: m5stack-grey
+  flash_size: 16MB
+  framework:
+    type: arduino
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Keep the radio fully awake so readings track movement.
+  power_save_mode: none
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "M5Stack WiFi Meter Fallback"
+    password: !secret m5fallbackpassword
+
+# Same device as m5-core.yaml, so it reuses that config's API key.
+api:
+  encryption:
+    key: !secret m5core2encryption
+
+ota:
+  - platform: esphome
+
+logger:
+
+captive_portal:
+
+globals:
+  - id: rssi_min
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: rssi_max
+    type: float
+    restore_value: no
+    initial_value: 'NAN'
+  - id: brightness_level
+    type: float
+    restore_value: yes
+    initial_value: '0.8'
+
+script:
+  - id: reset_min_max
+    then:
+      - lambda: |-
+          id(rssi_min) = NAN;
+          id(rssi_max) = NAN;
+      - component.update: main_display
+  - id: change_brightness
+    parameters:
+      delta: float
+    then:
+      - lambda: |-
+          id(brightness_level) = std::min(1.0f, std::max(0.1f, id(brightness_level) + delta));
+      - light.turn_on:
+          id: backlight
+          brightness: !lambda 'return id(brightness_level);'
+
+binary_sensor:
+  # Physical buttons (active-low, external pull-ups on Core Basic v2.7)
+  - platform: gpio
+    pin:
+      number: GPIO39
+      inverted: true
+      mode: INPUT
+    name: "Btn A"
+    id: btn_a
+    internal: true
+    on_press:
+      - script.execute:
+          id: change_brightness
+          delta: -0.1
+  - platform: gpio
+    pin:
+      number: GPIO38
+      inverted: true
+      mode: INPUT
+    name: "Btn B"
+    id: btn_b
+    internal: true
+    on_press:
+      - script.execute: reset_min_max
+  - platform: gpio
+    pin:
+      number: GPIO37
+      inverted: true
+      mode: INPUT
+    name: "Btn C"
+    id: btn_c
+    internal: true
+    on_press:
+      - script.execute:
+          id: change_brightness
+          delta: 0.1
+
+sensor:
+  # Drives the screen. 1s so it reacts while walking around; internal so that
+  # rate doesn't flood the HA recorder.
+  - platform: wifi_signal
+    id: wifi_rssi
+    name: "WiFi Signal (live)"
+    update_interval: 1s
+    internal: true
+    on_value:
+      - lambda: |-
+          if (isnan(id(rssi_min)) || x < id(rssi_min)) id(rssi_min) = x;
+          if (isnan(id(rssi_max)) || x > id(rssi_max)) id(rssi_max) = x;
+  # The same reading for Home Assistant, once a minute.
+  - platform: copy
+    source_id: wifi_rssi
+    name: "WiFi Signal"
+    filters:
+      - throttle: 60s
+
+text_sensor:
+  - platform: wifi_info
+    ssid:
+      id: wifi_ssid_info
+      internal: true
+    bssid:
+      id: wifi_bssid_info
+      name: "Access Point"
+
+# Backlight: direct LEDC PWM on GPIO32 (Core Basic v2.7 wiring)
+output:
+  - platform: ledc
+    pin: GPIO32
+    id: backlight_pwm
+
+light:
+  - platform: monochromatic
+    name: "Backlight"
+    output: backlight_pwm
+    id: backlight
+    default_transition_length: 0s
+    restore_mode: ALWAYS_ON
+    internal: true
+
+color:
+  - id: color_bg
+    hex: '1a1a2e'
+  - id: color_white
+    hex: 'ffffff'
+  - id: color_dim
+    hex: '666666'
+  - id: color_track
+    hex: '333355'
+  - id: color_good
+    hex: '69f0ae'
+  - id: color_fair
+    hex: 'ffb74d'
+  - id: color_weak
+    hex: 'ef5350'
+
+font:
+  - file: "gfonts://Space Grotesk"
+    id: big_font
+    size: 72
+    glyphs: "-0123456789"
+  - file: "gfonts://Space Grotesk"
+    id: mid_font
+    size: 18
+    glyphs: " !#%'()+,-./:0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"
+  - file: "gfonts://Space Grotesk"
+    id: small_font
+    size: 14
+    glyphs: " !#%'()+,-./:0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"
+
+# SPI: MOSI=GPIO23, CLK=GPIO18
+spi:
+  id: spi_bus
+  mosi_pin: GPIO23
+  clk_pin: GPIO18
+
+# Display: ILI9342C 320x240. The M5CORE model carries the Core Basic's pins
+# (CS=GPIO14, DC=GPIO27, RESET=GPIO33) and init sequence, and needs no PSRAM.
+# buffer_size 15% (~23 KB) — required without PSRAM; a full buffer won't fit.
+display:
+  - platform: mipi_spi
+    model: M5CORE
+    id: main_display
+    invert_colors: true
+    buffer_size: 15%
+    update_interval: 1s
+    lambda: |-
+      it.fill(id(color_bg));
+
+      // Network and access point (BSSID tells mesh nodes apart)
+      std::string ssid = id(wifi_ssid_info).has_state() ? id(wifi_ssid_info).state : "";
+      it.printf(160, 20, id(mid_font), id(color_white), TextAlign::CENTER, "%s",
+                ssid.empty() ? "Not connected" : ssid.c_str());
+      if (id(wifi_bssid_info).has_state() && !ssid.empty()) {
+        it.printf(160, 42, id(small_font), id(color_dim), TextAlign::CENTER, "%s",
+                  id(wifi_bssid_info).state.c_str());
+      }
+
+      // Bar track: -90 dBm (empty) .. -30 dBm (full), ticks at -67 and -75
+      const int bx = 20, by = 150, bw = 280, bh = 14;
+      auto to_x = [&](float dbm) {
+        float n = std::min(1.0f, std::max(0.0f, (dbm + 90.0f) / 60.0f));
+        return bx + (int) (n * bw);
+      };
+      it.filled_rectangle(bx, by, bw, bh, id(color_track));
+
+      bool live = id(wifi_rssi).has_state() && !std::isnan(id(wifi_rssi).state) && !ssid.empty();
+      if (live) {
+        float dbm = id(wifi_rssi).state;
+        // -67 dBm is the usual floor for smooth streaming / video calls
+        const char *quality = dbm >= -55 ? "Excellent" : dbm >= -67 ? "Good" : dbm >= -75 ? "Fair" : "Weak";
+        Color c = dbm >= -67 ? id(color_good) : dbm >= -75 ? id(color_fair) : id(color_weak);
+
+        it.printf(160, 98, id(big_font), c, TextAlign::CENTER, "%.0f", dbm);
+        it.print(160, 136, id(small_font), id(color_dim), TextAlign::CENTER, "dBm");
+        it.filled_rectangle(bx, by, to_x(dbm) - bx, bh, c);
+        it.printf(160, 184, id(mid_font), c, TextAlign::CENTER, "%s", quality);
+      } else {
+        it.print(160, 98, id(big_font), id(color_dim), TextAlign::CENTER, "--");
+        it.print(160, 136, id(small_font), id(color_dim), TextAlign::CENTER, "dBm");
+      }
+      it.vertical_line(to_x(-67), by - 3, bh + 6, id(color_white));
+      it.vertical_line(to_x(-75), by - 3, bh + 6, id(color_white));
+
+      // Range seen since the last reset
+      if (!isnan(id(rssi_min))) {
+        it.printf(160, 208, id(small_font), id(color_dim), TextAlign::CENTER,
+                  "min %.0f   max %.0f", id(rssi_min), id(rssi_max));
+      }
+
+      // Button hints, above the physical buttons
+      it.print(65, 231, id(small_font), id(color_dim), TextAlign::CENTER, "dim");
+      it.print(160, 231, id(small_font), id(color_dim), TextAlign::CENTER, "reset");
+      it.print(255, 231, id(small_font), id(color_dim), TextAlign::CENTER, "bright");
