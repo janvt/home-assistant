@@ -55,13 +55,15 @@ USB passthrough, so the app runs natively. `task xl:install` handles the Python
 side; it needs Homebrew libs, go-task, and a modern Python:
 
 ```bash
-brew install go-task hidapi cairo libffi python@3.12
+brew install go-task hidapi cairo libffi python@3.13
 ```
 
-> **Python ≥ 3.10 required.** macOS ships 3.9 as `python3` (from the Xcode
-> command line tools) and the app refuses to install on it. The Taskfile picks
-> the newest `python3.13/3.12/3.11/3.10` it finds on PATH and fails with a clear
-> message if none qualifies; override with `task xl:install XLPY=/path/to/python3.12`.
+> **Python ≥ 3.11 required.** macOS ships 3.9 as `python3` (from the Xcode
+> command line tools), which is too old. The Taskfile picks the newest
+> `python3.13/3.12/3.11` it finds on PATH for every venv, the image renderer's
+> included, and fails with a clear message if none qualifies; override with
+> `task xl:install XLPY=/path/to/python3.13`. 3.11 is the oldest a deck runs
+> (the Pi's Bookworm) and what CI tests as the floor.
 
 > **Plus XL needs the library from git.** `StreamDeckPlusXL` exists only on
 > `python-elgato-streamdeck`'s `master` — the latest release (0.9.8) has neither

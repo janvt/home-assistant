@@ -65,7 +65,7 @@ that neither file has.
 ## CI
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the suite on every
-push and pull request against Python 3.10 and 3.13, then renders both decks'
+push and pull request against Python 3.11 and 3.13, then renders both decks'
 image sets end to end. The ESPHome validation is a separate job. macOS-only
 paths are a manual `workflow_dispatch` job, since the Mac-specific coverage is
 one test and macOS runners bill at 10x.
