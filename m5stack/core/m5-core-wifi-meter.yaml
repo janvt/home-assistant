@@ -4,13 +4,13 @@ substitutions:
 
 ################################################################################################################
 # Handheld Wi-Fi signal meter for the M5GO / Core Basic v2.7 (the controller in
-# the M5Stack Starter Kit V2.7 M5GO IoT). Shows live RSSI in dBm, the network and
-# access point it's reading, and the min/max seen since the last reset — carry it
-# around the house to find dead spots.
+# the M5Stack Starter Kit V2.7 M5GO IoT). Shows live RSSI in dBm, a graph of the
+# last 70 seconds, the network and access point it's reading, and the min/max
+# seen since the last reset — carry it around the house to find dead spots.
 #
 # Standalone: flashing this replaces m5-core.yaml on the device.
 #
-# Buttons:  A (left) = switch network (home <-> Shrek)   B (centre) = reset min/max
+# Buttons:  A (left) = switch network (home <-> Shrek)   B (centre) = reset graph and min/max
 # Screen brightness is the "Backlight" light in Home Assistant.
 ################################################################################################################
 esphome:
@@ -54,6 +54,11 @@ globals:
     type: float
     restore_value: no
     initial_value: 'NAN'
+  # Graph samples, oldest first: one per 250ms, capped at the graph's 280px
+  # width (= 70s). NAN marks time spent disconnected, drawn as a gap.
+  - id: rssi_history
+    type: std::vector<float>
+    restore_value: no
   # Which network button A last switched to. Restored, because the switch
   # itself is persisted (see switch_network).
   - id: on_shrek
@@ -67,6 +72,7 @@ script:
       - lambda: |-
           id(rssi_min) = NAN;
           id(rssi_max) = NAN;
+          id(rssi_history).clear();
       - component.update: main_display
   # Toggle between the home network and Shrek. save: true is required, not a
   # preference: wifi.configure restarts the Wi-Fi component, and on start it
@@ -174,6 +180,18 @@ text_sensor:
       id: wifi_bssid_info
       name: "Access Point"
 
+# Feed the graph on a fixed clock rather than from the sensor's on_value: the
+# sensor goes quiet while disconnected, which would freeze the time axis
+# instead of leaving a gap.
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          auto &h = id(rssi_history);
+          bool live = wifi::global_wifi_component->is_connected() && id(wifi_rssi).has_state();
+          h.push_back(live ? id(wifi_rssi).state : NAN);
+          if (h.size() > 280) h.erase(h.begin());
+
 # Backlight: direct LEDC PWM on GPIO32 (Core Basic v2.7 wiring)
 output:
   - platform: ledc
@@ -208,7 +226,7 @@ color:
 font:
   - file: "gfonts://Space Grotesk"
     id: big_font
-    size: 72
+    size: 56
     glyphs: "-0123456789"
   - file: "gfonts://Space Grotesk"
     id: mid_font
@@ -249,35 +267,46 @@ display:
                   id(wifi_bssid_info).state.c_str());
       }
 
-      // Bar track: -90 dBm (empty) .. -30 dBm (full), ticks at -67 and -75
-      const int bx = 20, by = 150, bw = 280, bh = 14;
-      auto to_x = [&](float dbm) {
-        float n = std::min(1.0f, std::max(0.0f, (dbm + 90.0f) / 60.0f));
-        return bx + (int) (n * bw);
+      // -67 dBm is the usual floor for smooth streaming / video calls
+      auto color_for = [&](float dbm) {
+        return dbm >= -67 ? id(color_good) : dbm >= -75 ? id(color_fair) : id(color_weak);
       };
-      it.filled_rectangle(bx, by, bw, bh, id(color_track));
 
+      // Current reading: number, with unit and quality stacked to its right
       bool live = id(wifi_rssi).has_state() && !std::isnan(id(wifi_rssi).state) && !ssid.empty();
       if (live) {
         float dbm = id(wifi_rssi).state;
-        // -67 dBm is the usual floor for smooth streaming / video calls
         const char *quality = dbm >= -55 ? "Excellent" : dbm >= -67 ? "Good" : dbm >= -75 ? "Fair" : "Weak";
-        Color c = dbm >= -67 ? id(color_good) : dbm >= -75 ? id(color_fair) : id(color_weak);
-
-        it.printf(160, 98, id(big_font), c, TextAlign::CENTER, "%.0f", dbm);
-        it.print(160, 136, id(small_font), id(color_dim), TextAlign::CENTER, "dBm");
-        it.filled_rectangle(bx, by, to_x(dbm) - bx, bh, c);
-        it.printf(160, 184, id(mid_font), c, TextAlign::CENTER, "%s", quality);
+        it.printf(178, 80, id(big_font), color_for(dbm), TextAlign::CENTER_RIGHT, "%.0f", dbm);
+        it.print(186, 70, id(small_font), id(color_dim), TextAlign::CENTER_LEFT, "dBm");
+        it.printf(186, 90, id(mid_font), color_for(dbm), TextAlign::CENTER_LEFT, "%s", quality);
       } else {
-        it.print(160, 98, id(big_font), id(color_dim), TextAlign::CENTER, "--");
-        it.print(160, 136, id(small_font), id(color_dim), TextAlign::CENTER, "dBm");
+        it.print(178, 80, id(big_font), id(color_dim), TextAlign::CENTER_RIGHT, "--");
+        it.print(186, 70, id(small_font), id(color_dim), TextAlign::CENTER_LEFT, "dBm");
       }
-      it.vertical_line(to_x(-67), by - 3, bh + 6, id(color_white));
-      it.vertical_line(to_x(-75), by - 3, bh + 6, id(color_white));
+
+      // Graph: -90 dBm (bottom) .. -30 dBm (top), newest sample at the right
+      // edge, 1px per sample. Dotted lines mark -67 and -75.
+      const int gx = 20, gy = 114, gw = 280, gh = 82;
+      auto to_y = [&](float dbm) {
+        float n = std::min(1.0f, std::max(0.0f, (dbm + 90.0f) / 60.0f));
+        return gy + gh - 1 - (int) (n * (gh - 1));
+      };
+      it.rectangle(gx - 1, gy - 1, gw + 2, gh + 2, id(color_track));
+      for (int x = gx; x < gx + gw; x += 4) {
+        it.draw_pixel_at(x, to_y(-67), id(color_dim));
+        it.draw_pixel_at(x, to_y(-75), id(color_dim));
+      }
+      const auto &h = id(rssi_history);
+      const int x0 = gx + gw - (int) h.size();
+      for (size_t i = 1; i < h.size(); i++) {
+        if (std::isnan(h[i - 1]) || std::isnan(h[i])) continue;
+        it.line(x0 + i - 1, to_y(h[i - 1]), x0 + i, to_y(h[i]), color_for(h[i]));
+      }
 
       // Range seen since the last reset
       if (!isnan(id(rssi_min))) {
-        it.printf(160, 208, id(small_font), id(color_dim), TextAlign::CENTER,
+        it.printf(160, 211, id(small_font), id(color_dim), TextAlign::CENTER,
                   "min %.0f   max %.0f", id(rssi_min), id(rssi_max));
       }
 
