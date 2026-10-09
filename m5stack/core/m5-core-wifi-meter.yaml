@@ -119,13 +119,19 @@ binary_sensor:
           delta: 0.1
 
 sensor:
-  # Drives the screen. 1s so it reacts while walking around; internal so that
-  # rate doesn't flood the HA recorder.
+  # Drives the screen. 250ms so it reacts while walking around (the driver only
+  # refreshes RSSI from beacons, ~10/s, so faster buys nothing); averaged over
+  # the last 4 readings (~1s) to steady the number and min/max. Internal so
+  # that rate doesn't flood the HA recorder.
   - platform: wifi_signal
     id: wifi_rssi
     name: "WiFi Signal (live)"
-    update_interval: 1s
+    update_interval: 250ms
     internal: true
+    filters:
+      - sliding_window_moving_average:
+          window_size: 4
+          send_every: 1
     on_value:
       - lambda: |-
           if (isnan(id(rssi_min)) || x < id(rssi_min)) id(rssi_min) = x;
@@ -206,7 +212,9 @@ display:
     id: main_display
     invert_colors: true
     buffer_size: 15%
-    update_interval: 1s
+    # Each redraw is several partial-buffer passes, so 500ms rather than
+    # matching the 250ms sensor keeps the buttons responsive.
+    update_interval: 500ms
     lambda: |-
       it.fill(id(color_bg));
 
