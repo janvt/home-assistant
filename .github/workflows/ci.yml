@@ -29,10 +29,14 @@ env:
   # instead of skipping. See tests/conftest.py::mdi_codepoints.
   HASD_TEST_NETWORK: "1"
 
+# Linux jobs pin the runner image rather than use ubuntu-latest, so an image
+# migration (ubuntu-latest -> 26.04 from 2026-10-19) is a deliberate bump here
+# instead of a surprise: the apt package names below and the setup-python
+# builds for the 3.10 floor both depend on the image.
 jobs:
   tests:
     name: tests (python ${{ matrix.python }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -40,9 +44,9 @@ jobs:
         # is what the Mac deck actually runs on.
         python: ["3.10", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -56,7 +60,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends libcairo2 fonts-dejavu-core
 
       - name: Cache the Material Design Icons webfont
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: streamdeck/.iconbuild
           key: mdi-${{ hashFiles('streamdeck/generate_icons.py') }}
@@ -98,11 +102,11 @@ jobs:
 
   esphome:
     name: esphome config validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
@@ -120,7 +124,7 @@ jobs:
           pip install esphome pytest pyyaml pillow
 
       - name: Cache ESPHome downloads
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.esphome
           key: esphome-${{ hashFiles('m5stack/*/*.yaml') }}
@@ -140,9 +144,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
           cache: pip
