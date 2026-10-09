@@ -37,12 +37,11 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "M5Stack WiFi Meter Fallback"
-    password: !secret m5fallbackpassword
+    password: !secret ap_password
 
-# Same device as m5-core.yaml, so it reuses that config's API key.
 api:
   encryption:
-    key: !secret m5core2encryption
+    key: !secret m5stack_core_basic__encryption
 
 ota:
   - platform: esphome
