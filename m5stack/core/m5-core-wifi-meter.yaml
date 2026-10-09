@@ -37,7 +37,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "M5Stack WiFi Meter Fallback"
-    password: !secret ap_password
+    password: !secret m5stack_core_basic__ap_password
 
 api:
   encryption:
