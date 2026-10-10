@@ -130,7 +130,12 @@ the brownout scenario this covers.
 From the sibling LTS-3401AE/LE datasheets (red-orange GaAsP, gray face, white
 segments, left and right DP). The parts on hand are marked LTS3401VWE, a
 variant with no datasheet found. The package matches: 13 pins on an 18-position
-2 × 9 grid, two DP dots. Map one digit in diode mode before soldering anything.
+2 × 9 grid, two DP dots.
+
+Diode-mode check on one VWE digit: common anode confirmed (lights with the
+meter's red lead on 4/6/12/17, the black lead on a cathode), the four anode
+pins are tied together, and 7/10 light the two dots. Still to confirm:
+which segment each of 2, 3, 5, 11, 13, 14, 15 lights.
 
 | Pin | Function |
 |-----|----------|
