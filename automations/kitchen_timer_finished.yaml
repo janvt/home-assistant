@@ -1,0 +1,24 @@
+alias: Kitchen timer finished
+description: >-
+  Pushes a time-sensitive notification to the phone when the kitchen timer
+  runs out. The device rings on its own from its cached deadline, so this is
+  the alert for when you're not in the kitchen. See kitchen-timer/README.md.
+id: kitchen_timer_finished
+mode: single
+triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.kitchen
+conditions: []
+actions:
+  - action: notify.mobile_app_schmatzphone
+    data:
+      title: Kitchen timer
+      message: Time's up.
+      data:
+        push:
+          # Breaks through Focus modes on iOS; a cooking timer shouldn't wait
+          # for Do Not Disturb to end.
+          interruption-level: time-sensitive
+          sound: default
