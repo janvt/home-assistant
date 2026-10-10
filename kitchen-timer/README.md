@@ -127,8 +127,10 @@ the brownout scenario this covers.
 
 ### LTS-3401 pinout
 
-From the sibling LTS-3401AE datasheet; **not yet verified** for the YWE parts
-on hand. Map one digit in diode mode before soldering anything.
+From the sibling LTS-3401AE/LE datasheets (red-orange GaAsP, gray face, white
+segments, left and right DP). The parts on hand are marked LTS3401VWE, a
+variant with no datasheet found. The package matches: 13 pins on an 18-position
+2 × 9 grid, two DP dots. Map one digit in diode mode before soldering anything.
 
 | Pin | Function |
 |-----|----------|
