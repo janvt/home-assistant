@@ -132,10 +132,10 @@ segments, left and right DP). The parts on hand are marked LTS3401VWE, a
 variant with no datasheet found. The package matches: 13 pins on an 18-position
 2 × 9 grid, two DP dots.
 
-Diode-mode check on one VWE digit: common anode confirmed (lights with the
-meter's red lead on 4/6/12/17, the black lead on a cathode), the four anode
-pins are tied together, and 7/10 light the two dots. Still to confirm:
-which segment each of 2, 3, 5, 11, 13, 14, 15 lights.
+**Verified on a VWE digit (diode mode, 2026-10-10):** common anode (lights
+with the meter's red lead on 4/6/12/17, black on a cathode), the four anode
+pins are tied together, and every segment and both dots are on the pins below.
+The table matches the datasheets exactly.
 
 | Pin | Function |
 |-----|----------|
@@ -221,7 +221,7 @@ Newest last. Each one records what was traded away.
 
 ## Bring-up plan
 
-1. Map one LTS-3401 digit in diode mode; confirm the pinout table.
+1. ~~Map one LTS-3401 digit in diode mode; confirm the pinout table.~~ Done 2026-10-10.
 2. Breadboard one segment: 5 V → 150 Ω → segment → NPN. Measure V_BE, V_CE(sat)
    and the real current. Swap the 1 kΩ base resistor for 47 kΩ to see the
    active region.
