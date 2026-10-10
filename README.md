@@ -6,6 +6,7 @@ My Home Assistant setup: the bits that live in files rather than in the HA UI.
 |-----------|------------|
 | [`streamdeck/`](streamdeck/) | Two Stream Decks — a Plus on a Raspberry Pi (Docker) and a Plus XL on the Mac (native, with a local-action extension for controlling macOS). Has its own [README](streamdeck/README.md). |
 | [`m5stack/`](m5stack/) | ESPHome configs for three M5Stack devices (Core, CoreS3, Dial) used as wall/desk controllers, plus [`core/m5-core-wifi-meter.yaml`](m5stack/core/m5-core-wifi-meter.yaml): an alternative firmware that turns the Core into a handheld Wi-Fi signal meter. |
+| [`kitchen-timer/`](kitchen-timer/) | A DIY 7-segment kitchen timer: ESPHome config with a custom software-multiplexing display component. The timer itself is an HA `timer` helper; the device sets, starts and mirrors it. Has its own [README](kitchen-timer/README.md). |
 | [`automations/`](automations/) | Home Assistant automations kept in version control. |
 | [`ha-scene-tracker.yaml`](ha-scene-tracker.yaml) | The `input_select.active_scene` helper plus one automation per scene. Both Stream Decks read this to highlight the active scene. |
 
@@ -31,7 +32,8 @@ python3 -m venv .venv-test && .venv-test/bin/pip install -r requirements-test.tx
 | [`test_deck_config.py`](tests/test_deck_config.py) | Both deck configs through the app's real pydantic models: key counts vs hardware, dial pairing, page navigation, `mac.*` services having handlers, and every template rendering. |
 | [`test_icon_render.py`](tests/test_icon_render.py) | `generate_icons.py` — geometry scaling, the MDI codepoint map, and the rendered pixels (label placement, the gap INFO tiles leave for a live value, gauge fill growing with the value). |
 | [`test_upstream_patch.py`](tests/test_upstream_patch.py) | The one place this repo edits installed upstream source, end to end against a copy: idempotency, upgrading an older patch, and refusing to write when upstream has moved. |
-| [`test_esphome_configs.py`](tests/test_esphome_configs.py) | The `m5stack/` YAML: duplicate keys, undefined substitutions, `id(...)` references that no `id:` declares, missing `includes:` headers, inline credentials. Plus ESPHome's own validator, opt-in. |
+| [`test_esphome_configs.py`](tests/test_esphome_configs.py) | The ESPHome device YAML (`m5stack/`, `kitchen-timer/`): duplicate keys, undefined substitutions, `id(...)` references that no `id:` declares, missing `includes:` headers, inline credentials. Plus ESPHome's own validator, opt-in. |
+| [`test_kitchen_timer_helpers.py`](tests/test_kitchen_timer_helpers.py) | Compiles and runs the kitchen timer's C++ helpers on the host: parsing Home Assistant's `finishes_at` timestamp (timezone sign, fractional seconds) and `remaining` duration. |
 | [`test_ha_yaml.py`](tests/test_ha_yaml.py) | Automations, and the scene-tracker seam: a scene a deck highlights must be an option `input_select.active_scene` can actually hold. |
 | [`test_repo_hygiene.py`](tests/test_repo_hygiene.py) | No tokens, `.env` files or generated icons in git (asked of git itself, not of `.gitignore`), and the LaunchAgent/Taskfile pointing at files that exist. |
 | [`test_ext_selftest.py`](tests/test_ext_selftest.py) | Runs `streamdeck/ext/`'s own 34-test unittest suite, so one command covers everything. |

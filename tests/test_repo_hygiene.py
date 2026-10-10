@@ -90,6 +90,7 @@ def test_env_templates_carry_a_placeholder_not_a_value(deck: str) -> None:
         "streamdeck/decks/plus-xl/icons/anything.png",
         "streamdeck/decks/plus/icons/dials/anything.png",
         "m5stack/core/secrets.yaml",
+        "kitchen-timer/secrets.yaml",
         ".venv-test/lib/x.py",
     ],
 )

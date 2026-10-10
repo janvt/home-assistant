@@ -1,4 +1,4 @@
-"""The ESPHome device configs under `m5stack/`.
+"""The ESPHome device configs: `m5stack/` and `kitchen-timer/`.
 
 These are 1300-line single-file configs full of inline C++ lambdas, and the
 feedback loop on them is brutal: a typo is found by the compiler minutes into a
@@ -22,6 +22,7 @@ isn't installed; CI runs it in a dedicated job.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -29,10 +30,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from conftest import M5STACK
+from conftest import ROOT, esphome_configs
 
-CONFIGS = sorted(M5STACK.glob("*/*.yaml"))
-IDS = [str(p.relative_to(M5STACK)) for p in CONFIGS]
+CONFIGS = esphome_configs()
+IDS = [str(p.relative_to(ROOT)) for p in CONFIGS]
 
 # The complete set of secrets these devices may reference. Kept explicit so a
 # typo'd name is a test failure rather than an ESPHome error at flash time,
@@ -42,6 +43,7 @@ KNOWN_SECRETS = {
     "m5core2encryption", "m5cores3encryption", "m5dialencryption",
     "m5stack_core_basic__encryption", "m5stack_core_basic__ap_password",
     "wifi_shrek_ssid", "wifi_shrek_password",
+    "kitchentimerencryption",
 }
 
 # Fields that must never hold a literal value.
@@ -57,8 +59,8 @@ CREDENTIAL_FIELDS = ("password", "key", "psk")
 # non-strict: adding `psram:` makes these pass without any change here.
 _PSRAM = "display model M5CORE2 now requires an explicit `psram:` component"
 KNOWN_VALIDATION_GAPS = {
-    "core/m5-core.yaml": _PSRAM,
-    "cores3/m5-cores3.yaml": _PSRAM,
+    "m5stack/core/m5-core.yaml": _PSRAM,
+    "m5stack/cores3/m5-cores3.yaml": _PSRAM,
 }
 
 
@@ -117,7 +119,7 @@ def _walk(node, path=()):  # noqa: ANN001, ANN202
 
 
 def test_there_are_configs_to_check() -> None:
-    assert CONFIGS, f"no ESPHome YAML found under {M5STACK}"
+    assert CONFIGS, "no ESPHome device YAML found under m5stack/ or kitchen-timer/"
 
 
 def test_parses_without_duplicate_keys(config: Path) -> None:
@@ -213,7 +215,7 @@ def test_esphome_validates_the_config(config: Path, tmp_path: Path) -> None:
     nor writes build artefacts into the repo.
     """
     pytest.importorskip("esphome", reason="pip install esphome to run this")
-    gap = KNOWN_VALIDATION_GAPS.get(str(config.relative_to(M5STACK)))
+    gap = KNOWN_VALIDATION_GAPS.get(str(config.relative_to(ROOT)))
     if gap:
         pytest.xfail(gap)
 
@@ -221,6 +223,13 @@ def test_esphome_validates_the_config(config: Path, tmp_path: Path) -> None:
     work.mkdir(parents=True)
     for source in [config, *config.parent.glob("*.h")]:
         (work / source.name).write_bytes(source.read_bytes())
+    # Local external components (`external_components: source: type: local`)
+    # resolve relative to the config, so they have to come along too — without
+    # them the kitchen timer's `mux7seg:` block is an unknown component.
+    components = config.parent / "components"
+    if components.is_dir():
+        shutil.copytree(components, work / "components",
+                        ignore=shutil.ignore_patterns("__pycache__"))
     # 32 bytes, base64 — the api encryption schema checks the length.
     (work / "secrets.yaml").write_text(
         'wifi_ssid: "ci-ssid"\n'

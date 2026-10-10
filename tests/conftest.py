@@ -37,6 +37,18 @@ ROOT = Path(__file__).resolve().parents[1]
 STREAMDECK = ROOT / "streamdeck"
 DECKS_DIR = STREAMDECK / "decks"
 M5STACK = ROOT / "m5stack"
+KITCHEN_TIMER = ROOT / "kitchen-timer"
+
+
+def esphome_configs() -> list[Path]:
+    """Every ESPHome device config in the repo.
+
+    `secrets.yaml` sits next to the configs on the machine that flashes and is
+    not a device config, so it is excluded by name rather than left for the
+    glob to pick up on a workstation checkout.
+    """
+    found = [*M5STACK.glob("*/*.yaml"), *KITCHEN_TIMER.glob("*.yaml")]
+    return sorted(p for p in found if p.name != "secrets.yaml")
 
 DECKS = ("plus", "plus-xl")
 

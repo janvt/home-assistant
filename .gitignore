@@ -10,3 +10,4 @@ __pycache__/
 # workstation and a generated stub in CI — never commit either.
 .esphome/
 m5stack/*/secrets.yaml
+kitchen-timer/secrets.yaml
