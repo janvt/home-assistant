@@ -12,6 +12,7 @@ loudly here instead of silently sending `mac.volume_set` to Home Assistant.
 from __future__ import annotations
 
 import asyncio
+import json
 import subprocess
 import sys
 import unittest
@@ -20,7 +21,7 @@ from unittest import mock
 
 import home_assistant_streamdeck_yaml as app
 
-from . import actions, state, wrap
+from . import actions, run, state, wrap
 from . import mac as mac_mod
 
 ICON = "/dev/null"  # never actually read; render is stubbed out where needed
@@ -41,11 +42,27 @@ def tearDownModule() -> None:
 
 
 class FakeWS:
-    def __init__(self) -> None:
+    """Records what is sent; answers `get_config` like a running HA.
+
+    Queue other `hass_states` (e.g. "NOT_RUNNING") to play a starting HA; the
+    last one repeats. None leaves `state` out, as an old HA does.
+    """
+
+    def __init__(self, hass_states: list[str | None] = ("RUNNING",)) -> None:
         self.sent: list[str] = []
+        self.hass_states = list(hass_states)
 
     async def send(self, payload: str) -> None:
         self.sent.append(payload)
+
+    async def recv(self) -> str:
+        req = json.loads(self.sent[-1])
+        assert req["type"] == "get_config", f"unexpected recv after {req}"
+        hass_state = self.hass_states[0]
+        if len(self.hass_states) > 1:
+            self.hass_states.pop(0)
+        result = {} if hass_state is None else {"state": hass_state}
+        return json.dumps({"id": req["id"], "type": "result", "result": result})
 
 
 class FakeDeck:
@@ -195,6 +212,8 @@ class SyntheticState(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(got["mac.volume"]["state"], "7")
         self.assertIs(got["mac.volume"]["attributes"]["muted"], True)
         self.assertIn("light.real", got, "real HA state was dropped")
+        self.assertEqual(got["light.gone"]["state"], "unavailable")
+        self.assertNotIn("light.gone", got, "placeholder must not be inserted")
 
     async def test_publish_updates_the_dial_through_the_app(self) -> None:
         """An external volume change must move the dial via the app's own path."""
@@ -382,6 +401,99 @@ class WakeReconnect(unittest.IsolatedAsyncioTestCase):
              mock.patch.object(state.mac, "caffeinate_running", return_value=False):
             await asyncio.wait_for(state.poll_loop({}, cfg, FakeDeck()), timeout=2.0)
         # returning at all is the assertion: the loop is `while True` otherwise
+
+
+class HARestart(unittest.IsolatedAsyncioTestCase):
+    """An HA restart used to kill the deck for good: the app reconnected while
+    HA was still loading integrations, `get_states` lacked a dial's entity, the
+    KeyError broke out of upstream's retry loop, and the process exited 0 —
+    which launchd does not restart.
+    """
+
+    async def asyncSetUp(self) -> None:
+        self._poll = mock.patch.object(wrap, "STARTUP_POLL", 0)
+        self._poll.start()
+        self._render = mock.patch.object(app.Dial, "render_lcd_image", _blank_image)
+        self._render.start()
+
+    async def asyncTearDown(self) -> None:
+        self._poll.stop()
+        self._render.stop()
+
+    def _get_configs(self, ws: FakeWS) -> int:
+        return sum(json.loads(m)["type"] == "get_config" for m in ws.sent)
+
+    async def test_waits_for_a_starting_ha(self) -> None:
+        ws = FakeWS(["NOT_RUNNING", "STARTING", "STARTING", "RUNNING"])
+        await wrap._wait_until_running(ws)  # noqa: SLF001
+        self.assertEqual(self._get_configs(ws), 4)
+
+    async def test_running_ha_costs_one_request(self) -> None:
+        ws = FakeWS()
+        await wrap._wait_until_running(ws)  # noqa: SLF001
+        self.assertEqual(self._get_configs(ws), 1)
+
+    async def test_ha_without_a_state_field_is_not_waited_on(self) -> None:
+        ws = FakeWS([None])
+        await wrap._wait_until_running(ws)  # noqa: SLF001
+        self.assertEqual(self._get_configs(ws), 1)
+
+    async def test_gives_up_waiting_after_the_timeout(self) -> None:
+        ws = FakeWS(["STARTING"])
+        with mock.patch.object(wrap, "STARTUP_TIMEOUT", 0):
+            await wrap._wait_until_running(ws)  # noqa: SLF001
+        self.assertEqual(self._get_configs(ws), 1)
+
+    def test_dial_on_a_missing_entity_renders(self) -> None:
+        """The exact crash: update_all_dials() on a light HA had not loaded."""
+        dial = app.Dial(
+            entity_id="light.kitchen_ceiling_light",
+            dial_event_type="TURN",
+            state_attribute="brightness",
+            service="light.turn_on",
+            attributes={"min": 0, "max": 255, "step": -13},
+            icon=ICON,
+        )
+        deck = FakeDeck()
+        app.update_all_dials(deck, make_config([], [dial]), wrap.TolerantState())
+        self.assertTrue(deck.strip_writes, "dial was not drawn")
+
+    def test_unavailable_numeric_dial_keeps_its_value(self) -> None:
+        """No state_attribute means float(state) — which `unavailable` breaks."""
+        dial = app.Dial(
+            entity_id="input_number.brightness",
+            dial_event_type="TURN",
+            service="input_number.set_value",
+            attributes={"min": 0, "max": 100, "step": -2},
+            icon=ICON,
+        )
+        dial.update_attributes({"state": "60", "attributes": {}})
+        dial.update_attributes({"state": "unavailable", "attributes": {}})
+        self.assertEqual(dial.get_attributes()["state"], 60)
+
+    def test_unavailable_dial_without_a_previous_value_starts_at_min(self) -> None:
+        dial = app.Dial(
+            entity_id="input_number.fresh",
+            dial_event_type="TURN",
+            service="input_number.set_value",
+            attributes={"min": 10, "max": 100, "step": 1},
+            icon=ICON,
+        )
+        dial.update_attributes({"state": "unknown", "attributes": {}})
+        self.assertEqual(dial.get_attributes()["state"], 10)
+
+    def test_app_returning_exits_nonzero_for_launchd(self) -> None:
+        with mock.patch.object(app, "main", return_value=None):
+            with self.assertRaises(SystemExit) as ctx:
+                run.main()
+        self.assertEqual(ctx.exception.code, 1)
+
+    def test_signal_exit_stays_clean(self) -> None:
+        """Ctrl-C / SIGTERM: upstream's handler raises SystemExit(0) itself."""
+        with mock.patch.object(app, "main", side_effect=SystemExit(0)):
+            with self.assertRaises(SystemExit) as ctx:
+                run.main()
+        self.assertEqual(ctx.exception.code, 0)
 
 
 class Redraw(unittest.IsolatedAsyncioTestCase):

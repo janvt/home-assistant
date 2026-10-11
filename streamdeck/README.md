@@ -167,10 +167,30 @@ CONNECTION_RETRY_DELAY=10      # seconds between attempts (0 would busy-loop)
 ```
 
 With these set, the app's own loop absorbs an HA outage of any length and
-reconnects on its own the moment HA comes back — `KeepAlive` is then only
-ever exercised by genuine crashes (deck unplugged, an unhandled exception),
-which is what it was already good at. Requires a service restart to pick up
-(env vars are read once at process start, same as everything else in `.env`).
+reconnects on its own the moment HA comes back. Requires a service restart to
+pick up (env vars are read once at process start, same as everything else in
+`.env`).
+
+**That alone did not survive an HA *restart*.** `run()` retries only
+websocket/OS errors; any other exception "breaks" out of the loop, resets the
+deck and exits **0** — the same un-restarted exit as above. A restart hits that
+reliably: HA accepts the websocket ~40s before its integrations have loaded, so
+`get_states` comes back without some dial's entity and
+`update_all_dials()` raises `KeyError: 'light.kitchen_ceiling_light'`. The
+deck went dark until someone ran `task xl:service`. `ext/` now covers it in
+three layers:
+
+1. **Wait for HA to finish starting.** Before `get_states`, the wrapper asks
+   `get_config` every 2s until HA reports `RUNNING` (max 5 min, then it starts
+   anyway). Logs `Home Assistant is NOT_RUNNING; waiting…`.
+2. **Missing or non-numeric entities don't raise.** `complete_state` answers an
+   unknown entity with an `unavailable` placeholder (a renamed entity no longer
+   crash-loops the deck), and a dial whose entity state becomes
+   `unavailable`/`unknown` keeps its last value instead of `float()` raising
+   mid-session.
+3. **Never exit 0 on our own.** `ext/run.py` exits 1 if upstream `main()`
+   returns, so launchd's `KeepAlive` restarts it after `ThrottleInterval`
+   (30s). Ctrl-C/SIGTERM still exit 0 cleanly.
 
 **The Pi's Plus deck has the same 0-retry default**, but a different outer
 safety net: `docker-compose.yaml`'s `restart: unless-stopped` restarts on
