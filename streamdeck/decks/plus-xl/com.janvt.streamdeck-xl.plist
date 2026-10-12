@@ -47,7 +47,8 @@
     <true/>
 
     <!-- Restart if it exits non-zero (crash, deck unplugged, an
-         unrecoverable error like a bad token). This does NOT cover "HA was
+         unrecoverable error like a bad token), and whenever the app stops
+         on its own: ext/run.py turns upstream's exit 0 into exit 1. This does NOT cover "HA was
          unreachable": with CONNECTION_RETRY_ATTEMPTS=-1 in .env, the app
          retries forever internally and never exits over that, so it isn't
          relying on launchd to recover from an HA outage — see the README's
