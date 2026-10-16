@@ -240,6 +240,18 @@ Newest last. Each one records what was traded away.
    digit switch on GPIO13, segment G sink on GPIO10, both digits' pins 2 and 14
    joined. Slot time (1000 ms → 1 ms) and blank time (0–50 µs) are controls in HA.
    Device name is already `kitchen-timer`, the name the final firmware uses.
+   **Results 2026-10-16** (two digits, segments A and G, mux7seg compiled and
+   ran first time):
+   - Scan works: digits alternate at 1000 ms, independent patterns per digit.
+   - Flicker gone at 10 ms per digit with 2 digits (50 Hz); 5 ms looks better.
+     With 4 digits the same slot halves the rate, so the final 1 ms (250 Hz) stays.
+   - Ghosting is real: at blank 0 µs the dark digit shows the other's segments;
+     fading from 2 µs, gone at 5 µs. The 5 µs default has no margin.
+   - Faint glow on the unwired vertical segments next to a lit G is optical bleed
+     inside the package, not electrical (no current path). A tinted front hides it.
+   - Next: try a 2.2 kΩ PNP pull-up instead of 10 kΩ (faster removal of stored
+     base charge; this test is the worst case, 9 mA base for one 18 mA segment),
+     then set the final blank to 10 µs.
 5. Full firmware on the breadboard; HA integration; stress test: 48 h of `88.88`,
    repeated OTA updates, knob spinning across an NVS flush, Wi-Fi pulled
    mid-timer, power cycle mid-timer.
