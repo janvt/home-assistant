@@ -224,11 +224,16 @@ Newest last. Each one records what was traded away.
 ## Bring-up plan
 
 1. ~~Map one LTS-3401 digit in diode mode; confirm the pinout table.~~ Done 2026-10-10.
-2. Breadboard one segment: 5 V → 150 Ω → segment → NPN. Measure V_BE, V_CE(sat)
-   and the real current. Swap the 1 kΩ base resistor for 47 kΩ to see the
-   active region.
-3. Add one digit switch. Try driving the PNP from the GPIO directly first, to
-   see why the level shifter exists.
+2. ~~Breadboard one segment: 5 V → 150 Ω → segment → NPN.~~ Done 2026-10-16:
+   segment lights from the buck's 5 V rail through 150 Ω; BC337 driven from
+   GPIO4 through 1 kΩ saturates at V_CE = 0.17 V. Optional, not done: swap the
+   1 kΩ for 47 kΩ to see the active region (dim segment, V_CE well above 1 V).
+3. ~~Add one digit switch.~~ Done 2026-10-16: BC327 + BC547 level shifter on
+   GPIO12. Lights only with both GPIOs high, dark with no glow otherwise, no
+   flash at power-up. Not repeated: driving the PNP straight from a GPIO. With
+   the emitter at 5 V, a 3.3 V "high" still leaves ~1.7 V across base-emitter,
+   so the digit never turns off and current flows back into the pin's clamp
+   diode; the level shifter exists because of that.
 4. Two digits, multiplexed slowly (1 Hz → 1 kHz), then remove the blank to see
    ghosting, then put it back.
 5. Full firmware on the breadboard; HA integration; stress test: 48 h of `88.88`,
@@ -236,6 +241,25 @@ Newest last. Each one records what was traded away.
    mid-timer, power cycle mid-timer.
 6. Perfboard: display board first (passive, test each segment with 5 V through
    150 Ω), then the driver board.
+
+### Bring-up lessons (breadboard, 2026-10-16)
+
+What actually went wrong, so the perfboard build skips it:
+
+- **The fourth band.** A 470 kΩ (yellow-violet-black-**orange**-brown) sat
+  where the 470 Ω (…-**black**-brown) belonged. The BC327 base then got 10 µA,
+  the 10 kΩ pull-up won, and the digit never switched on. Symptom: 4.9 V across
+  the "470 Ω" while the base wouldn't move. Big drop, no effect = tiny current
+  = resistor far too large.
+- **Wrong rail.** The BC547's 10 kΩ pull-down went to + instead of −, so the
+  level shifter was permanently on (base at 0.7 V with GPIO12 low).
+- **Wrong row.** The BC547 emitter went to the GPIO4 row instead of ground; the
+  two switches then cancelled each other out and no combination lit.
+- **Resistance only out of circuit.** In circuit, the meter's test current also
+  flows through junctions and other resistors: the 470 kΩ read as "220 kΩ".
+- **Debug by walking the signal path with the power on**: GPIO → BC547 base →
+  collector → 470 Ω → BC327 base → collector → anode. The first value that's off
+  is the fault.
 
 ## Open questions
 
