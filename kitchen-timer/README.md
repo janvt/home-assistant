@@ -12,7 +12,7 @@ compiled and tested on the host. Expect a first-compile fix or two in
 
 | File | What it is |
 |------|------------|
-| [`kitchen-timer.yaml`](kitchen-timer.yaml) | ESPHome config: knob, button, buzzer, and the HA-owned timer logic. |
+| [`kitchen-timer.yaml`](kitchen-timer.yaml) | ESPHome config: knob, button, and the HA-owned timer logic. |
 | [`components/mux7seg/`](components/mux7seg/) | Custom ESPHome component: software-multiplexed 7-segment display driven from a hardware-timer ISR. |
 | [`kitchen_timer_helpers.h`](kitchen_timer_helpers.h) | Pure C++: parses HA's `finishes_at` / `remaining`. Tested by [`tests/test_helpers.cpp`](tests/test_helpers.cpp). |
 | [`../automations/kitchen_timer_finished.yaml`](../automations/kitchen_timer_finished.yaml) | Phone notification when the timer runs out. |
@@ -22,7 +22,7 @@ compiled and tested on the host. Expect a first-compile fix or two in
 ```
 knob + button ──timer.start / pause / cancel──▶ timer.kitchen (Home Assistant)
 display       ◀──state, finishes_at, remaining──┘        │
-buzzer        ◀── cached deadline (local)                 └─timer.finished─▶ iPhone
+display flash ◀── cached deadline (local)                 └─timer.finished─▶ iPhone
 ```
 
 - **Home Assistant owns the timer.** The device is a thin client: it sends
@@ -32,20 +32,20 @@ buzzer        ◀── cached deadline (local)                 └─timer.fini
   and the HA-synced clock. HA's `remaining` attribute does **not** tick while a
   timer runs; it is only accurate while paused, which is the only time it is used.
 - **The deadline is cached.** If Wi-Fi or HA drop mid-cooking, the display keeps
-  counting and the buzzer still rings at zero.
+  counting and flashes at zero.
 - **Presses are optimistic.** The display changes immediately; if HA hasn't
   confirmed within 3 s, the device falls back to HA's last known state.
 
 | Input | Idle | Running | Paused | Ringing |
 |-------|------|---------|--------|---------|
 | Turn knob | set time (10 s steps to 2 min, 30 s to 10 min, then 1 min) | — | — | — |
-| Short press | start | pause | resume | silence |
-| Long press (≥ 1 s) | — | cancel | cancel | silence |
+| Short press | start | pause | resume | acknowledge |
+| Long press (≥ 1 s) | — | cancel | cancel | acknowledge |
 
-Without a connection to HA, only the knob and silencing work. Start, pause and
-cancel are refused (`----` and a double beep) so HA stays the single source of
+Without a connection to HA, only the knob and acknowledging work. Start, pause
+and cancel are refused (`----` for 1.5 s) so HA stays the single source of
 truth. The display: blinking dot = running, steady dot = paused, flashing
-`0.00` = ringing, `--.--` = running but the clock hasn't synced yet.
+`0.00` = finished (until the button is pressed), `--.--` = running but the clock hasn't synced yet.
 
 ## Home Assistant setup
 
@@ -74,7 +74,7 @@ Two boards joined by a 12-wire ribbon:
   common anode, red) and eight bus rails, nothing else. Sits flush behind a red
   or smoked acrylic front, which makes unlit segments nearly invisible.
 - **Driver board:** ESP32-S3 dev board (socketed), 4 digit switches, 8 segment
-  sinks, bulk capacitance, encoder and buzzer headers, USB power.
+  sinks, bulk capacitance, encoder header, USB power.
 
 ### Pin map (ESP32-S3)
 
@@ -83,7 +83,6 @@ Two boards joined by a 12-wire ribbon:
 | Segments A B C D E F G DP | 4 5 6 7 8 9 10 11 |
 | Digits 1–4 (left to right) | 12 13 14 15 |
 | Encoder A / B / push | 16 / 17 / 18 |
-| Buzzer | 21 |
 
 All display pins are below 32, so one register write switches all twelve at
 once. Avoided: strapping pins (0, 3, 45, 46), USB (19, 20), UART0 (43, 44),
@@ -158,7 +157,6 @@ which one lights, e.g. digit 2's as the minutes/seconds separator.
 | Resistors | 8 × 150 Ω, 8 × 1 kΩ, 4 × 2.2 kΩ, 4 × 470 Ω, 8 × 10 kΩ (the 600-piece set on hand) |
 | 220 µF + 100 nF | bulk + decoupling on 5 V |
 | [DFRobot EC11 encoder](https://www.bastelgarage.ch/bauteile/schalter-taster/ec11-rotary-encoder-module) | with push button |
-| [Gravity digital buzzer](https://www.bastelgarage.ch/bauteile/audio/gravity-digital-buzzer-fur-arduino) | **not ordered yet**; the only offline alarm |
 | [Precision female header strip](https://www.bastelgarage.ch/bauteile/stiftleisten-pinheader/prazision-buchsenleiste-female-1x40-polig-rm-2-54-mm) ×3 | digit sockets + display-board connector |
 | [Rainbow ribbon cable](https://www.bastelgarage.ch/kabel-litzen/sonder-kabel/flachkabel-idc-fc-regenbogen-40p-28awg) | peel off 12 conductors; key the connector by pulling one pin |
 
@@ -215,9 +213,13 @@ Newest last. Each one records what was traded away.
    enables several timers later. Costs: needs HA for every start/pause/cancel.
 6. **Offline: refuse, don't fork.** Without HA the device refuses to change the
    timer rather than running a local one that would need reconciling. A running
-   timer still counts down and rings from its cached deadline.
+   timer still counts down and flashes at zero from its cached deadline.
 7. **150 Ω segment resistors** instead of the computed 120 Ω: what the resistor
    set on hand has. ~15% less current, more margin if the scan ever hangs.
+8. **No buzzer: alarms are digital only.** The phone notification from HA's
+   `timer.finished` is the alarm; the device only flashes `0.00`. Costs: if HA
+   is down when the timer ends, nothing makes a sound. Accepted because HA has
+   been reliable. Adding one back is a GPIO (21 is free) and an `output:`.
 
 ## Bring-up plan
 
