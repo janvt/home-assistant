@@ -1,8 +1,8 @@
 substitutions:
   # The final device name, so Home Assistant keeps the same device from here on.
-  # Coming from the earlier kt-bringup firmware, flash once with
-  #   wifi: use_address: kt-bringup.local
-  # (or over USB), then drop that line and remove the old kt-bringup device in HA.
+  # Coming from the earlier kt-bringup firmware, the first OTA flash goes to the
+  # board's IP (wifi: use_address below). Afterwards remove the old kt-bringup
+  # device in HA.
   name: kitchen-timer
   friendly_name: Kitchen Timer
 
@@ -50,6 +50,9 @@ ota:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Where the dashboard sends OTA uploads: the board's current IP, so the first
+  # flash finds it while it still answers as kt-bringup.
+  use_address: 10.69.43.193
 
 globals:
   # index into the Pattern options below
