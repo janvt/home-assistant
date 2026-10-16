@@ -14,9 +14,10 @@ substitutions:
 # The countdown is computed locally from HA's absolute `finishes_at` and the
 # HA-synced clock, because HA's `remaining` attribute does not tick while the
 # timer runs. The deadline is cached, so a running timer keeps counting down and
-# still rings if Wi-Fi or HA drop out mid-cooking. Without a connection only the
-# knob and silencing an alarm work; starting/pausing/cancelling is refused, so
-# HA stays the single source of truth.
+# still flashes at zero if Wi-Fi or HA drop out mid-cooking. Alarms are digital
+# only (HA's timer.finished -> phone); the device has no buzzer by choice.
+# Without a connection only the knob and acknowledging a finished timer work;
+# starting/pausing/cancelling is refused, so HA stays the single source of truth.
 #
 # Needs "Allow the device to perform Home Assistant actions" enabled in the
 # ESPHome integration's options for this device.
@@ -115,8 +116,8 @@ text_sensor:
 
 script:
   # HA is authoritative for idle/active/paused. RINGING is local: by the time
-  # the alarm sounds, HA has already gone idle, and the ring lasts until the
-  # button is pressed.
+  # the timer runs out, HA has already gone idle, and the display flashes until
+  # the button is pressed.
   - id: apply_ha_state
     mode: queued
     then:
@@ -146,7 +147,6 @@ script:
               auto now = id(ha_time).now();
               if (now.is_valid() && now.timestamp >= id(deadline) - 2) {
                 id(mode) = RINGING;
-                id(beeper).execute();
               } else {
                 id(mode) = IDLE;
               }
@@ -188,28 +188,6 @@ script:
           data:
             entity_id: ${timer_entity}
 
-  - id: beeper
-    mode: restart
-    then:
-      - while:
-          condition:
-            lambda: return id(mode) == kitchen_timer::RINGING;
-          then:
-            - output.turn_on: buzzer
-            - delay: 150ms
-            - output.turn_off: buzzer
-            - delay: 350ms
-  - id: refuse_beep
-    mode: restart
-    then:
-      - repeat:
-          count: 2
-          then:
-            - output.turn_on: buzzer
-            - delay: 60ms
-            - output.turn_off: buzzer
-            - delay: 90ms
-
 # ---------------------------------------------------------------------------
 # Countdown tick and the optimistic-update safety net.
 # ---------------------------------------------------------------------------
@@ -228,7 +206,6 @@ interval:
                 // Ring from the cached deadline: works even if HA is gone.
                 id(shown_s) = 0;
                 id(mode) = RINGING;
-                id(beeper).execute();
               } else {
                 id(shown_s) = (int) left;
               }
@@ -322,19 +299,18 @@ binary_sensor:
       inverted: true
       mode: { input: true, pullup: true }
     on_click:
-      # Short press: start / pause / resume / silence
+      # Short press: start / pause / resume / acknowledge
       - min_length: 30ms
         max_length: 700ms
         then:
           - lambda: |-
               using namespace kitchen_timer;
-              if (id(mode) == RINGING) {          // silencing is always local
+              if (id(mode) == RINGING) {          // acknowledging is always local
                 id(mode) = IDLE;
                 return;
               }
               if (!api::global_api_server->is_connected()) {
                 id(refused_until) = millis() + 1500;
-                id(refuse_beep).execute();
                 return;
               }
               auto now = id(ha_time).now();
@@ -372,7 +348,6 @@ binary_sensor:
               if (id(mode) == RINGING) { id(mode) = IDLE; return; }
               if (!api::global_api_server->is_connected()) {
                 id(refused_until) = millis() + 1500;
-                id(refuse_beep).execute();
                 return;
               }
               id(pending_until) = millis() + 3000;
@@ -392,9 +367,3 @@ number:
     restore_value: true
     on_value:
       - lambda: id(display).set_brightness(x / 100.0f);
-
-# Buzzer: rings while RINGING, stops on button press.
-output:
-  - platform: gpio
-    id: buzzer
-    pin: GPIO21
