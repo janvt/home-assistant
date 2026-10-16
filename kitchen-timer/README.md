@@ -153,12 +153,12 @@ which one lights, e.g. digit 2's as the minutes/seconds separator.
 |------|-------|
 | 4 × LTS-3401 | on hand |
 | [Waveshare ESP32-S3 dev board](https://www.bastelgarage.ch/esp8266-esp32/esp-boards/waveshare-esp32-s3-entwicklungsboard) | dual core: the scan ISR gets core 1 to itself |
-| 4 × PNP, ≥ 300 mA | BC327, S8550, 2N4403 or BC640. **Not** 2N3906 (200 mA, gain drops). |
-| 12 × small NPN | 2N3904, BC547, BC337 or S8050 |
+| 4 × PNP, ≥ 300 mA | on hand: BC327 (TRU VK-84524 set). Alternatives: S8550, 2N4403, BC640. **Not** 2N3906 (200 mA, gain drops). |
+| 12 × small NPN | on hand: BC337 ×8 as segment sinks, BC547 ×4 as level shifters (same set) |
 | Resistors | 8 × 150 Ω, 8 × 1 kΩ, 4 × 2.2 kΩ, 4 × 470 Ω, 8 × 10 kΩ (the 600-piece set on hand) |
 | 220 µF + 100 nF | bulk + decoupling on 5 V |
 | [DFRobot EC11 encoder](https://www.bastelgarage.ch/bauteile/schalter-taster/ec11-rotary-encoder-module) | with push button |
-| [Gravity digital buzzer](https://www.bastelgarage.ch/bauteile/audio/gravity-digital-buzzer-fur-arduino) | |
+| [Gravity digital buzzer](https://www.bastelgarage.ch/bauteile/audio/gravity-digital-buzzer-fur-arduino) | **not ordered yet**; the only offline alarm |
 | [Precision female header strip](https://www.bastelgarage.ch/bauteile/stiftleisten-pinheader/prazision-buchsenleiste-female-1x40-polig-rm-2-54-mm) ×3 | digit sockets + display-board connector |
 | [Rainbow ribbon cable](https://www.bastelgarage.ch/kabel-litzen/sonder-kabel/flachkabel-idc-fc-regenbogen-40p-28awg) | peel off 12 conductors; key the connector by pulling one pin |
 
