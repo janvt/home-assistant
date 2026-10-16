@@ -19,8 +19,12 @@ class Mux7Seg : public PollingComponent {
   // --- configuration (called from generated code) ---
   void set_segment_pins(const std::vector<uint8_t> &pins) { this->segment_pins_ = pins; }
   void set_digit_pins(const std::vector<uint8_t> &pins) { this->digit_pins_ = pins; }
-  void set_slot_us(uint32_t us) { this->slot_us_ = us; }
-  void set_blank_us(uint32_t us) { this->blank_us_ = us; }
+  // Both are also safe at runtime (e.g. from a template number): they rewrite the
+  // phase lengths the ISR reads, and take effect from the next digit switch.
+  // Runtime slots may be far longer than the YAML allows (up to 1 s), to watch the
+  // scan in slow motion; blank_us is clamped to half a slot.
+  void set_slot_us(uint32_t us);
+  void set_blank_us(uint32_t us);
   void set_writer(mux7seg_writer_t &&writer) { this->writer_ = writer; }
 
   // 0.0-1.0. Implemented as on-time within each digit's slot (PWM inside the scan).
@@ -63,6 +67,7 @@ class Mux7Seg : public PollingComponent {
   // so the display is blanked and the component reports an error instead.
   volatile bool timer_started_{false};  // set from the timer task on the other core
   uint32_t last_scans_{0};
+  uint32_t last_scan_ms_{0};  // millis() when the scan count last moved
   bool stalled_{false};
 };
 

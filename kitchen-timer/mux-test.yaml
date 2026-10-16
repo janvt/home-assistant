@@ -1,0 +1,133 @@
+substitutions:
+  # Same name as the bring-up config, so this flashes over the air onto the
+  # board that is already in Home Assistant.
+  name: kt-bringup
+  friendly_name: Kitchen Timer bring-up
+
+################################################################################
+# Bring-up step 4: the smallest real multiplexing. Breadboard wiring is on the
+# bring-up page; in short:
+#
+#   segment A  GPIO4  -> 1 k -> BC337 sink, 150 R -> pin 2  of both digits
+#   segment G  GPIO10 -> 1 k -> BC337 sink, 150 R -> pin 14 of both digits
+#   digit 1    GPIO12 -> 2.2 k -> BC547 -> 470 R -> BC327 -> anode of digit 1
+#   digit 2    GPIO13 -> 2.2 k -> BC547 -> 470 R -> BC327 -> anode of digit 2
+#
+# The other segment pins are declared (the component wants all eight) but
+# nothing is wired to them.
+#
+# From Home Assistant:
+#   Slot time:  1000 ms down to 1 ms. Slow, you watch the digits take turns;
+#               fast, both look lit at once.
+#   Blank time: the dark gap between digits. Drop it to 0 at 1 ms to look for
+#               ghosting (the other digit's segment, faintly).
+#   Pattern:    what each digit shows.
+################################################################################
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: components
+
+logger:
+
+api:
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+globals:
+  # index into the Pattern options below
+  - id: pattern_i
+    type: int
+    restore_value: true
+    initial_value: "0"
+
+mux7seg:
+  id: display
+  # A B C D E F G DP: only A (GPIO4) and G (GPIO10) are wired on the breadboard
+  segment_pins: [GPIO4, GPIO5, GPIO6, GPIO7, GPIO8, GPIO9, GPIO10, GPIO11]
+  digit_pins: [GPIO12, GPIO13]
+  slot_time: 1ms
+  blank_time: 5us
+  update_interval: 50ms
+  # set_raw bits: 0x01 = A (top bar), 0x40 = G (middle bar)
+  lambda: |-
+    switch (id(pattern_i)) {
+      case 0:  // different: digit 1 middle, digit 2 top
+        it.set_raw(0, 0x40);
+        it.set_raw(1, 0x01);
+        break;
+      case 1:  // same on both
+        it.set_raw(0, 0x41);
+        it.set_raw(1, 0x41);
+        break;
+      case 2:
+        it.set_raw(0, 0x41);
+        break;
+      default:
+        it.set_raw(1, 0x41);
+    }
+
+select:
+  - platform: template
+    id: slot_select
+    name: Slot time
+    optimistic: true
+    restore_value: true
+    options: ["1000 ms", "500 ms", "200 ms", "100 ms", "50 ms", "20 ms", "10 ms", "5 ms", "2 ms", "1 ms"]
+    initial_option: "500 ms"
+    on_value:
+      - lambda: |-
+          static const uint32_t SLOT_US[] = {1000000, 500000, 200000, 100000, 50000,
+                                             20000, 10000, 5000, 2000, 1000};
+          if (i < sizeof(SLOT_US) / sizeof(SLOT_US[0]))
+            id(display).set_slot_us(SLOT_US[i]);
+  - platform: template
+    id: pattern_select
+    name: Pattern
+    optimistic: true
+    restore_value: true
+    options: ["Digit 1 middle, digit 2 top", "Both digits: top + middle", "Digit 1 only", "Digit 2 only"]
+    initial_option: "Digit 1 middle, digit 2 top"
+    on_value:
+      - lambda: id(pattern_i) = i;
+
+number:
+  - platform: template
+    id: blank_number
+    name: Blank time
+    min_value: 0
+    max_value: 50
+    step: 1
+    initial_value: 5
+    unit_of_measurement: "µs"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - lambda: id(display).set_blank_us((uint32_t) x);
+  - platform: template
+    id: brightness_number
+    name: Display brightness
+    min_value: 5
+    max_value: 100
+    step: 5
+    initial_value: 100
+    unit_of_measurement: "%"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - lambda: id(display).set_brightness(x / 100.0f);

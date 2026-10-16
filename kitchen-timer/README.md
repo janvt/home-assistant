@@ -13,6 +13,7 @@ compiled and tested on the host. Expect a first-compile fix or two in
 | File | What it is |
 |------|------------|
 | [`kitchen-timer.yaml`](kitchen-timer.yaml) | ESPHome config: knob, button, and the HA-owned timer logic. |
+| [`mux-test.yaml`](mux-test.yaml) | Bring-up step 4: two digits, segments A and G, slot time / blank time / pattern adjustable from HA. |
 | [`components/mux7seg/`](components/mux7seg/) | Custom ESPHome component: software-multiplexed 7-segment display driven from a hardware-timer ISR. |
 | [`kitchen_timer_helpers.h`](kitchen_timer_helpers.h) | Pure C++: parses HA's `finishes_at` / `remaining`. Tested by [`tests/test_helpers.cpp`](tests/test_helpers.cpp). |
 | [`../automations/kitchen_timer_finished.yaml`](../automations/kitchen_timer_finished.yaml) | Phone notification when the timer runs out. |
@@ -235,7 +236,9 @@ Newest last. Each one records what was traded away.
    so the digit never turns off and current flows back into the pin's clamp
    diode; the level shifter exists because of that.
 4. Two digits, multiplexed slowly (1 Hz → 1 kHz), then remove the blank to see
-   ghosting, then put it back.
+   ghosting, then put it back. Flash [`mux-test.yaml`](mux-test.yaml): second
+   digit switch on GPIO13, segment G sink on GPIO10, both digits' pins 2 and 14
+   joined. Slot time (1000 ms → 1 ms) and blank time (0–50 µs) are controls in HA.
 5. Full firmware on the breadboard; HA integration; stress test: 48 h of `88.88`,
    repeated OTA updates, knob spinning across an NVS flush, Wi-Fi pulled
    mid-timer, power cycle mid-timer.
