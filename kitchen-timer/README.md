@@ -239,6 +239,7 @@ Newest last. Each one records what was traded away.
    ghosting, then put it back. Flash [`mux-test.yaml`](mux-test.yaml): second
    digit switch on GPIO13, segment G sink on GPIO10, both digits' pins 2 and 14
    joined. Slot time (1000 ms → 1 ms) and blank time (0–50 µs) are controls in HA.
+   Device name is already `kitchen-timer`, the name the final firmware uses.
 5. Full firmware on the breadboard; HA integration; stress test: 48 h of `88.88`,
    repeated OTA updates, knob spinning across an NVS flush, Wi-Fi pulled
    mid-timer, power cycle mid-timer.

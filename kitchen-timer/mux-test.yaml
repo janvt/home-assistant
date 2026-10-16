@@ -1,8 +1,10 @@
 substitutions:
-  # Same name as the bring-up config, so this flashes over the air onto the
-  # board that is already in Home Assistant.
-  name: kt-bringup
-  friendly_name: Kitchen Timer bring-up
+  # The final device name, so Home Assistant keeps the same device from here on.
+  # Coming from the earlier kt-bringup firmware, flash once with
+  #   wifi: use_address: kt-bringup.local
+  # (or over USB), then drop that line and remove the old kt-bringup device in HA.
+  name: kitchen-timer
+  friendly_name: Kitchen Timer
 
 ################################################################################
 # Bring-up step 4: the smallest real multiplexing. Breadboard wiring is on the
