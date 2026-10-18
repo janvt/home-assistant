@@ -1,0 +1,88 @@
+alias: Living room CO2 status LED
+description: >-
+  Mirrors the living room CO2 level on the kitchen Dig-Quad status strip:
+  under 600 ppm off, 600-800 yellow, 800-1300 orange, above 1300 red.
+  Crossings are 50 ppm stickier on the way down, so a reading hovering
+  around a threshold doesn't make the strip flicker between two colours.
+id: living_room_co2_status_led
+# Two crossings can fire on the same sensor update (500 -> 900 crosses both
+# 600 and 800). Every run reads the current value rather than its trigger id,
+# so whichever run survives the restart sets the same colour.
+mode: restart
+triggers:
+  # Rising: the plain thresholds.
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    above: 600
+    id: rising
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    above: 800
+    id: rising
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    above: 1300
+    id: rising
+  # Falling: the same thresholds minus the deadband.
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    below: 550
+    id: falling
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    below: 750
+    id: falling
+  - trigger: numeric_state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    below: 1250
+    id: falling
+  # numeric_state only fires on a crossing, so anything that lost the colour
+  # in between needs a resync: an HA restart, a WLED reboot or a power cut on
+  # the Dig-Quad, or the sensor coming back from unavailable.
+  - trigger: homeassistant
+    event: start
+    id: resync
+  - trigger: state
+    entity_id: light.kitchen_digquad
+    from: unavailable
+    id: resync
+  - trigger: state
+    entity_id: sensor.ultimatesensor_scd41_co2
+    from: unavailable
+    id: resync
+conditions:
+  - condition: template
+    value_template: "{{ states('sensor.ultimatesensor_scd41_co2') | is_number }}"
+actions:
+  - variables:
+      ppm: "{{ states('sensor.ultimatesensor_scd41_co2') | float(0) }}"
+      # On the way down a level only ends 50 ppm below where it began.
+      deadband: "{{ 50 if trigger.id == 'falling' else 0 }}"
+      # 0 = off, 1 = yellow, 2 = orange, 3 = red: how many thresholds the
+      # reading has reached.
+      level: "{{ [600, 800, 1300] | select('le', ppm + deadband) | list | count }}"
+      # Pure RGB yellow looks green-tinged on WS281x LEDs (the green die is
+      # the brightest), so yellow and orange lean red. Tune to taste.
+      colours:
+        - [0, 0, 0]
+        - [255, 170, 0]
+        - [255, 60, 0]
+        - [255, 0, 0]
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ level | int == 0 }}"
+        sequence:
+          - action: light.turn_off
+            target:
+              entity_id: light.kitchen_digquad
+            data:
+              transition: 2
+    default:
+      - action: light.turn_on
+        target:
+          entity_id: light.kitchen_digquad
+        data:
+          rgb_color: "{{ colours[level | int] }}"
+          brightness_pct: 40
+          transition: 2
