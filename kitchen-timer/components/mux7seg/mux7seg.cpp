@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "soc/gpio_reg.h"
+#include "esphome/core/hal.h"
 #include "esphome/core/log.h"
 
 namespace esphome {
@@ -141,8 +142,26 @@ void Mux7Seg::start_timer_() {
   ESP_ERROR_CHECK(gptimer_enable(timer));
   ESP_ERROR_CHECK(gptimer_start(timer));
   this->last_scans_ = s_scans;
+  this->last_scan_ms_ = millis();
   this->timer_started_ = true;
   ESP_LOGD(TAG, "Scan timer running on core %d", xPortGetCoreID());
+}
+
+void Mux7Seg::set_slot_us(uint32_t us) {
+  if (us < 200)
+    us = 200;
+  if (us > 1000000)
+    us = 1000000;
+  this->slot_us_ = us;
+  this->set_blank_us(this->blank_us_);  // re-clamp the gap, then recompute the phases
+}
+
+void Mux7Seg::set_blank_us(uint32_t us) {
+  if (us > this->slot_us_ / 2)
+    us = this->slot_us_ / 2;
+  this->blank_us_ = us;
+  s_blank_us = us;  // single aligned 32-bit store; the ISR picks it up on the next switch
+  this->set_brightness(this->brightness_);
 }
 
 void Mux7Seg::set_brightness(float brightness) {
@@ -166,18 +185,25 @@ void Mux7Seg::set_brightness(float brightness) {
 }
 
 void Mux7Seg::update() {
-  // Heartbeat check. At 1 ms per digit, ~50 scans happen between two updates;
-  // an unchanged count means the ISR has stopped and one digit is stuck at 100%.
+  // Heartbeat check. At 1 ms per digit, ~50 scans happen between two updates; a
+  // count that hasn't moved for several slots means the ISR has stopped and one
+  // digit is stuck at 100%. Measured in time rather than per update, so a slow-motion
+  // slot (hundreds of ms, set at runtime) isn't mistaken for a dead scan.
   if (this->timer_started_) {
     const uint32_t scans = s_scans;
-    if (scans == this->last_scans_) {
+    const uint32_t now = millis();
+    const uint32_t limit_ms = 100 + 3 * (this->slot_us_ / 1000);
+    if (scans != this->last_scans_) {
+      this->last_scan_ms_ = now;
+    }
+    if (scans == this->last_scans_ && now - this->last_scan_ms_ > limit_ms) {
       REG_WRITE(GPIO_OUT_W1TC_REG, s_all_mask);  // blank everything, keep it blank
       if (!this->stalled_) {
         ESP_LOGE(TAG, "Scan ISR stopped: display blanked");
         this->status_set_error();
         this->stalled_ = true;
       }
-    } else if (this->stalled_) {
+    } else if (this->stalled_ && scans != this->last_scans_) {
       ESP_LOGW(TAG, "Scan ISR running again");
       this->status_clear_error();
       this->stalled_ = false;
