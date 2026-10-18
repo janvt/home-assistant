@@ -1,4 +1,4 @@
-"""`automations/living_room_co2_status_led.yaml`.
+"""`automations/kitchen_co2_status_led.yaml`.
 
 The automation keeps its thresholds in two places that must agree: the
 `numeric_state` triggers decide WHEN it runs, the `level` template decides
@@ -15,7 +15,7 @@ from conftest import ROOT
 
 jinja2 = pytest.importorskip("jinja2")
 
-PATH = ROOT / "automations" / "living_room_co2_status_led.yaml"
+PATH = ROOT / "automations" / "kitchen_co2_status_led.yaml"
 AUTOMATION = yaml.safe_load(PATH.read_text())
 VARIABLES = next(step["variables"] for step in AUTOMATION["actions"] if "variables" in step)
 

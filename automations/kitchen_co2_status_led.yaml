@@ -1,10 +1,10 @@
-alias: Living room CO2 status LED
+alias: Kitchen CO2 status LED
 description: >-
-  Mirrors the living room CO2 level on the kitchen Dig-Quad status strip:
+  Kitchen status strip (Dig-Quad) showing the living room CO2 level:
   under 600 ppm off, 600-800 yellow, 800-1300 orange, above 1300 red.
   Crossings are 50 ppm stickier on the way down, so a reading hovering
   around a threshold doesn't make the strip flicker between two colours.
-id: living_room_co2_status_led
+id: kitchen_co2_status_led
 # Two crossings can fire on the same sensor update (500 -> 900 crosses both
 # 600 and 800). Every run reads the current value rather than its trigger id,
 # so whichever run survives the restart sets the same colour.
