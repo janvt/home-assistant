@@ -35,6 +35,26 @@ NEXT_TRAINS=("{{ "+hhmm(TRAIN+"_departure")+" else '–' }} ({{ states('"+TRAIN+
              " · then {{ "+hhmm(TRAIN+"_departure_1")+" else '–' }} and {{ "+hhmm(TRAIN+"_departure_2")+" else '–' }}"
              " · {{ (states('"+TRAIN+"_trip_duration')|float(0) * 60)|round(0)|int }} min to Zürich"
              "{{ ', ' ~ states('"+TRAIN+"_transfers') ~ ' change(s)' if states('"+TRAIN+"_transfers')|int(0) > 0 }}")
+WORKDAY_UR="binary_sensor.workday_sensor_ch_ur"
+WORKDAY_ZH="binary_sensor.workday_sensor_ch_zh"
+CALENDARS=["calendar.home","calendar.jan_vanthoor_copebit_ch"]
+# Calendar start_time is a local "YYYY-MM-DD HH:MM:SS" string without a zone,
+# so it is compared as a string against local now() formatted the same way.
+SOON=("{% set a = now().strftime('%Y-%m-%d %H:%M:%S') %}{% set b = (now() + timedelta(minutes=60)).strftime('%Y-%m-%d %H:%M:%S') %}"
+      "{% set ns = namespace(ev=[]) %}{% for c in "+str(CALENDARS)+" %}{% set s = state_attr(c,'start_time') or '' %}"
+      "{% if not state_attr(c,'all_day') and a < s <= b %}{% set ns.ev = ns.ev + [{'t': s, 'm': state_attr(c,'message'), 'c': state_attr(c,'friendly_name')}] %}{% endif %}{% endfor %}"
+      "{% set ev = ns.ev | sort(attribute='t') %}")
+OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),("binary_sensor.nuki_bridge_connected","Nuki bridge"),
+         ("binary_sensor.athom_smart_plug_fridge_status","Fridge plug"),("binary_sensor.aqara_fridge","Fridge door sensor"),
+         ("sensor.aqara_fridge_temp_temperature","Fridge thermometer"),("binary_sensor.aquara_smoke_acn03","Smoke detector"),
+         ("sensor.ultimatesensor_scd41_co2","ultimatesensor"),("light.home_gym_dig_quad","Home gym WLED"),
+         ("lock.nuki_schmatzknauf_lock_2","Nuki lock"),("sensor.schmatzrouter_state","Router")]
+DOWN=("{% set ns = namespace(d=[]) %}{% for e, n in "+str([list(x) for x in OFFLINE])+" %}"
+      "{% if states(e) in ['unavailable','unknown'] or (e.endswith(('_status','_connected')) and is_state(e,'off')) %}{% set ns.d = ns.d + [n] %}{% endif %}{% endfor %}")
+CLIMATES=["climate.smart_thermostat_mts200b_main_channel","climate.meross_bedroom_mts200b_main_channel","climate.meross_guest_bedroom_mts200b_main_channel_2"]
+HEATING="(expand("+str(CLIMATES)+") | selectattr('attributes.hvac_action','defined') | selectattr('attributes.hvac_action','eq','heating') | list)"
+PLAYERS=["media_player.living_room","media_player.unnamed_room","media_player.unnamed_room_4","media_player.spotify_jan_van_thoor"]
+PLAYING="(expand("+str(PLAYERS)+") | selectattr('state','eq','playing') | list)"
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -53,6 +73,11 @@ ALERTS=[
    rule="On when the Nuki lock isn't locked while nobody is home.",
    data=[("lock.nuki_schmatzknauf_lock_2","Lock"),("person.jan","Jan"),("person.silvia","Silvia"),("sensor.nuki_schmatzknauf_battery_2","Lock battery")],hist=[]),
  # --- kitchen
+ dict(key="heating_while_away",group="Home",name="Heating while away",icon="mdi:radiator",color="deep-orange",
+   tmpl="{{ "+HEATING+" | count > 0 and states.person | selectattr('state','eq','home') | list | count == 0 }}",
+   secondary="{{ "+HEATING+" | map(attribute='name') | join(', ') }} heating, nobody home",
+   rule="On when a Meross thermostat is actively heating while nobody is home.",
+   data=[(c,n) for c,n in zip(CLIMATES,["Living area","Bedroom","Guest bedroom"])]+[("person.jan","Jan"),("person.silvia","Silvia")],hist=[]),
  dict(key="fridge_not_cooling",group="Kitchen",name="Fridge not cooling",icon="mdi:fridge-alert",color="red",
    tmpl="{{ "+f("sensor.athom_smart_plug_fridge_power",99)+" < 1 and "+since("sensor.athom_smart_plug_fridge_power",7200)+" }}",
    secondary="0 W since {{ states.sensor.athom_smart_plug_fridge_power.last_changed | as_local | relative_time }} · inside {{ states('sensor.aqara_fridge_temp_temperature') }} °C",
@@ -71,6 +96,12 @@ ALERTS=[
    data=[("sensor.aqara_fridge_temp_temperature","Inside temperature"),("sensor.aqara_fridge_temp_humidity","Inside humidity"),("sensor.aqara_fridge_temp_battery","Thermometer battery")],
    hist=["sensor.aqara_fridge_temp_temperature"]),
  # --- weather now (existing helpers)
+ dict(key="device_offline",group="Maintenance",name="Device offline",icon="mdi:lan-disconnect",color="red",
+   tmpl=DOWN+"{{ ns.d | count > 0 }}",
+   secondary=DOWN+"{{ ns.d | join(', ') }} offline",
+   summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
+   rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected.",
+   data=OFFLINE[:6],hist=[]),
  dict(key="storm_on_the_summits",tmpl="{{ [states('sensor.slf_imis_sca1_spjp_wind_gust')|float(0), states('sensor.slf_imis_urs1_prsf_wind_gust')|float(0)]|max >= 100 }}",group="Weather now",name="Summit storm",icon="mdi:weather-hurricane",color="red",
    secondary="{{ ["+f('sensor.slf_imis_sca1_spjp_wind_gust')+","+f('sensor.slf_imis_urs1_prsf_wind_gust')+"]|max|round(0) }} km/h gusts measured (Gross Windgällen {{ "+f('sensor.slf_imis_sca1_spjp_wind_gust')+"|round(0) }}, Gross Schijen {{ "+f('sensor.slf_imis_urs1_prsf_wind_gust')+"|round(0) }})",
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
@@ -91,6 +122,12 @@ ALERTS=[
    secondary="Nabu Casa remote UI is offline · ha.janvt.dev won't load away from home",
    rule="On when the Nabu Casa remote UI is disconnected.",
    data=[("binary_sensor.remote_ui","Remote UI")],hist=["binary_sensor.remote_ui"]),
+ dict(key="backup_overdue",group="Maintenance",name="Backup overdue",icon="mdi:backup-restore",color="orange",
+   tmpl="{{ is_state('binary_sensor.backups_stale','on') or (states('sensor.backup_last_successful_automatic_backup') not in ['unknown','unavailable'] and now() - as_datetime(states('sensor.backup_last_successful_automatic_backup')) > timedelta(days=2)) }}",
+   secondary="Last good backup {{ as_datetime(states('sensor.backup_last_successful_automatic_backup')) | relative_time }} ago · next {{ (states('sensor.backup_next_scheduled_automatic_backup')|as_datetime|as_local).strftime('%a %H:%M') if states('sensor.backup_next_scheduled_automatic_backup') not in ['unknown','unavailable'] }}",
+   rule="On when the last successful automatic backup is more than 2 days old, or HA flags its backups as stale.",
+   data=[("sensor.backup_last_successful_automatic_backup","Last successful"),("sensor.backup_last_attempted_automatic_backup","Last attempted"),
+         ("sensor.backup_next_scheduled_automatic_backup","Next scheduled"),("sensor.backup_backup_manager_state","Backup manager")],hist=[]),
  dict(key="air_stuffy",group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
    tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
    secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
@@ -99,13 +136,18 @@ ALERTS=[
    hist=["sensor.ultimatesensor_scd41_co2"]),
  # --- forecast
  dict(key="train_delayed",group="Travel",name="Train delayed",icon="mdi:train-variant",color="deep-orange",
-   tmpl="{{ states('"+TRAIN+"_delay')|int(0) >= 5 }}",
+   tmpl="{{ is_state('"+WORKDAY_UR+"','on') and states('"+TRAIN+"_delay')|int(0) >= 5 }}",
    secondary=NEXT_TRAINS,
    summary="Next trains to Zürich: "+NEXT_TRAINS,
-   rule="On when the next train from Altdorf to Zürich is running at least 5 minutes late.",
-   data=[(TRAIN+"_departure","Next departure"),(TRAIN+"_delay","Delay"),(TRAIN+"_line","Line"),(TRAIN+"_platform","Platform"),
+   rule="On on Uri workdays when the next train from Altdorf to Zürich is running at least 5 minutes late.",
+   data=[(WORKDAY_UR,"Workday in Uri"),(TRAIN+"_departure","Next departure"),(TRAIN+"_delay","Delay"),(TRAIN+"_line","Line"),(TRAIN+"_platform","Platform"),
          (TRAIN+"_departure_1","Then"),(TRAIN+"_departure_2","And then"),(TRAIN+"_trip_duration","Trip time"),(TRAIN+"_transfers","Changes")],
    hist=[TRAIN+"_delay"]),
+ dict(key="event_soon",group="Calendar",name="Event soon",icon="mdi:calendar-clock",color="indigo",
+   tmpl=SOON+"{{ ev | count > 0 }}",
+   secondary=SOON+"{% for e in ev %}{{ e.m }} at {{ e.t[11:16] }} ({{ e.c }}){{ ' · ' if not loop.last }}{% endfor %}",
+   rule="On when an event in the iCloud Home or copebit calendar starts within the next hour (all-day events excluded).",
+   data=[("calendar.home","Home (iCloud)"),("calendar.jan_vanthoor_copebit_ch","copebit")],hist=[]),
  dict(key="rain_next_hour",group="Forecast",name="Rain next hour",icon="mdi:umbrella",color="blue",
    tmpl="{{ "+f("sensor.altdorf_ur_chance_of_rain_next_hour",0)+" >= 60 and "+f("sensor.altdorf_ur_precipitation_next_hour",0)+" >= 0.3 }}",
    secondary="{{ states('sensor.altdorf_ur_chance_of_rain_next_hour')|round(0) }} % chance, {{ states('sensor.altdorf_ur_precipitation_next_hour') }} mm in Altdorf",
@@ -176,6 +218,11 @@ ALERTS=[
    secondary="{{ state_attr('calendar.birthdays_2','message') }}",
    rule="On while the Birthdays calendar has an event today.",
    data=[("calendar.birthdays_2","Birthdays")],hist=[]),
+ dict(key="holiday_mismatch",group="Calendar",name="Uri and Zürich differ",icon="mdi:calendar-alert",color="purple",
+   tmpl="{{ states('"+WORKDAY_UR+"') in ['on','off'] and states('"+WORKDAY_ZH+"') in ['on','off'] and states('"+WORKDAY_UR+"') != states('"+WORKDAY_ZH+"') }}",
+   secondary="{{ 'Day off in Uri, but a workday in Zürich' if is_state('"+WORKDAY_UR+"','off') else 'Workday in Uri, but a holiday in Zürich' }}",
+   rule="On when today is a workday in one canton and a holiday in the other, e.g. a Catholic holiday in Uri that Zürich doesn't have.",
+   data=[(WORKDAY_UR,"Workday in Uri"),(WORKDAY_ZH,"Workday in Zürich")],hist=[]),
  dict(key="holiday_tomorrow",group="Calendar",name="Holiday tomorrow",icon="mdi:party-popper",color="purple",
    tmpl="{{ (state_attr('calendar.holidays_in_switzerland','start_time') or '')[:10] == "+TOMORROW+" }}",
    secondary="{{ state_attr('calendar.holidays_in_switzerland','message') }}",
@@ -203,6 +250,17 @@ ALERTS=[
    rule="On while FlightRadar24 sees an aircraft within 3 km of home.",
    data=[("sensor.flightradar24_current_in_area","Aircraft in area"),("sensor.flightradar24_entered_area","Entered area")],hist=["sensor.flightradar24_current_in_area"]),
  # --- maintenance
+ dict(key="router_hot",group="Maintenance",name="Router running hot",icon="mdi:thermometer-high",color="orange",
+   tmpl="{{ states('sensor.schmatzrouter_cpu_temperature_2')|float(0) > 85 }}",
+   secondary="CPU at {{ states('sensor.schmatzrouter_cpu_temperature_2')|round(0) }} °C, {{ states('sensor.schmatzrouter_cpu_utilization_2')|round(0) }} % busy",
+   rule="On when the UniFi router's CPU is above 85 °C.",
+   data=[("sensor.schmatzrouter_cpu_temperature_2","CPU temperature"),("sensor.schmatzrouter_cpu_utilization_2","CPU load"),("sensor.schmatzrouter_memory_utilization_2","Memory")],
+   hist=["sensor.schmatzrouter_cpu_temperature_2"]),
+ dict(key="router_restarted",group="Maintenance",name="Router restarted",icon="mdi:router-network",color="blue-grey",
+   tmpl="{{ states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] and now() - as_datetime(states('sensor.schmatzrouter_uptime_2')) < timedelta(hours=1) }}",
+   secondary="Up since {{ (states('sensor.schmatzrouter_uptime_2')|as_datetime|as_local).strftime('%H:%M') if states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] }}",
+   rule="On for the first hour after the UniFi router restarts.",
+   data=[("sensor.schmatzrouter_uptime_2","Up since"),("sensor.schmatzrouter_state","State"),("sensor.quagmire_clients","Clients on quagmire")],hist=[]),
  dict(key="low_batteries",group="Maintenance",name="Low batteries",icon="mdi:battery-alert-variant-outline",color="orange",
    tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
    secondary=LOWBAT_LIST,
@@ -216,5 +274,23 @@ ALERTS=[
    summary="{{ "+UPDATES+" | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
    rule="On when any update entity has an update available.",
    data=[],hist=[]),
+ dict(key="dirty_grid",group="Home",name="Dirty grid",icon="mdi:factory",color="brown",
+   tmpl="{{ states('sensor.electricity_maps_co2_intensity')|float(0) > 100 or states('sensor.electricity_maps_grid_fossil_fuel_percentage')|float(0) > 10 }}",
+   secondary="{{ states('sensor.electricity_maps_co2_intensity')|round(0) }} gCO₂/kWh, {{ states('sensor.electricity_maps_grid_fossil_fuel_percentage')|round(0) }} % fossil · wait with the dishwasher",
+   rule="On when Swiss grid power is unusually dirty: above 100 gCO₂/kWh or 10 % fossil (it's usually 25–75 g, mostly hydro and nuclear).",
+   data=[("sensor.electricity_maps_co2_intensity","CO₂ intensity"),("sensor.electricity_maps_grid_fossil_fuel_percentage","Fossil share")],
+   hist=["sensor.electricity_maps_co2_intensity"]),
+ dict(key="big_load",group="Home",name="Big load",icon="mdi:flash-alert",color="yellow",
+   tmpl="{{ states('sensor.apartment_consumption_total_active_power')|float(0) > 1500 }}",
+   secondary="{{ states('sensor.apartment_consumption_total_active_power')|round(0) }} W right now (usually around 260 W)",
+   rule="On while the apartment draws more than 1.5 kW. Over a normal 10 days it peaks at about 1.6 kW.",
+   data=[("sensor.apartment_consumption_total_active_power","Total power"),("sensor.apartment_consumption_phase_a_active_power","Phase A"),
+         ("sensor.apartment_consumption_phase_b_active_power","Phase B"),("sensor.apartment_consumption_phase_c_active_power","Phase C")],
+   hist=["sensor.apartment_consumption_total_active_power"]),
+ dict(key="now_playing",group="Home",name="Now playing",icon="mdi:music",color="green",
+   tmpl="{{ "+PLAYING+" | count > 0 }}",
+   secondary="{% for p in "+PLAYING+" %}{{ p.attributes.media_title or 'Something' }}{{ ' – ' ~ p.attributes.media_artist if p.attributes.media_artist }} ({{ p.name }}){{ ' · ' if not loop.last }}{% endfor %}",
+   rule="On while a Sonos speaker or Spotify is playing.",
+   data=[(m,n) for m,n in zip(PLAYERS,["Living Room","Madagascar","Living Room (2)","Spotify"])],hist=[]),
 ]
 GROUPS=["Safety","Kitchen","Travel","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]
