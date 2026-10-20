@@ -98,6 +98,23 @@ POLLEN="sensor.luzern_pollen"
 POLLEN_HIGH=("{% set ns = namespace(hi=[]) %}{% for k, lim in "+str(POLLEN_STRONG)+".items() %}"
              "{% set v = states('"+POLLEN+"_' ~ k)|float(0) %}{% if v >= lim %}{% set ns.hi = ns.hi + [k ~ ' ' ~ (v|round(0)|int)] %}{% endif %}{% endfor %}")
 PROX="sensor.1_node_prox"
+# Proxmox guests and storages, found by entity id so new ones are picked up
+# without editing this file: sensor.3_ct_<name>_<id>_status, sensor.4_vm_…,
+# sensor.5_storage_<name>_usage.
+GUESTS="states.sensor | selectattr('entity_id','match','sensor\\\\.(3_ct|4_vm)_.+_status$') | list"
+GUEST_NAME="| regex_replace('^[0-9]+\\\\. (CT|VM): ','') | regex_replace(' Status$','') | replace('-(',' (')"
+DOWN_GUESTS=("{% set ns = namespace(d=[]) %}{% for g in "+GUESTS+" %}"
+             "{% if g.attributes.expected_state == 'running' and g.state|lower != 'running' and g.state not in ['unknown','unavailable'] %}"
+             "{% set ns.d = ns.d + [(g.name "+GUEST_NAME+") ~ ': ' ~ g.state] %}{% endif %}{% endfor %}")
+STORAGES="states.sensor | selectattr('entity_id','match','sensor\\\\.5_storage_.+_usage$') | list"
+FULL_STORAGES=("{% set ns = namespace(f=[]) %}{% for s in "+STORAGES+" %}{% if s.state|float(0) > 85 %}"
+               "{% set ns.f = ns.f + [(s.name | regex_replace('^5\\\\. Storage: ','') | regex_replace(' Usage$','')) ~ ' ' ~ (s.state|float|round(0)|int) ~ ' %'] %}{% endif %}{% endfor %}")
+GUEST_TABLE=("| Guest | Status | CPU | RAM |\n|:--|:--|--:|--:|\n{% for g in "+GUESTS+" | sort(attribute='entity_id') %}{% set b = g.entity_id[:-7] %}"
+             "| {{ g.name "+GUEST_NAME+" }} | {{ g.state }} | {{ states(b ~ '_cpu_usage')|float(0)|round(1) }} % "
+             "| {{ states(b ~ '_ram_used')|float(0)|round(1) }} / {{ states(b ~ '_ram_total')|float(0)|round(1) }} GB |\n{% endfor %}")
+STORAGE_TABLE=("| Storage | Used | Of | |\n|:--|--:|--:|--:|\n{% for s in "+STORAGES+" | sort(attribute='entity_id') %}{% set b = s.entity_id[:-6] %}"
+               "| {{ s.name | regex_replace('^5\\\\. Storage: ','') | regex_replace(' Usage$','') }} | {{ states(b ~ '_used')|float(0)|round(0)|int }} GB "
+               "| {{ states(b ~ '_total')|float(0)|round(0)|int }} GB | {{ s.state|float(0)|round(0)|int }} % |\n{% endfor %}")
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -145,6 +162,12 @@ ALERTS=[
    summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
    rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected.",
    data=OFFLINE[:6],hist=[]),
+ dict(key="guest_down",group="Proxmox",name="Guest down",icon="mdi:server-remove",color="red",
+   tmpl=DOWN_GUESTS+"{{ ns.d | count > 0 }}",
+   secondary=DOWN_GUESTS+"{{ ns.d | join(', ') }}",
+   summary=GUEST_TABLE,
+   rule="On when a VM or container that is set to start at boot isn't running. Guests you stopped on purpose (not started at boot) don't count. New guests are picked up automatically.",
+   data=[("sensor.4_vm_haos_100_status","Home Assistant VM")],hist=[]),
  dict(key="storm_on_the_summits",tmpl="{{ [states('sensor.slf_imis_sca1_spjp_wind_gust')|float(0), states('sensor.slf_imis_urs1_prsf_wind_gust')|float(0)]|max >= 100 }}",group="Weather now",name="Summit storm",icon="mdi:weather-hurricane",color="red",
    secondary="{{ ["+f('sensor.slf_imis_sca1_spjp_wind_gust')+","+f('sensor.slf_imis_urs1_prsf_wind_gust')+"]|max|round(0) }} km/h gusts measured (Gross Windgällen {{ "+f('sensor.slf_imis_sca1_spjp_wind_gust')+"|round(0) }}, Gross Schijen {{ "+f('sensor.slf_imis_urs1_prsf_wind_gust')+"|round(0) }})",
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
@@ -352,6 +375,13 @@ ALERTS=[
    rule="On while FlightRadar24 sees an aircraft within 3 km of home.",
    data=[("sensor.flightradar24_current_in_area","Aircraft in area"),("sensor.flightradar24_entered_area","Entered area")],hist=["sensor.flightradar24_current_in_area"]),
  # --- maintenance
+ dict(key="storage_full",group="Proxmox",name="Storage filling up",icon="mdi:harddisk",color="orange",
+   tmpl=FULL_STORAGES+"{{ ns.f | count > 0 }}",
+   secondary=FULL_STORAGES+"{{ ns.f | join(', ') }}",
+   summary=STORAGE_TABLE,
+   rule="On when a Proxmox storage is more than 85 % full.",
+   data=[("sensor.5_storage_schmatzdata_usage","schmatzdata (NFS)"),("sensor.5_storage_local_lvm_usage","local-lvm"),("sensor.5_storage_local_usage","local")],
+   hist=["sensor.5_storage_schmatzdata_usage"]),
  dict(key="router_hot",group="Maintenance",name="Router running hot",icon="mdi:thermometer-high",color="orange",
    tmpl="{{ states('sensor.schmatzrouter_cpu_temperature_2')|float(0) > 85 }}",
    secondary="CPU at {{ states('sensor.schmatzrouter_cpu_temperature_2')|round(0) }} °C, {{ states('sensor.schmatzrouter_cpu_utilization_2')|round(0) }} % busy",
@@ -363,34 +393,34 @@ ALERTS=[
    secondary="Up since {{ (states('sensor.schmatzrouter_uptime_2')|as_datetime|as_local).strftime('%H:%M') if states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] }}",
    rule="On for the first hour after the UniFi router restarts.",
    data=[("sensor.schmatzrouter_uptime_2","Up since"),("sensor.schmatzrouter_state","State"),("sensor.quagmire_clients","Clients on quagmire")],hist=[]),
- dict(key="server_stressed",group="Maintenance",name="Server stressed",icon="mdi:server-network",color="red",
+ dict(key="server_stressed",group="Proxmox",name="Server stressed",icon="mdi:server-network",color="red",
    tmpl="{{ ['binary_sensor.overloaded','binary_sensor.disk_overloaded','binary_sensor.stressed'] | select('is_state','on') | list | count > 0 }}",
    secondary="Proxmox: {{ ['binary_sensor.overloaded','binary_sensor.disk_overloaded','binary_sensor.stressed'] | select('is_state','on') | map('state_attr','friendly_name') | join(', ') }}",
    rule="On when Proxmox reports the node overloaded, its disks overloaded, or stressed.",
    data=[("binary_sensor.overloaded","Overloaded"),("binary_sensor.disk_overloaded","Disk overloaded"),("binary_sensor.stressed","Stressed"),(PROX+"_io_wait","IO wait")],hist=[]),
- dict(key="server_hot",group="Maintenance",name="Server running hot",icon="mdi:thermometer-high",color="red",
+ dict(key="server_hot",group="Proxmox",name="Server running hot",icon="mdi:thermometer-high",color="red",
    tmpl="{{ states('"+PROX+"_cpu_temperature')|float(0) > 80 }}",
    secondary="CPU at {{ states('"+PROX+"_cpu_temperature')|round(0)|int }} °C, {{ states('"+PROX+"_cpu_usage')|round(0)|int }} % busy · NVMe {{ states('"+PROX+"_micron_mtfdkcd1t0tfk_953gb')|round(0)|int }} °C",
    rule="On when the Proxmox host's CPU is above 80 °C.",
    data=[(PROX+"_cpu_temperature","CPU temperature"),(PROX+"_cpu_usage","CPU usage"),(PROX+"_micron_mtfdkcd1t0tfk_953gb","NVMe temperature")],
    hist=[PROX+"_cpu_temperature"]),
- dict(key="server_swapping",group="Maintenance",name="Server swapping",icon="mdi:memory",color="orange",
+ dict(key="server_swapping",group="Proxmox",name="Server swapping",icon="mdi:memory",color="orange",
    tmpl="{{ states('"+PROX+"_swap_usage')|float(0) > 50 }}",
    secondary="Swap {{ states('"+PROX+"_swap_usage')|round(0)|int }} % used, memory {{ states('"+PROX+"_memory_usage')|round(0)|int }} %",
    rule="On when the Proxmox host uses more than half its swap: it's short of memory (16 GB) and slowing down.",
    data=[(PROX+"_swap_usage","Swap"),(PROX+"_memory_usage","Memory")],
    hist=[PROX+"_swap_usage",PROX+"_memory_usage"]),
- dict(key="server_monitoring",group="Maintenance",name="Proxmox monitoring incomplete",icon="mdi:server-off",color="orange",
+ dict(key="server_monitoring",group="Proxmox",name="Proxmox monitoring incomplete",icon="mdi:server-off",color="orange",
    tmpl="{{ states('"+PROX+"_sidecar_status') in ['error','degraded'] or state_attr('"+PROX+"_node_status','pve_version') in ['unknown', None] }}",
    secondary="Sidecar {{ states('"+PROX+"_sidecar_status') }}{{ ' · no node details (API permissions?)' if state_attr('"+PROX+"_node_status','pve_version') in ['unknown', None] }}",
    rule="On when the Proxmox sidecar reports an error, or the API can't read the node's details: then the other Proxmox pills can't see anything.",
    data=[(PROX+"_sidecar_status","Sidecar"),(PROX+"_node_status","Node")],hist=[]),
- dict(key="server_backup",group="Maintenance",name="Proxmox backup running",icon="mdi:database-sync",color="blue-grey",
+ dict(key="server_backup",group="Proxmox",name="Proxmox backup running",icon="mdi:database-sync",color="blue-grey",
    tmpl="{{ states('"+PROX+"_backup_progress') not in ['idle','unknown','unavailable',''] }}",
    secondary="Backup: {{ states('"+PROX+"_backup_progress') }} · last task {{ states('"+PROX+"_last_task') }}",
    rule="On while a Proxmox backup runs.",
    data=[(PROX+"_backup_progress","Backup"),(PROX+"_last_task","Last task")],hist=[]),
- dict(key="server_updates",group="Maintenance",name="Proxmox updates",icon="mdi:package-up",color="grey",
+ dict(key="server_updates",group="Proxmox",name="Proxmox updates",icon="mdi:package-up",color="grey",
    tmpl="{{ states('"+PROX+"_node_updates')|int(0) > 0 }}",
    secondary="{{ states('"+PROX+"_node_updates') }} package updates on prox",
    rule="On when the Proxmox node has package updates waiting.",
@@ -432,4 +462,4 @@ ALERTS=[
    rule="On while a Sonos speaker or Spotify is playing.",
    data=[(m,n) for m,n in zip(PLAYERS,["Living Room","Madagascar","Living Room (2)","Spotify"])],hist=[]),
 ]
-GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Proxmox","Maintenance"]

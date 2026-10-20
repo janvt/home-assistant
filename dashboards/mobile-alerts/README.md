@@ -56,7 +56,7 @@ into the raw configuration editor.
 The pills read entities from all over the house: MeteoSwiss (the forked
 integration, including its forecast summary and warning sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
-Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox, FlightRadar24, Swiss public
+Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection), Meross
 thermostats, Backup, UniFi, Electricity Maps, Sonos, Spotify and `update.*`.
