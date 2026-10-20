@@ -99,6 +99,8 @@ def test_templates_compile() -> None:
         templates[f"{p['key']} detail"] = p["secondary"]
         if p.get("summary"):
             templates[f"{p['key']} summary"] = p["summary"]
+        if p.get("color_from"):
+            templates[f"{p['key']} colour"] = build.color(p)
     for i, place in enumerate(build.chips()[:-1]):
         templates[f"row place {i} icon"] = place["chip"]["icon"]
         templates[f"row place {i} colour"] = place["chip"]["icon_color"]

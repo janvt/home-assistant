@@ -4,6 +4,9 @@ Each pill is a UI template helper `binary_sensor.pill_<key>` whose state is
 `tmpl`. The dashboard's alert row shows the icons of the active pills in this
 order, so the first entries win when more are active than the row has places.
 
+`color_from` (optional) names one or more enum sensors whose highest
+yellow/orange/red state overrides `color` in the row and on the Alerts page.
+
 `secondary`, `rule`, `data`, `hist` and the optional `summary` (a line that
 always shows in the pill's section, on or off) only feed the Alerts sub-page. Thresholds live
 in `tmpl`; change them here and run `sync.py`, not in the HA UI, or the next
@@ -26,7 +29,6 @@ UPDATES="states.update | selectattr('state','eq','on') | list"
 TOMORROW="(now() + timedelta(days=1)).date()|string"
 WASTE="calendar.waste_collection_schedule_zaku_entsorgung"
 WASTE_DAY="(state_attr('"+WASTE+"','start_time') or '')[:10]"
-METEOALARM="binary_sensor.meteoalarm"
 FLIGHTS="(state_attr('sensor.flightradar24_current_in_area','flights') or []) | selectattr('distance','defined') | selectattr('distance','lt',3) | sort(attribute='distance') | list"
 TRAIN="sensor.altdorf_zurich"
 def hhmm(e): return "(states('"+e+"')|as_datetime|as_local).strftime('%H:%M') if states('"+e+"') not in ['unknown','unavailable']"
@@ -55,6 +57,17 @@ CLIMATES=["climate.smart_thermostat_mts200b_main_channel","climate.meross_bedroo
 HEATING="(expand("+str(CLIMATES)+") | selectattr('attributes.hvac_action','defined') | selectattr('attributes.hvac_action','eq','heating') | list)"
 PLAYERS=["media_player.living_room","media_player.unnamed_room","media_player.unnamed_room_4","media_player.spotify_jan_van_thoor"]
 PLAYING="(expand("+str(PLAYERS)+") | selectattr('state','eq','playing') | list)"
+WARN_HOME="sensor.altdorf_ur_weather_warning_next_24_hours"
+WARN_MOUNTAINS=["sensor.andermatt_weather_warning_next_24_hours","sensor.oberalppass_weather_warning_next_24_hours"]
+LEVEL_RANK="{'none': 0, 'yellow': 1, 'orange': 2, 'red': 3}"
+def warn_lines(entities):
+    """One line per MeteoSwiss warning: event, level, and when it starts or ends."""
+    return ("{% set ns = namespace(seen=[]) %}{% for s in "+str(entities)+" %}{% for w in state_attr(s,'warnings') or [] %}"
+            "{% set id = w.event ~ w.region %}{% if id not in ns.seen %}{% set ns.seen = ns.seen + [id] %}"
+            "{% set on = w.onset|as_datetime|as_local %}{% set off = w.expires|as_datetime|as_local %}"
+            "{{ ' · ' if ns.seen|count > 1 }}{{ w.event }} ({{ w.level }}, {{ w.region }}) "
+            "{{ ('until ' ~ off.strftime('%a %H:%M')) if on <= now() else ('from ' ~ on.strftime('%a %H:%M') ~ ' to ' ~ off.strftime('%a %H:%M')) }}"
+            "{% endif %}{% endfor %}{% endfor %}")
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -107,11 +120,11 @@ ALERTS=[
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
    data=[("sensor.slf_imis_sca1_spjp_wind_gust","Gusts Gross Windgällen"),("sensor.slf_imis_urs1_prsf_wind_gust","Gusts Gross Schijen")],
    hist=["sensor.slf_imis_sca1_spjp_wind_gust","sensor.slf_imis_urs1_prsf_wind_gust"]),
- dict(key="weather_warning",group="Weather now",name="Weather warning",icon="mdi:alert-octagram",color="orange",
-   tmpl="{{ is_state('"+METEOALARM+"','on') }}",
-   secondary="{{ state_attr('"+METEOALARM+"','event') or state_attr('"+METEOALARM+"','headline') }} · {{ state_attr('"+METEOALARM+"','awareness_level') }}{{ ' · until ' ~ (state_attr('"+METEOALARM+"','expires')|as_datetime|as_local).strftime('%a %H:%M') if state_attr('"+METEOALARM+"','expires') }}",
-   rule="On while Meteoalarm has an official warning for your region.",
-   data=[(METEOALARM,"Meteoalarm")],hist=[METEOALARM]),
+ dict(key="weather_warning",group="Weather now",name="Weather warning",icon="mdi:alert-octagram",color="amber",color_from=WARN_HOME,
+   tmpl="{{ states('"+WARN_HOME+"') in ['yellow','orange','red'] }}",
+   secondary=warn_lines([WARN_HOME]),
+   rule="On while MeteoSwiss has, or expects within 24 hours, a warning for Altdorf's region (Flüelen-Unterschächen). The icon takes the warning's colour: yellow, orange or red.",
+   data=[("sensor.altdorf_ur_weather_warning","Altdorf now"),(WARN_HOME,"Altdorf next 24 h")],hist=["sensor.altdorf_ur_weather_warning"]),
  dict(key="avalanche_danger_high",tmpl="{{ [states('sensor.slf_avalanche_danger_level_altdorf_9r5z')|int(0), states('sensor.slf_avalanche_danger_level_andermatt_9pb7')|int(0)]|max >= 3 }}",group="Mountains",name="Avalanche danger",icon="mdi:alert",color="deep-orange",
    secondary="Level {{ ["+f('sensor.slf_avalanche_danger_level_altdorf_9r5z')+","+f('sensor.slf_avalanche_danger_level_andermatt_9pb7')+"]|max|int }} · Schächental {{ states('sensor.slf_avalanche_danger_level_altdorf_9r5z') }}, Nördliche Urseren {{ states('sensor.slf_avalanche_danger_level_andermatt_9pb7') }}",
    rule="On when the SLF danger level for Altdorf or Andermatt is 3 (considerable) or higher.",
@@ -171,6 +184,12 @@ ALERTS=[
    data=[("sensor.andermatt_snow_next_24_hours","Andermatt 24 h"),("sensor.andermatt_snow_next_48_hours","Andermatt 48 h"),
          ("sensor.altdorf_ur_snow_next_24_hours","Altdorf 24 h"),("sensor.altdorf_ur_snow_next_48_hours","Altdorf 48 h")],hist=[]),
  # --- mountains / weather now (existing)
+ dict(key="mountain_warning",group="Mountains",name="Mountain warning",icon="mdi:alert-octagram-outline",color="amber",color_from=WARN_MOUNTAINS,
+   tmpl="{{ "+str(WARN_MOUNTAINS)+" | map('states') | select('in',['yellow','orange','red']) | list | count > 0 }}",
+   secondary=warn_lines(WARN_MOUNTAINS),
+   rule="On while MeteoSwiss has, or expects within 24 hours, a warning for Andermatt (Urserntal) or Oberalppass (Nördliches Tavetsch).",
+   data=[("sensor.andermatt_weather_warning","Andermatt now"),(WARN_MOUNTAINS[0],"Andermatt next 24 h"),
+         ("sensor.oberalppass_weather_warning","Oberalppass now"),(WARN_MOUNTAINS[1],"Oberalppass next 24 h")],hist=[]),
  dict(key="fresh_snow_measured",tmpl="{{ [states('sensor.slf_imis_gos3_zwja_new_snow_1d')|float(0), states('sensor.slf_imis_tuj2_mr82_new_snow_1d')|float(0)]|max >= 5 }}",group="Mountains",name="Fresh snow",icon="mdi:snowflake",color="blue",
    secondary="+{{ ["+f('sensor.slf_imis_gos3_zwja_new_snow_1d')+","+f('sensor.slf_imis_tuj2_mr82_new_snow_1d')+"]|max|round(0) }} cm in 24 h · Gütsch {{ "+f('sensor.slf_imis_gos3_zwja_snow_height')+"|round(0) }} cm, Culmatsch {{ "+f('sensor.slf_imis_tuj2_mr82_snow_height')+"|round(0) }} cm total",
    rule="On when Gütsch or Culmatsch measure at least 5 cm of new snow in 24 hours.",

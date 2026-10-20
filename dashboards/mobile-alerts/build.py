@@ -63,11 +63,29 @@ _ACTIVE = (
 )
 
 
+def color(pill: dict[str, Any]) -> str:
+    """The pill's colour: fixed, or the highest warning level of its `color_from` sensors."""
+    sources = pill.get("color_from")
+    if not sources:
+        return pill["color"]
+    sources = [sources] if isinstance(sources, str) else sources
+    return ("{% set lv = namespace(r=0) %}{% for s in " + json.dumps(sources) + " %}"
+            "{% set r = {'yellow': 1, 'orange': 2, 'red': 3}.get(states(s), 0) %}"
+            "{% if r > lv.r %}{% set lv.r = r %}{% endif %}{% endfor %}"
+            "{{ " + json.dumps([pill["color"], "yellow", "orange", "red"]) + "[lv.r] }}")
+
+
 def _pick(index: int, field: str) -> str:
     """Template for the icon or colour of the index-th active pill."""
     table = json.dumps({p["key"]: p[field] for p in ALERTS})
-    return (_ACTIVE + "{% set m = " + table + " %}"
-            "{{ m[ns.a[" + str(index) + "]] if ns.a|count > " + str(index) + " else '' }}")
+    head = (_ACTIVE + "{% set m = " + table + " %}"
+            "{% set k = ns.a[" + str(index) + "] if ns.a|count > " + str(index) + " else '' %}")
+    dynamic = [p for p in ALERTS if field == "color" and p.get("color_from")]
+    if not dynamic:
+        return head + "{{ m[k] if k else '' }}"
+    branches = "".join(("{% if " if i == 0 else "{% elif ") + f"k == '{p['key']}' %}}" + color(p)
+                       for i, p in enumerate(dynamic))
+    return head + branches + "{% else %}{{ m[k] if k else '' }}{% endif %}"
 
 
 def chips() -> list[dict[str, Any]]:
@@ -113,7 +131,7 @@ def subview() -> dict[str, Any]:
     for p in ALERTS:
         active.append({
             "type": "custom:mushroom-template-card", "entity": entity(p),
-            "primary": p["name"], "secondary": p["secondary"], "icon": p["icon"], "icon_color": p["color"],
+            "primary": p["name"], "secondary": p["secondary"], "icon": p["icon"], "icon_color": color(p),
             "multiline_secondary": True, "fill_container": True, "grid_options": {"columns": 12},
             "tap_action": {"action": "more-info"},
             "visibility": [{"condition": "state", "entity": entity(p), "state": "on"}],
@@ -124,7 +142,7 @@ def subview() -> dict[str, Any]:
         for p in (p for p in ALERTS if p["group"] == group):
             cards.append({"type": "heading", "heading": p["name"], "heading_style": "subtitle", "icon": p["icon"],
                           "badges": [{"type": "entity", "entity": entity(p), "show_state": True,
-                                      "show_icon": False, "color": p["color"]}]})
+                                      "show_icon": False, "color": p["color"]}]})  # badges take no template
             cards.append({"type": "markdown", "content": f"<small>{p['rule']}</small>"})
             cards += [_tile(e, n) for e, n in p["data"]]
             if p.get("summary"):
