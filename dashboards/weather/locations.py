@@ -11,17 +11,19 @@ creates the ones a station measures, and wind-only stations have no snow.
 LOCATIONS = [
     dict(title="Altdorf", path="altdorf", icon="mdi:town-hall", weather="weather.altdorf_ur",
          station="altdorf", rain="sensor.bristen_10_minute_rain", stations_text="Altdorf · rain Bristen",
-         slf="altdorf_9r5z", lightning="altdorf"),
+         slf="altdorf_9r5z", lightning="altdorf", pollen=("Luzern", "luzern_pollen")),
     dict(title="Andermatt", path="andermatt", icon="mdi:summit", weather="weather.andermatt",
          station="andermatt", rain="sensor.goscheneralp_10_minute_rain",
          stations_text="Andermatt · rain Göscheneralp",
          cams=["camera.andermatt_gemsstock", "camera.andermatt_baezberg"],
          # Bergfex resort id, name on the dashboard.
          ski=[("andermatt_gemsstock", "Gemsstock"), ("andermatt_oberalp_sedrun", "Oberalp – Sedrun")],
-         slf="andermatt_9pb7", imis=["gos3_zwja", "tuj2_mr82", "urs1_prsf"]),
+         slf="andermatt_9pb7", imis=["gos3_zwja", "tuj2_mr82", "urs1_prsf"],
+         # The Andermatt entry has its own copy (…_2); Altdorf's is the same station.
+         pollen=("Luzern", "luzern_pollen")),
     dict(title="Schlieren", path="schlieren", icon="mdi:home-city", weather="weather.schlieren",
          station="zurich_fluntern", rain="sensor.uster_10_minute_rain",
-         stations_text="Zürich / Fluntern · rain Uster"),
+         stations_text="Zürich / Fluntern · rain Uster", pollen=("Zürich", "zurich_pollen")),
 ]
 
 MOUNTAINS = [
@@ -55,3 +57,5 @@ RIVERS = [
     dict(title="Rhône · Gletsch", station=2268, slug="rhone_gletsch", conditions=["discharge", "level"]),
     dict(title="Rein da Sumvitg · Sumvitg", station=2430, slug="rein_da_sumvitg_sumvitg", conditions=["discharge", "level"]),
 ]
+
+POLLEN_TYPES = ["hazel", "alder", "ash", "birch", "beech", "oak", "grasses"]

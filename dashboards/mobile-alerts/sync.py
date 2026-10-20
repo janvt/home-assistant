@@ -85,6 +85,18 @@ def main() -> None:
                 fields = {k: v for k, v in number.items() if k != "entity"}
                 ha.call({"type": "input_number/create", **fields})
 
+    for stat in build.STATISTICS:
+        if stat["entity"] not in have:
+            changes.append(f"create {stat['entity']}")
+            if args.apply:
+                flow = ha.rest("POST", "/api/config/config_entries/flow", {"handler": "statistics"})
+                url = f"/api/config/config_entries/flow/{flow['flow_id']}"
+                ha.rest("POST", url, {"name": stat["name"], "entity_id": stat["source"]})
+                ha.rest("POST", url, {"state_characteristic": stat["characteristic"]})
+                ha.rest("POST", url, {"entity_id": stat["source"], "state_characteristic": stat["characteristic"],
+                                      "sampling_size": stat["sampling_size"], "max_age": stat["max_age"],
+                                      "keep_last_sample": False, "precision": stat["precision"]})
+
     if args.apply:
         # A just-created helper's entity id is HA's slug of its title: check it.
         registry = {e["entity_id"] for e in ha.call({"type": "config/entity_registry/list"})}

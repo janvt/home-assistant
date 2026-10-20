@@ -16,10 +16,12 @@ plus SLF, Bergfex and the Andermatt webcams.
   the current weather, the daily forecast, wind, rain, humidity, a MeteoSwiss
   warning tile when one is out, and for Andermatt the Gemsstock webcam, the
   avalanche level and the snow depths. Then 48-hour comparison graphs, and a
-  section per mountain or pass with its freezing level.
+  section per mountain or pass with its freezing level, and the FOEN river
+  stations with a rising/falling trend against their 24-hour mean.
 - **One page per location:** MeteoSwiss warnings in full, hourly and daily
   forecast, wind gauges, sun and rain, 72-hour trends. Altdorf adds Blitzortung
-  lightning. Andermatt adds the
+  lightning. Altdorf and Andermatt show Luzern's pollen, Schlieren Zürich's.
+  Andermatt adds the
   webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
   their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
 - **One page per mountain:** the forecast for the summit's altitude, freezing

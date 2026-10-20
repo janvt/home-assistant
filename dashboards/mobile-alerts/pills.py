@@ -77,6 +77,27 @@ REUSS_LIMIT="input_number.reuss_seedorf_dog_walk_limit"
 # yours to change on the Alerts page; sync never resets it.
 NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, max=700, step=10, initial=150,
               unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box")]
+RAIN_24H="sensor.altdorf_rain_24_h"
+# Statistics helpers the pills read; sync.py creates them when missing.
+STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
+                 characteristic="sum", max_age={"hours": 24, "minutes": 0, "seconds": 0},
+                 sampling_size=300, precision=1)]
+SCHACHEN="sensor.schachen_burglen"
+BRUNNEN="sensor.vierwaldstattersee_brunnen_level"
+GLETSCH="sensor.rhone_gletsch_discharge"
+WARN_ALL=[WARN_HOME]+WARN_MOUNTAINS
+# MeteoSwiss puts the snowfall limit in the description of rain and snow
+# warnings: "Snowfall limit: 2500 - 1200 m (sinking)". The lowest number wins.
+SNOWLINE=("{% set ns = namespace(low=99999) %}{% for s in "+str(WARN_ALL)+" %}{% for w in state_attr(s,'warnings') or [] %}"
+          "{% for m in (w.description or '') | regex_findall('Snowfall limit:[^\\n]*') %}"
+          "{% for n in m | regex_findall('[0-9]{3,4}') %}{% if n|int < ns.low %}{% set ns.low = n|int %}{% endif %}{% endfor %}"
+          "{% endfor %}{% endfor %}{% endfor %}")
+# MeteoSwiss's "strong" class (pollen/m³, meant for daily means; these are hourly).
+POLLEN_STRONG={"alder": 70, "ash": 100, "beech": 70, "birch": 70, "grasses": 50, "hazel": 70, "oak": 70}
+POLLEN="sensor.luzern_pollen"
+POLLEN_HIGH=("{% set ns = namespace(hi=[]) %}{% for k, lim in "+str(POLLEN_STRONG)+".items() %}"
+             "{% set v = states('"+POLLEN+"_' ~ k)|float(0) %}{% if v >= lim %}{% set ns.hi = ns.hi + [k ~ ' ' ~ (v|round(0)|int)] %}{% endif %}{% endfor %}")
+PROX="sensor.1_node_prox"
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -163,13 +184,28 @@ ALERTS=[
    data=[("sensor.ultimatesensor_scd41_co2","CO₂"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
    hist=["sensor.ultimatesensor_scd41_co2"]),
  # --- forecast
- dict(key="reuss_high",group="Home",name="Reuss too high for the dog walk",icon="mdi:dog-side",color="blue",
+ dict(key="reuss_high",group="Rivers",name="Reuss too high for the dog walk",icon="mdi:dog-side",color="blue",
    tmpl="{{ states('"+REUSS+"_discharge') not in ['unknown','unavailable'] and states('"+REUSS+"_discharge')|float(0) >= states('"+REUSS_LIMIT+"')|float(9999) }}",
    secondary="{{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s at Seedorf (your limit {{ states('"+REUSS_LIMIT+"')|int }}) · 24 h max {{ state_attr('"+REUSS+"_discharge','max_24h')|float(0)|round(0)|int }} · level {{ states('"+REUSS+"_level') }} m",
    summary="{% set q = states('"+REUSS+"_discharge') %}{{ ('Now ' ~ (q|float(0)|round(0)|int) ~ ' m³/s, your limit ' ~ states('"+REUSS_LIMIT+"')|int ~ ' m³/s. FOEN flood danger level 2 starts at 280 m³/s; the yearly mean is 43.') if q not in ['unknown','unavailable'] else 'No reading from the Seedorf station yet.' }}",
    rule="On when the Reuss at Seedorf carries at least your dog walk limit (change it below; it starts at 150 m³/s).",
    data=[(REUSS+"_discharge","Discharge"),(REUSS_LIMIT,"Your limit"),(REUSS+"_level","Water level"),(REUSS+"_temperature","Water temperature")],
    hist=[REUSS+"_discharge"]),
+ dict(key="reuss_rising",group="Rivers",name="Reuss rising fast",icon="mdi:trending-up",color="blue",
+   tmpl="{% set q = states('"+REUSS+"_discharge')|float(0) %}{% set m = state_attr('"+REUSS+"_discharge','mean_24h')|float(0) %}{{ m > 0 and q >= 1.5 * m and q - m >= 15 }}",
+   secondary="{{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s at Seedorf, {{ ((states('"+REUSS+"_discharge')|float(0) / (state_attr('"+REUSS+"_discharge','mean_24h')|float(1))) * 100 - 100)|round(0)|int }} % above its 24 h mean · your limit {{ states('"+REUSS_LIMIT+"')|int }}",
+   rule="On when the Reuss at Seedorf runs at least 1.5 times its 24-hour mean and at least 15 m³/s above it: the early sign before your dog walk limit.",
+   data=[(REUSS+"_discharge","Seedorf now"),(REUSS_LIMIT,"Your limit")],hist=[REUSS+"_discharge"]),
+ dict(key="schachen_spate",group="Rivers",name="Schächen in spate",icon="mdi:waves-arrow-up",color="blue",
+   tmpl="{% set q = states('"+SCHACHEN+"_discharge')|float(0) %}{% set m = state_attr('"+SCHACHEN+"_discharge','mean_24h')|float(0) %}{{ q >= 20 or (m > 0 and q >= 4 * m and q >= 5) }}",
+   secondary="{{ states('"+SCHACHEN+"_discharge')|float(0)|round(1) }} m³/s at Bürglen (24 h mean {{ state_attr('"+SCHACHEN+"_discharge','mean_24h')|float(0)|round(1) }}, June mean 10)",
+   rule="On when the Schächen at Bürglen carries 20 m³/s or more, or four times its 24-hour mean (at least 5 m³/s). FOEN publishes no danger levels for it; it averages 4.4 m³/s, 10 in June. A jump here usually comes before the Reuss.",
+   data=[(SCHACHEN+"_discharge","Discharge"),(SCHACHEN+"_level","Level")],hist=[SCHACHEN+"_discharge"]),
+ dict(key="lake_high",group="Rivers",name="Lake Lucerne high",icon="mdi:waves",color="blue",
+   tmpl="{{ states('"+BRUNNEN+"')|float(0) >= 434.0 }}",
+   secondary="{{ states('"+BRUNNEN+"') }} m at Brunnen, {{ ((states('"+BRUNNEN+"')|float(0) - 433.57) * 100)|round(0)|int }} cm above its long-term mean",
+   rule="On when Lake Lucerne at Brunnen reaches 434.0 m, about 40 cm above its long-term mean of 433.57 m. FOEN publishes no danger levels for this station, so the threshold is a judgement call.",
+   data=[(BRUNNEN,"Level at Brunnen")],hist=[BRUNNEN]),
  dict(key="train_delayed",group="Travel",name="Train delayed",icon="mdi:train-variant",color="deep-orange",
    tmpl="{{ is_state('"+WORKDAY_UR+"','on') and states('"+TRAIN+"_delay')|int(0) >= 5 }}",
    secondary=NEXT_TRAINS,
@@ -212,6 +248,11 @@ ALERTS=[
    rule="On while MeteoSwiss has, or expects within 24 hours, a warning for Andermatt (Urserntal) or Oberalppass (Nördliches Tavetsch).",
    data=[("sensor.andermatt_weather_warning","Andermatt now"),(WARN_MOUNTAINS[0],"Andermatt next 24 h"),
          ("sensor.oberalppass_weather_warning","Oberalppass now"),(WARN_MOUNTAINS[1],"Oberalppass next 24 h")],hist=[]),
+ dict(key="snow_line_low",group="Mountains",name="Snow line coming down",icon="mdi:snowflake-melt",color="cyan",
+   tmpl=SNOWLINE+"{{ ns.low <= 1500 }}",
+   secondary=SNOWLINE+"Snow down to {{ ns.low }} m according to MeteoSwiss's warnings (Andermatt lies at 1440 m)",
+   rule="On when a MeteoSwiss warning for Altdorf, Andermatt or Oberalppass puts the snowfall limit at 1500 m or lower.",
+   data=[(WARN_HOME,"Altdorf warnings"),(WARN_MOUNTAINS[0],"Andermatt warnings"),(WARN_MOUNTAINS[1],"Oberalppass warnings")],hist=[]),
  dict(key="fresh_snow_measured",tmpl="{{ [states('sensor.slf_imis_gos3_zwja_new_snow_1d')|float(0), states('sensor.slf_imis_tuj2_mr82_new_snow_1d')|float(0)]|max >= 5 }}",group="Mountains",name="Fresh snow",icon="mdi:snowflake",color="blue",
    secondary="+{{ ["+f('sensor.slf_imis_gos3_zwja_new_snow_1d')+","+f('sensor.slf_imis_tuj2_mr82_new_snow_1d')+"]|max|round(0) }} cm in 24 h · Gütsch {{ "+f('sensor.slf_imis_gos3_zwja_snow_height')+"|round(0) }} cm, Culmatsch {{ "+f('sensor.slf_imis_tuj2_mr82_snow_height')+"|round(0) }} cm total",
    rule="On when Gütsch or Culmatsch measure at least 5 cm of new snow in 24 hours.",
@@ -249,6 +290,11 @@ ALERTS=[
    data=[("sensor.ruuvi_outside_temperature","Outside"),("sensor.ruuvi_kitchen_temperature","Kitchen")],
    hist=["sensor.ruuvi_outside_temperature","sensor.ruuvi_kitchen_temperature"]),
  # --- calendar & modes
+ dict(key="pollen_high",group="Home",name="Pollen high",icon="mdi:flower-pollen",color="lime",
+   tmpl=POLLEN_HIGH+"{{ ns.hi | count > 0 }}",
+   secondary=POLLEN_HIGH+"Strong in Luzern: {{ ns.hi | join(', ') }} pollen/m³",
+   rule="On when a pollen type in Luzern (the station nearest Altdorf) reaches MeteoSwiss's 'strong' class: 70 pollen/m³ for hazel, alder, birch, beech and oak, 50 for grasses, 100 for ash.",
+   data=[(POLLEN+"_"+k,k.capitalize()) for k in POLLEN_STRONG],hist=[POLLEN+"_birch",POLLEN+"_grasses"]),
  dict(key="waste_collection",group="Calendar",name="Waste collection",icon="mdi:trash-can-outline",color="brown",
    tmpl="{{ "+WASTE_DAY+" == "+TOMORROW+" or (is_state('"+WASTE+"','on') and now().hour < 10) }}",
    secondary="{{ state_attr('"+WASTE+"','message') }} {{ 'tomorrow' if "+WASTE_DAY+" == "+TOMORROW+" else 'today' }}",
@@ -285,6 +331,21 @@ ALERTS=[
    secondary="Open since {{ states.binary_sensor.aqara_record_player.last_changed | as_local | relative_time }}",
    rule="On while the record player's sensor reports it open.",
    data=[("binary_sensor.aqara_record_player","Record player")],hist=[]),
+ dict(key="reussdelta_swim",group="Rivers",name="Swim day at the Reussdelta",icon="mdi:swim",color="teal",
+   tmpl="{{ states('"+REUSS+"_temperature')|float(0) >= 18 and states('weather.altdorf_ur') in ['sunny','partlycloudy','clear-night'] and is_state('sun.sun','above_horizon') }}",
+   secondary="Reuss {{ states('"+REUSS+"_temperature') }} °C at Seedorf, {{ states('sensor.altdorf_temperature') }} °C in Altdorf",
+   rule="On in daylight when the Reuss at Seedorf is 18 °C or warmer and Altdorf is sunny.",
+   data=[(REUSS+"_temperature","Reuss water"),("sensor.altdorf_temperature","Altdorf air")],hist=[REUSS+"_temperature"]),
+ dict(key="glacier_melt",group="Rivers",name="Glacier melt",icon="mdi:snowflake-melt",color="light-blue",
+   tmpl="{{ states('"+GLETSCH+"')|float(0) >= 15 }}",
+   secondary="Rhône at Gletsch {{ states('"+GLETSCH+"')|float(0)|round(1) }} m³/s (July mean 9, record 56)",
+   rule="On when the Rhône at Gletsch, right below the Rhône glacier, carries 15 m³/s or more: a hot spell at altitude.",
+   data=[(GLETSCH,"Rhône at Gletsch")],hist=[GLETSCH]),
+ dict(key="muddy_paths",group="Rivers",name="Muddy paths",icon="mdi:shoe-print",color="brown",
+   tmpl="{{ states('"+RAIN_24H+"')|float(0) >= 10 }}",
+   secondary="{{ states('"+RAIN_24H+"')|float(0)|round(1) }} mm of rain in Altdorf over the last 24 h",
+   rule="On when Altdorf has measured 10 mm of rain or more over the last 24 hours (a Statistics helper sums the 10-minute rain).",
+   data=[(RAIN_24H,"Rain 24 h"),("sensor.altdorf_10_minute_rain","Rain 10 min")],hist=[RAIN_24H]),
  dict(key="plane_overhead",group="Home",name="Plane overhead",icon="mdi:airplane",color="light-blue",
    tmpl="{{ "+FLIGHTS+" | count > 0 }}",
    secondary="{% set fl = "+FLIGHTS+" %}{% if fl %}{% set f = fl[0] %}{{ f.callsign or f.aircraft_registration }} · {{ f.aircraft_model }} at {{ (f.altitude|float(0) * 0.3048)|round(-2)|int }} m, {{ f.distance|round(1) }} km away · {{ f.airport_origin_city or '?' }} → {{ f.airport_destination_city or '?' }}{% else %}Nothing within 3 km{% endif %}",
@@ -302,6 +363,26 @@ ALERTS=[
    secondary="Up since {{ (states('sensor.schmatzrouter_uptime_2')|as_datetime|as_local).strftime('%H:%M') if states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] }}",
    rule="On for the first hour after the UniFi router restarts.",
    data=[("sensor.schmatzrouter_uptime_2","Up since"),("sensor.schmatzrouter_state","State"),("sensor.quagmire_clients","Clients on quagmire")],hist=[]),
+ dict(key="server_stressed",group="Maintenance",name="Server stressed",icon="mdi:server-network",color="red",
+   tmpl="{{ ['binary_sensor.overloaded','binary_sensor.disk_overloaded','binary_sensor.stressed'] | select('is_state','on') | list | count > 0 }}",
+   secondary="Proxmox: {{ ['binary_sensor.overloaded','binary_sensor.disk_overloaded','binary_sensor.stressed'] | select('is_state','on') | map('state_attr','friendly_name') | join(', ') }}",
+   rule="On when Proxmox reports the node overloaded, its disks overloaded, or stressed.",
+   data=[("binary_sensor.overloaded","Overloaded"),("binary_sensor.disk_overloaded","Disk overloaded"),("binary_sensor.stressed","Stressed"),(PROX+"_io_wait","IO wait")],hist=[]),
+ dict(key="server_monitoring",group="Maintenance",name="Proxmox monitoring incomplete",icon="mdi:server-off",color="orange",
+   tmpl="{{ states('"+PROX+"_sidecar_status') in ['error','degraded'] or state_attr('"+PROX+"_node_status','pve_version') in ['unknown', None] }}",
+   secondary="Sidecar {{ states('"+PROX+"_sidecar_status') }}{{ ' · no node details (API permissions?)' if state_attr('"+PROX+"_node_status','pve_version') in ['unknown', None] }}",
+   rule="On when the Proxmox sidecar reports an error, or the API can't read the node's details: then the other Proxmox pills can't see anything.",
+   data=[(PROX+"_sidecar_status","Sidecar"),(PROX+"_node_status","Node")],hist=[]),
+ dict(key="server_backup",group="Maintenance",name="Proxmox backup running",icon="mdi:database-sync",color="blue-grey",
+   tmpl="{{ states('"+PROX+"_backup_progress') not in ['idle','unknown','unavailable',''] }}",
+   secondary="Backup: {{ states('"+PROX+"_backup_progress') }} · last task {{ states('"+PROX+"_last_task') }}",
+   rule="On while a Proxmox backup runs.",
+   data=[(PROX+"_backup_progress","Backup"),(PROX+"_last_task","Last task")],hist=[]),
+ dict(key="server_updates",group="Maintenance",name="Proxmox updates",icon="mdi:package-up",color="grey",
+   tmpl="{{ states('"+PROX+"_node_updates')|int(0) > 0 }}",
+   secondary="{{ states('"+PROX+"_node_updates') }} package updates on prox",
+   rule="On when the Proxmox node has package updates waiting.",
+   data=[(PROX+"_node_updates","Updates")],hist=[]),
  dict(key="low_batteries",group="Maintenance",name="Low batteries",icon="mdi:battery-alert-variant-outline",color="orange",
    tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
    secondary=LOWBAT_LIST,
@@ -315,6 +396,11 @@ ALERTS=[
    summary="{{ "+UPDATES+" | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
    rule="On when any update entity has an update available.",
    data=[],hist=[]),
+ dict(key="dog_walk_good",group="Rivers",name="Good time for a dog walk",icon="mdi:dog",color="green",
+   tmpl="{% set q = states('"+REUSS+"_discharge') %}{{ is_state('sun.sun','above_horizon') and q not in ['unknown','unavailable'] and q|float(0) < states('"+REUSS_LIMIT+"')|float(0) and states('sensor.altdorf_ur_chance_of_rain_next_hour')|float(100) < 40 and 'wind' not in (state_attr('sensor.altdorf_ur_weather_warning','types') or []) and not is_state('binary_sensor.pill_lightning_nearby','on') and states('"+RAIN_24H+"')|float(0) < 10 }}",
+   secondary="Reuss {{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s (limit {{ states('"+REUSS_LIMIT+"')|int }}), {{ states('sensor.altdorf_ur_chance_of_rain_next_hour')|round(0)|int }} % chance of rain in the next hour, no wind warning",
+   rule="On in daylight when the Reuss is below your limit, rain in the next hour is unlikely (under 40 %), there's no wind warning or lightning nearby, and the paths aren't muddy.",
+   data=[(REUSS+"_discharge","Reuss"),(REUSS_LIMIT,"Your limit"),("sensor.altdorf_ur_chance_of_rain_next_hour","Rain next hour"),(RAIN_24H,"Rain 24 h")],hist=[]),
  dict(key="dirty_grid",group="Home",name="Dirty grid",icon="mdi:factory",color="brown",
    tmpl="{{ states('sensor.electricity_maps_co2_intensity')|float(0) > 100 or states('sensor.electricity_maps_grid_fossil_fuel_percentage')|float(0) > 10 }}",
    secondary="{{ states('sensor.electricity_maps_co2_intensity')|round(0) }} gCO₂/kWh, {{ states('sensor.electricity_maps_grid_fossil_fuel_percentage')|round(0) }} % fossil · wait with the dishwasher",
@@ -334,4 +420,4 @@ ALERTS=[
    rule="On while a Sonos speaker or Spotify is playing.",
    data=[(m,n) for m,n in zip(PLAYERS,["Living Room","Madagascar","Living Room (2)","Spotify"])],hist=[]),
 ]
-GROUPS=["Safety","Kitchen","Travel","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]

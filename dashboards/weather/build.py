@@ -18,6 +18,7 @@ LOCATIONS: list[dict[str, Any]] = _loc["LOCATIONS"]
 MOUNTAINS: list[dict[str, Any]] = _loc["MOUNTAINS"]
 IMIS: dict[str, dict[str, Any]] = _loc["IMIS"]
 RIVERS: list[dict[str, Any]] = _loc["RIVERS"]
+POLLEN_TYPES: list[str] = _loc["POLLEN_TYPES"]
 
 DASHBOARD = "dashboard-weather"
 BASE = f"/{DASHBOARD}"
@@ -215,6 +216,18 @@ def imis_section(sfx: str) -> dict[str, Any]:
     return {"type": "grid", "cards": cards}
 
 
+def pollen_section(station: str, prefix: str) -> dict[str, Any]:
+    """Hourly concentrations (pollen/m³) from the MeteoSwiss pollen station."""
+    def e(kind: str) -> str:
+        return f"sensor.{prefix}_{kind}"
+    return {"type": "grid", "cards": [
+        {"type": "heading", "heading": f"Pollen ({station})", "icon": "mdi:flower-pollen"},
+        *[tile(e(k), k.capitalize(), icon="mdi:flower-pollen") for k in POLLEN_TYPES],
+        {"type": "markdown", "content": "<small>Hourly pollen/m³. MeteoSwiss's 'strong' class starts at 70 for hazel, "
+                                        "alder and birch, 50 for grasses, 100 for ash (daily means).</small>"},
+        hist([e("birch"), e("grasses"), e("hazel")], "Birch, grasses, hazel (7 days)", 168)]}
+
+
 def lightning_section(name: str) -> dict[str, Any]:
     """Blitzortung: strikes within its radius (100 km) over its time window (2 h)."""
     def e(x: str) -> str:
@@ -238,6 +251,20 @@ def danger_level(river: dict[str, Any]) -> str:
             "{% if q >= t %}{% set ns.l = loop.index + 1 %}{% endif %}{% endfor %}{{ ns.l }}")
 
 
+def river_trend(river: dict[str, Any]) -> str:
+    """Rising, falling or steady: now against the 24-hour mean (FOEN's own attribute)."""
+    main = river["conditions"][0]
+    e = river_entity(river, main)
+    if main == "level":  # a lake: centimetres, not percent
+        return ("{% set d = (states('" + e + "')|float(0) - state_attr('" + e + "','mean_24h')|float(0)) * 100 %}"
+                "<small>{{ '↗ rising' if d >= 2 else ('↘ falling' if d <= -2 else '→ steady') }} "
+                "({{ d|round(0)|int }} cm against the 24 h mean)</small>")
+    return ("{% set q = states('" + e + "')|float(0) %}{% set m = state_attr('" + e + "','mean_24h')|float(0) %}"
+            "{% set p = ((q / m - 1) * 100) if m > 0 else 0 %}"
+            "<small>{{ '↗ rising' if p >= 10 else ('↘ falling' if p <= -10 else '→ steady') }} "
+            "({{ '+' if p > 0 }}{{ p|round(0)|int }} % against the 24 h mean of {{ m|round(1) }} m³/s)</small>")
+
+
 def rivers_section() -> dict[str, Any]:
     cards = [{"type": "heading", "heading": "Rivers (FOEN)", "heading_style": "title", "icon": "mdi:waves"}]
     for r in RIVERS:
@@ -245,6 +272,7 @@ def rivers_section() -> dict[str, Any]:
         names = {"discharge": "Discharge", "level": "Water level", "temperature": "Water temperature"}
         cards += [tile(river_entity(r, c), names[c], state_content=["state", "max_24h"]) if c == "discharge"
                   else tile(river_entity(r, c), names[c]) for c in r["conditions"]]
+        cards.append({"type": "markdown", "content": river_trend(r)})
         if r.get("danger"):
             cards.append({"type": "markdown", "content":
                 "<small>Flood danger level " + danger_level(r) +
@@ -282,6 +310,7 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
         *ski_sections(loc),
         *[imis_section(x) for x in loc.get("imis", [])],
         *([lightning_section(loc["lightning"])] if loc.get("lightning") else []),
+        *([pollen_section(*loc["pollen"])] if loc.get("pollen") else []),
         {"type": "grid", "cards": [
             *forecast_cards(w),
             {"type": "heading", "heading": "Daily forecast", "icon": "mdi:calendar-week"},

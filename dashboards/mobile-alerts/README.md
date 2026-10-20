@@ -21,6 +21,8 @@ grouped by topic, every alert's rule and the live values it checks.
 - Some pills compare against a limit you set: an `input_number` listed in
   `NUMBERS` in `pills.py` (the Reuss dog walk limit). `sync.py` creates it
   when it's missing and never touches its value; change it on the Alerts page.
+- A few pills read a **Statistics** helper (`STATISTICS` in `pills.py`), e.g.
+  Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
   picks up new pills by itself.
 - **The row never wraps.** Mushroom wraps chips onto a second line and card-mod
@@ -54,7 +56,7 @@ into the raw configuration editor.
 The pills read entities from all over the house: MeteoSwiss (the forked
 integration, including its forecast summary and warning sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
-Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, FlightRadar24, Swiss public
+Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox, FlightRadar24, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection), Meross
 thermostats, Backup, UniFi, Electricity Maps, Sonos, Spotify and `update.*`.

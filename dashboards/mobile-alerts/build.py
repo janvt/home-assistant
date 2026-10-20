@@ -23,6 +23,7 @@ _pills = runpy.run_path(str(HERE / "pills.py"))
 ALERTS: list[dict[str, Any]] = _pills["ALERTS"]
 GROUPS: list[str] = _pills["GROUPS"]
 NUMBERS: list[dict[str, Any]] = _pills.get("NUMBERS", [])
+STATISTICS: list[dict[str, Any]] = _pills.get("STATISTICS", [])
 
 DASHBOARD = "dashboard-mobile"
 SUBVIEW = "weather-alerts"
@@ -32,7 +33,7 @@ PLACES = 6
 NAV = {"action": "navigate", "navigation_path": f"/{DASHBOARD}/{SUBVIEW}"}
 GROUP_ICONS = {
     "Safety": "mdi:shield-home-outline", "Kitchen": "mdi:fridge-outline",
-    "Travel": "mdi:train", "Forecast": "mdi:crystal-ball", "Weather now": "mdi:weather-partly-cloudy",
+    "Travel": "mdi:train", "Rivers": "mdi:waves", "Forecast": "mdi:crystal-ball", "Weather now": "mdi:weather-partly-cloudy",
     "Mountains": "mdi:image-filter-hdr", "Home": "mdi:home-outline",
     "Calendar": "mdi:calendar-star", "Maintenance": "mdi:wrench-outline",
 }
