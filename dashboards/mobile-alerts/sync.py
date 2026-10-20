@@ -77,6 +77,14 @@ def main() -> None:
     if what != "same":
         changes.append(f"{what} {build.COUNT}")
 
+    have = {s["entity_id"] for s in ha.call({"type": "get_states"})}
+    for number in build.NUMBERS:
+        if number["entity"] not in have:
+            changes.append(f"create {number['entity']}")
+            if args.apply:
+                fields = {k: v for k, v in number.items() if k != "entity"}
+                ha.call({"type": "input_number/create", **fields})
+
     if args.apply:
         # A just-created helper's entity id is HA's slug of its title: check it.
         registry = {e["entity_id"] for e in ha.call({"type": "config/entity_registry/list"})}

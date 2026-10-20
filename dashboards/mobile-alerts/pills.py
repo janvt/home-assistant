@@ -71,6 +71,12 @@ def warn_lines(entities):
 LIGHTNING="sensor.altdorf_lightning"
 COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
          "{{ ['N','NE','E','SE','S','SW','W','NW'][((az + 22.5) // 45)|int % 8] if az >= 0 else '' }}")
+REUSS="sensor.reuss_seedorf"
+REUSS_LIMIT="input_number.reuss_seedorf_dog_walk_limit"
+# Helpers the pills read that sync.py creates when missing. Their value is
+# yours to change on the Alerts page; sync never resets it.
+NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, max=700, step=10, initial=150,
+              unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box")]
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -157,6 +163,13 @@ ALERTS=[
    data=[("sensor.ultimatesensor_scd41_co2","CO₂"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
    hist=["sensor.ultimatesensor_scd41_co2"]),
  # --- forecast
+ dict(key="reuss_high",group="Home",name="Reuss too high for the dog walk",icon="mdi:dog-side",color="blue",
+   tmpl="{{ states('"+REUSS+"_discharge') not in ['unknown','unavailable'] and states('"+REUSS+"_discharge')|float(0) >= states('"+REUSS_LIMIT+"')|float(9999) }}",
+   secondary="{{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s at Seedorf (your limit {{ states('"+REUSS_LIMIT+"')|int }}) · 24 h max {{ state_attr('"+REUSS+"_discharge','max-24h')|float(0)|round(0)|int }} · level {{ states('"+REUSS+"_level') }} m",
+   summary="{% set q = states('"+REUSS+"_discharge') %}{{ ('Now ' ~ (q|float(0)|round(0)|int) ~ ' m³/s, your limit ' ~ states('"+REUSS_LIMIT+"')|int ~ ' m³/s. FOEN flood danger level 2 starts at 280 m³/s; the yearly mean is 43.') if q not in ['unknown','unavailable'] else 'No reading from the Seedorf station yet.' }}",
+   rule="On when the Reuss at Seedorf carries at least your dog walk limit (change it below; it starts at 150 m³/s).",
+   data=[(REUSS+"_discharge","Discharge"),(REUSS_LIMIT,"Your limit"),(REUSS+"_level","Water level"),(REUSS+"_temperature","Water temperature")],
+   hist=[REUSS+"_discharge"]),
  dict(key="train_delayed",group="Travel",name="Train delayed",icon="mdi:train-variant",color="deep-orange",
    tmpl="{{ is_state('"+WORKDAY_UR+"','on') and states('"+TRAIN+"_delay')|int(0) >= 5 }}",
    secondary=NEXT_TRAINS,

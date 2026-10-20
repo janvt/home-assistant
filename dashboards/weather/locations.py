@@ -40,3 +40,14 @@ IMIS = {
     "urs1_prsf": dict(name="Gross Schijen", elevation=2784, sensors=WIND),
     "sca1_spjp": dict(name="Gross Windgällen", elevation=3187, sensors=WIND),
 }
+
+# FOEN river stations (core `swiss_hydrological_data`, configured in YAML).
+# HA names their sensors after the river ("Reuss discharge", "..._2" in load
+# order), so sync.py renames them by unique id (<station>_<condition>) to
+# sensor.<slug>_<condition>. `danger` are FOEN's discharge thresholds (m³/s)
+# for flood danger levels 2 to 5, from hydrodaten.admin.ch.
+RIVERS = [
+    dict(title="Reuss · Seedorf", station=2056, slug="reuss_seedorf", conditions=["discharge", "level", "temperature"],
+         danger=[280, 450, 570, 690], mean=43),
+    dict(title="Reuss · Andermatt", station=2087, slug="reuss_andermatt", conditions=["discharge", "level"]),
+]

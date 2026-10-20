@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 _pills = runpy.run_path(str(HERE / "pills.py"))
 ALERTS: list[dict[str, Any]] = _pills["ALERTS"]
 GROUPS: list[str] = _pills["GROUPS"]
+NUMBERS: list[dict[str, Any]] = _pills.get("NUMBERS", [])
 
 DASHBOARD = "dashboard-mobile"
 SUBVIEW = "weather-alerts"

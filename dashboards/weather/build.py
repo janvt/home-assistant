@@ -17,6 +17,7 @@ _loc = runpy.run_path(str(Path(__file__).resolve().parent / "locations.py"))
 LOCATIONS: list[dict[str, Any]] = _loc["LOCATIONS"]
 MOUNTAINS: list[dict[str, Any]] = _loc["MOUNTAINS"]
 IMIS: dict[str, dict[str, Any]] = _loc["IMIS"]
+RIVERS: list[dict[str, Any]] = _loc["RIVERS"]
 
 DASHBOARD = "dashboard-weather"
 BASE = f"/{DASHBOARD}"
@@ -226,6 +227,33 @@ def lightning_section(name: str) -> dict[str, Any]:
         hist([e("counter")], "Strikes (48 h)")]}
 
 
+def river_entity(river: dict[str, Any], condition: str) -> str:
+    return f"sensor.{river['slug']}_{condition}"
+
+
+def danger_level(river: dict[str, Any]) -> str:
+    """Template: FOEN's flood danger level (1-5) for the current discharge."""
+    return ("{% set q = states('" + river_entity(river, "discharge") + "')|float(0) %}"
+            "{% set ns = namespace(l=1) %}{% for t in " + str(river["danger"]) + " %}"
+            "{% if q >= t %}{% set ns.l = loop.index + 1 %}{% endif %}{% endfor %}{{ ns.l }}")
+
+
+def rivers_section() -> dict[str, Any]:
+    cards = [{"type": "heading", "heading": "Rivers (FOEN)", "heading_style": "title", "icon": "mdi:waves"}]
+    for r in RIVERS:
+        cards.append({"type": "heading", "heading": r["title"], "heading_style": "subtitle", "icon": "mdi:waves-arrow-up"})
+        names = {"discharge": "Discharge", "level": "Water level", "temperature": "Water temperature"}
+        cards += [tile(river_entity(r, c), names[c], state_content=["state", "max-24h"]) if c == "discharge"
+                  else tile(river_entity(r, c), names[c]) for c in r["conditions"]]
+        if r.get("danger"):
+            cards.append({"type": "markdown", "content":
+                "<small>Flood danger level " + danger_level(r) +
+                " · level 2 from " + str(r["danger"][0]) + " m³/s · yearly mean " + str(r["mean"]) + " m³/s</small>"})
+        cards.append(dict(hist([river_entity(r, "discharge")], f"{r['title']} discharge (7 days)", 168),
+                          grid_options={"columns": 12}))
+    return {"type": "grid", "column_span": 4, "cards": cards}
+
+
 def forecast_cards(w: str) -> list[dict[str, Any]]:
     return [{"type": "heading", "heading": "Hourly forecast", "icon": "mdi:clock-outline"},
             {"type": "weather-forecast", "entity": w, "forecast_type": "hourly", "show_current": False,
@@ -333,6 +361,7 @@ def overview() -> dict[str, Any]:
             "max_columns": 4, "sections": [
         *[overview_section(l) for l in LOCATIONS],
         compare_section(),
+        rivers_section(),
         {"type": "grid", "column_span": 4, "cards": [
             {"type": "heading", "heading": "Mountains & passes", "heading_style": "title",
              "icon": "mdi:image-filter-hdr"}]},

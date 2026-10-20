@@ -18,6 +18,9 @@ grouped by topic, every alert's rule and the live values it checks.
 - Each pill is a UI **template helper**, `binary_sensor.pill_<key>`. It's a
   config entry, so you can see it under Settings → Helpers, but its template
   belongs to `pills.py`: a change made in the UI is undone by the next sync.
+- Some pills compare against a limit you set: an `input_number` listed in
+  `NUMBERS` in `pills.py` (the Reuss dog walk limit). `sync.py` creates it
+  when it's missing and never touches its value; change it on the Alerts page.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
   picks up new pills by itself.
 - **The row never wraps.** Mushroom wraps chips onto a second line and card-mod
@@ -51,7 +54,7 @@ into the raw configuration editor.
 The pills read entities from all over the house: MeteoSwiss (the forked
 integration, including its forecast summary and warning sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
-Athom plugs, the ultimatesensor, Blitzortung, FlightRadar24, Swiss public
+Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, FlightRadar24, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection), Meross
 thermostats, Backup, UniFi, Electricity Maps, Sonos, Spotify and `update.*`.
