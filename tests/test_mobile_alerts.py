@@ -214,3 +214,15 @@ def test_dismiss_templates_parse() -> None:
             templates += [card["secondary"], card["icon_color"]]
     for template in templates:
         env.parse(template)
+
+
+def test_alerts_page_has_back_buttons_top_and_bottom() -> None:
+    """The header arrow is small on a phone and scrolls out of view on a long
+    page, so the first and the last section each carry a Back button to the
+    same place the arrow goes."""
+    page = build.subview()
+    def backs(section):
+        return [c for c in section["cards"] if c.get("type") == "button"
+                and c.get("tap_action", {}).get("navigation_path") == page["back_path"]]
+    assert page["sections"][0]["cards"][0] in backs(page["sections"][0]), "no Back button at the top"
+    assert backs(page["sections"][-1]), "no Back button at the bottom"
