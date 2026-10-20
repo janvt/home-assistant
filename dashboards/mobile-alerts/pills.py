@@ -1,0 +1,190 @@
+"""The alert pills on the Mobile dashboard: one entry per pill, in priority order.
+
+Each pill is a UI template helper `binary_sensor.pill_<key>` whose state is
+`tmpl`. The dashboard's alert row shows the icons of the active pills in this
+order, so the first entries win when more are active than the row has places.
+
+`secondary`, `rule` and `data` only feed the Alerts sub-page. Thresholds live
+in `tmpl`; change them here and run `sync.py`, not in the HA UI, or the next
+sync puts them back.
+"""
+f=lambda e,d=0:f"states('{e}')|float({d})"
+def since(e,sec):
+    return f"(now() - states.{e}.last_changed).total_seconds() > {sec}"
+PHONES=["sensor.iphone_battery_level","sensor.jans_ipad_battery_level","sensor.sm_f741b_battery_level","sensor.silvs_iphone_battery_level"]
+LOWBAT=("{% set skip = "+str(PHONES)+" %}"
+        "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
+        " | rejectattr('entity_id','in',skip) | rejectattr('state','in',['unknown','unavailable']) | selectattr('state','is_number')"
+        " | map(attribute='state') | map('float') | select('lt',20) | list %}"
+        "{% set crit = states.binary_sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery') | selectattr('state','eq','on') | list %}")
+LOWBAT_LIST=("{% set skip = "+str(PHONES)+" %}"
+        "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
+        " | rejectattr('entity_id','in',skip) | selectattr('state','is_number') | list %}"
+        "{% for s in low if s.state|float < 20 %}{{ s.name }} {{ s.state|round(0) }} %{{ ', ' if not loop.last }}{% else %}All above 20 %{% endfor %}")
+UPDATES="states.update | selectattr('state','eq','on') | list"
+TOMORROW="(now() + timedelta(days=1)).date()|string"
+WASTE="calendar.waste_collection_schedule_zaku_entsorgung"
+WASTE_DAY="(state_attr('"+WASTE+"','start_time') or '')[:10]"
+ALERTS=[
+ # --- safety
+ dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
+   tmpl="{{ is_state('binary_sensor.aquara_smoke_acn03','on') or is_state('binary_sensor.g4_instant_co_alarm_detected','on') }}",
+   secondary="Smoke {{ states('binary_sensor.aquara_smoke_acn03') }} · CO {{ states('binary_sensor.g4_instant_co_alarm_detected') }}",
+   rule="On when the Aqara smoke detector or the G4 Instant CO detector raises an alarm.",
+   data=[("binary_sensor.aquara_smoke_acn03","Smoke detector"),("binary_sensor.g4_instant_co_alarm_detected","CO detector"),("sensor.aquara_smoke_acn03_battery","Smoke detector battery")],hist=[]),
+ dict(key="front_door_open",group="Safety",name="Front door open",icon="mdi:door-open",color="red",
+   tmpl="{{ is_state('binary_sensor.nuki_schmatzknauf_door_open_2','on') and "+since("binary_sensor.nuki_schmatzknauf_door_open_2",120)+" }}",
+   secondary="Open since {{ states.binary_sensor.nuki_schmatzknauf_door_open_2.last_changed | as_local | relative_time }}",
+   rule="On when the front door has been open for more than 2 minutes.",
+   data=[("binary_sensor.nuki_schmatzknauf_door_open_2","Door"),("lock.nuki_schmatzknauf_lock_2","Lock")],hist=[]),
+ dict(key="unlocked_nobody_home",group="Safety",name="Unlocked, nobody home",icon="mdi:lock-open-alert",color="red",
+   tmpl="{{ not is_state('lock.nuki_schmatzknauf_lock_2','locked') and states('lock.nuki_schmatzknauf_lock_2') not in ['unknown','unavailable'] and states.person | selectattr('state','eq','home') | list | count == 0 }}",
+   secondary="Lock is {{ states('lock.nuki_schmatzknauf_lock_2') }} and everyone is away",
+   rule="On when the Nuki lock isn't locked while nobody is home.",
+   data=[("lock.nuki_schmatzknauf_lock_2","Lock"),("person.jan","Jan"),("person.silvia","Silvia"),("sensor.nuki_schmatzknauf_battery_2","Lock battery")],hist=[]),
+ # --- kitchen
+ dict(key="fridge_not_cooling",group="Kitchen",name="Fridge not cooling",icon="mdi:fridge-alert",color="red",
+   tmpl="{{ "+f("sensor.athom_smart_plug_fridge_power",99)+" < 1 and "+since("sensor.athom_smart_plug_fridge_power",7200)+" }}",
+   secondary="0 W since {{ states.sensor.athom_smart_plug_fridge_power.last_changed | as_local | relative_time }} · inside {{ states('sensor.aqara_fridge_temp_temperature') }} °C",
+   rule="On when the fridge plug has drawn no power for more than 2 hours (the compressor normally cycles every hour or so).",
+   data=[("sensor.athom_smart_plug_fridge_power","Fridge power"),("sensor.aqara_fridge_temp_temperature","Inside temperature"),("binary_sensor.athom_smart_plug_fridge_status","Plug online")],
+   hist=["sensor.athom_smart_plug_fridge_power"]),
+ dict(key="fridge_open",group="Kitchen",name="Fridge open",icon="mdi:fridge-industrial-alert-outline",color="orange",
+   tmpl="{{ is_state('binary_sensor.aqara_fridge','on') and "+since("binary_sensor.aqara_fridge",60)+" }}",
+   secondary="Open since {{ states.binary_sensor.aqara_fridge.last_changed | as_local | relative_time }}",
+   rule="On when the fridge door has been open for more than 60 seconds.",
+   data=[("binary_sensor.aqara_fridge","Fridge door"),("sensor.aqara_fridge_temp_temperature","Inside temperature")],hist=[]),
+ dict(key="fridge_too_warm",group="Kitchen",name="Fridge too warm",icon="mdi:thermometer-alert",color="orange",
+   tmpl="{{ "+f("sensor.aqara_fridge_temp_temperature",0)+" > 8 and "+since("sensor.aqara_fridge_temp_temperature",900)+" }}",
+   secondary="{{ states('sensor.aqara_fridge_temp_temperature') }} °C inside",
+   rule="On when the fridge thermometer has read above 8 °C for 15 minutes. It usually sits around 7 °C, which is warm; 4–5 °C is ideal.",
+   data=[("sensor.aqara_fridge_temp_temperature","Inside temperature"),("sensor.aqara_fridge_temp_humidity","Inside humidity"),("sensor.aqara_fridge_temp_battery","Thermometer battery")],
+   hist=["sensor.aqara_fridge_temp_temperature"]),
+ # --- weather now (existing helpers)
+ dict(key="storm_on_the_summits",tmpl="{{ [states('sensor.slf_imis_sca1_spjp_wind_gust')|float(0), states('sensor.slf_imis_urs1_prsf_wind_gust')|float(0)]|max >= 100 }}",group="Weather now",name="Summit storm",icon="mdi:weather-hurricane",color="red",
+   secondary="{{ ["+f('sensor.slf_imis_sca1_spjp_wind_gust')+","+f('sensor.slf_imis_urs1_prsf_wind_gust')+"]|max|round(0) }} km/h gusts measured (Gross Windgällen {{ "+f('sensor.slf_imis_sca1_spjp_wind_gust')+"|round(0) }}, Gross Schijen {{ "+f('sensor.slf_imis_urs1_prsf_wind_gust')+"|round(0) }})",
+   rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
+   data=[("sensor.slf_imis_sca1_spjp_wind_gust","Gusts Gross Windgällen"),("sensor.slf_imis_urs1_prsf_wind_gust","Gusts Gross Schijen")],
+   hist=["sensor.slf_imis_sca1_spjp_wind_gust","sensor.slf_imis_urs1_prsf_wind_gust"]),
+ dict(key="avalanche_danger_high",tmpl="{{ [states('sensor.slf_avalanche_danger_level_altdorf_9r5z')|int(0), states('sensor.slf_avalanche_danger_level_andermatt_9pb7')|int(0)]|max >= 3 }}",group="Mountains",name="Avalanche danger",icon="mdi:alert",color="deep-orange",
+   secondary="Level {{ ["+f('sensor.slf_avalanche_danger_level_altdorf_9r5z')+","+f('sensor.slf_avalanche_danger_level_andermatt_9pb7')+"]|max|int }} · Schächental {{ states('sensor.slf_avalanche_danger_level_altdorf_9r5z') }}, Nördliche Urseren {{ states('sensor.slf_avalanche_danger_level_andermatt_9pb7') }}",
+   rule="On when the SLF danger level for Altdorf or Andermatt is 3 (considerable) or higher.",
+   data=[("sensor.slf_avalanche_danger_level_altdorf_9r5z","Altdorf (Schächental)"),("sensor.slf_avalanche_danger_level_andermatt_9pb7","Andermatt (Nördliche Urseren)")],
+   hist=["sensor.slf_avalanche_danger_level_altdorf_9r5z","sensor.slf_avalanche_danger_level_andermatt_9pb7"]),
+ dict(key="remote_access_down",group="Home",name="Remote access down",icon="mdi:cloud-off-outline",color="orange",
+   tmpl="{{ is_state('binary_sensor.remote_ui','off') }}",
+   secondary="Nabu Casa remote UI is offline · ha.janvt.dev won't load away from home",
+   rule="On when the Nabu Casa remote UI is disconnected.",
+   data=[("binary_sensor.remote_ui","Remote UI")],hist=["binary_sensor.remote_ui"]),
+ dict(key="air_stuffy",group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
+   tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
+   secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
+   rule="On when CO₂ is above 1200 ppm or the VOC index above 250.",
+   data=[("sensor.ultimatesensor_scd41_co2","CO₂"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
+   hist=["sensor.ultimatesensor_scd41_co2"]),
+ # --- forecast
+ dict(key="rain_next_hour",group="Forecast",name="Rain next hour",icon="mdi:umbrella",color="blue",
+   tmpl="{{ "+f("sensor.schlieren_chance_of_rain_next_hour",0)+" >= 60 and "+f("sensor.schlieren_precipitation_next_hour",0)+" >= 0.3 }}",
+   secondary="{{ states('sensor.schlieren_chance_of_rain_next_hour')|round(0) }} % chance, {{ states('sensor.schlieren_precipitation_next_hour') }} mm in Schlieren",
+   rule="On when Schlieren's forecast gives at least a 60 % chance of rain and 0.3 mm or more in the next hour.",
+   data=[("sensor.schlieren_chance_of_rain_next_hour","Chance of rain"),("sensor.schlieren_precipitation_next_hour","Precipitation"),("sensor.uster_10_minute_rain","Rain now (Uster)")],hist=[]),
+ dict(key="frost_tonight",group="Forecast",name="Frost tonight",icon="mdi:snowflake-thermometer",color="cyan",
+   tmpl="{{ states('sensor.schlieren_lowest_temperature_tonight') not in ['unknown','unavailable'] and "+f("sensor.schlieren_lowest_temperature_tonight",9)+" <= 0 }}",
+   secondary="Down to {{ states('sensor.schlieren_lowest_temperature_tonight') }} °C in Schlieren tonight",
+   rule="On when Schlieren's lowest forecast temperature between 18:00 and 08:00 is 0 °C or below.",
+   data=[("sensor.schlieren_lowest_temperature_tonight","Lowest tonight"),("sensor.ruuvi_outside_temperature","Outside now")],hist=[]),
+ dict(key="bluebird_tomorrow",group="Forecast",name="Bluebird tomorrow",icon="mdi:weather-sunny-alert",color="indigo",
+   tmpl="{{ "+f("sensor.gross_windgallen_snow_tonight",0)+" >= 5 and "+f("sensor.andermatt_sunshine_tomorrow_9_15",0)+" >= 4.5 and "+f("sensor.gross_windgallen_strongest_gust_tomorrow_9_15",99)+" < 40 }}",
+   secondary="{{ states('sensor.gross_windgallen_snow_tonight') }} mm of snow tonight, {{ states('sensor.andermatt_sunshine_tomorrow_9_15') }} h of sun 9–15, gusts to {{ states('sensor.gross_windgallen_strongest_gust_tomorrow_9_15')|round(0) }} km/h",
+   rule="On when at least 5 mm of snow falls tonight on Gross Windgällen, Andermatt gets at least 4.5 h of sun between 09:00 and 15:00 tomorrow, and gusts on Gross Windgällen stay under 40 km/h. After midnight, 'tomorrow' means the following day.",
+   data=[("sensor.gross_windgallen_snow_tonight","Snow tonight (Gross Windgällen)"),("sensor.andermatt_sunshine_tomorrow_9_15","Sun tomorrow 9–15 (Andermatt)"),
+         ("sensor.gross_windgallen_strongest_gust_tomorrow_9_15","Gusts tomorrow 9–15 (Gross Windgällen)"),("sensor.oberalppass_snow_tonight","Snow tonight (Oberalppass)")],hist=[]),
+ dict(key="snow_coming",group="Forecast",name="Snow coming",icon="mdi:weather-snowy-heavy",color="blue",
+   tmpl="{{ ["+f("sensor.andermatt_snow_next_24_hours")+","+f("sensor.altdorf_ur_snow_next_24_hours")+"]|max >= 5 }}",
+   secondary="Next 24 h: Andermatt {{ states('sensor.andermatt_snow_next_24_hours') }} mm, Altdorf {{ states('sensor.altdorf_ur_snow_next_24_hours') }} mm · 48 h: Andermatt {{ states('sensor.andermatt_snow_next_48_hours') }} mm",
+   rule="On when at least 5 mm of snow (water equivalent, very roughly 5 cm) is forecast within 24 hours in Andermatt or Altdorf.",
+   data=[("sensor.andermatt_snow_next_24_hours","Andermatt 24 h"),("sensor.andermatt_snow_next_48_hours","Andermatt 48 h"),
+         ("sensor.altdorf_ur_snow_next_24_hours","Altdorf 24 h"),("sensor.altdorf_ur_snow_next_48_hours","Altdorf 48 h")],hist=[]),
+ # --- mountains / weather now (existing)
+ dict(key="fresh_snow_measured",tmpl="{{ [states('sensor.slf_imis_gos3_zwja_new_snow_1d')|float(0), states('sensor.slf_imis_tuj2_mr82_new_snow_1d')|float(0)]|max >= 5 }}",group="Mountains",name="Fresh snow",icon="mdi:snowflake",color="blue",
+   secondary="+{{ ["+f('sensor.slf_imis_gos3_zwja_new_snow_1d')+","+f('sensor.slf_imis_tuj2_mr82_new_snow_1d')+"]|max|round(0) }} cm in 24 h · Gütsch {{ "+f('sensor.slf_imis_gos3_zwja_snow_height')+"|round(0) }} cm, Culmatsch {{ "+f('sensor.slf_imis_tuj2_mr82_snow_height')+"|round(0) }} cm total",
+   rule="On when Gütsch or Culmatsch measure at least 5 cm of new snow in 24 hours.",
+   data=[("sensor.slf_imis_gos3_zwja_new_snow_1d","New snow Gütsch"),("sensor.slf_imis_tuj2_mr82_new_snow_1d","New snow Culmatsch"),
+         ("sensor.slf_imis_gos3_zwja_snow_height","Snow depth Gütsch"),("sensor.slf_imis_tuj2_mr82_snow_height","Snow depth Culmatsch")],
+   hist=["sensor.slf_imis_gos3_zwja_snow_height","sensor.slf_imis_tuj2_mr82_snow_height"]),
+ dict(key="fohn_altdorf",tmpl="{% set d = states('sensor.altdorf_wind_direction')|float(-1) %}\n{% set g = states('sensor.altdorf_wind_speed_max')|float(0) %}\n{% set h = states('sensor.altdorf_humidity')|float(100) %}\n{% set dt = states('sensor.altdorf_temperature')|float(0) - states('sensor.zurich_fluntern_temperature')|float(99) %}\n{{ 120 <= d <= 220 and g >= 50 and h < 50 and dt >= 5 }}",group="Weather now",name="Föhn in Altdorf",icon="mdi:weather-windy",color="amber",
+   secondary="Gusts {{ "+f('sensor.altdorf_wind_speed_max')+"|round(0) }} km/h from {{ "+f('sensor.altdorf_wind_direction')+"|round(0) }}°, {{ "+f('sensor.altdorf_humidity')+"|round(0) }} % humidity, {{ ("+f('sensor.altdorf_temperature')+" - "+f('sensor.zurich_fluntern_temperature')+")|round(1) }} °C warmer than Zürich",
+   rule="On when Altdorf has wind from 120–220°, gusts of 50 km/h or more, humidity under 50 %, and is at least 5 °C warmer than Zürich.",
+   data=[("sensor.altdorf_wind_speed_max","Gusts"),("sensor.altdorf_wind_direction","Direction"),("sensor.altdorf_humidity","Humidity"),
+         ("sensor.altdorf_temperature","Altdorf"),("sensor.zurich_fluntern_temperature","Zürich")],
+   hist=["sensor.altdorf_temperature","sensor.zurich_fluntern_temperature"]),
+ dict(key="gemsstock_open",tmpl="{{ states('sensor.andermatt_gemsstock_status') not in ['Closed','unknown','unavailable',''] }}",group="Mountains",name="Gemsstock open",icon="mdi:gondola",color="green",
+   secondary="{{ states('sensor.andermatt_gemsstock_lifts_open_count') }} lifts, {{ states('sensor.andermatt_gemsstock_slopes_open_km') }} km of slopes · Sedrun: {{ states('sensor.andermatt_oberalp_sedrun_status') }}",
+   rule="On when Bergfex reports Gemsstock as anything other than closed.",
+   data=[("sensor.andermatt_gemsstock_status","Gemsstock"),("sensor.andermatt_gemsstock_lifts_open_count","Lifts open"),("sensor.andermatt_oberalp_sedrun_status","Oberalp – Sedrun")],hist=[]),
+ dict(key="snow_down_to_the_pass",tmpl="{% set f = states('sensor.oberalppass_freezing_level')|float(9999) %}{{ f < 2000 }}",group="Mountains",name="Snow to the pass",icon="mdi:snowflake-melt",color="light-blue",
+   secondary="Freezing level {{ "+f('sensor.oberalppass_freezing_level')+"|round(0) }} m (Oberalppass 2044 m)",
+   rule="On when the forecast freezing level at Oberalppass drops below 2000 m.",
+   data=[("sensor.oberalppass_freezing_level","Oberalppass"),("sensor.bristen_freezing_level","Bristen")],hist=["sensor.oberalppass_freezing_level"]),
+ dict(key="sun_above_the_fog",tmpl="{% set zh_h = states('sensor.zurich_fluntern_humidity')|float(0) %}\n{% set zh_sun = states('sensor.zurich_fluntern_10_minute_sun')|float(10) %}\n{% set an_sun = states('sensor.andermatt_10_minute_sun')|float(0) %}\n{{ is_state('sun.sun','above_horizon') and zh_h >= 90 and zh_sun == 0 and an_sun >= 5 }}",group="Weather now",name="Sun above the fog",icon="mdi:weather-sunny",color="yellow",
+   secondary="Zürich {{ "+f('sensor.zurich_fluntern_humidity')+"|round(0) }} % and grey, Andermatt {{ "+f('sensor.andermatt_10_minute_sun')+"|round(0) }} of 10 min sunny",
+   rule="On in daytime when Zürich is at 90 % humidity or more with no sun, while Andermatt gets at least 5 of every 10 minutes of sun.",
+   data=[("sensor.zurich_fluntern_humidity","Zürich humidity"),("sensor.zurich_fluntern_10_minute_sun","Zürich sun (10 min)"),("sensor.andermatt_10_minute_sun","Andermatt sun (10 min)")],hist=[]),
+ # --- comfort
+ dict(key="close_east_shades",group="Home",name="Close the east shades",icon="mdi:blinds-horizontal",color="amber",
+   tmpl="{{ is_state('cover.east_facing_shades','open') and is_state('sun.sun','above_horizon') and 60 <= state_attr('sun.sun','azimuth')|float(0) <= 160 and "+f("sensor.zurich_fluntern_sun_irradiation",0)+" > 500 and "+f("sensor.ruuvi_outside_temperature",0)+" > 18 }}",
+   secondary="Sun on the east side ({{ states('sensor.zurich_fluntern_sun_irradiation')|round(0) }} W/m², {{ states('sensor.ruuvi_outside_temperature')|round(1) }} °C outside)",
+   rule="On in the morning (sun azimuth 60–160°) when the east shades are open, irradiance is above 500 W/m² and it's warmer than 18 °C outside.",
+   data=[("cover.east_facing_shades","East shades"),("sensor.zurich_fluntern_sun_irradiation","Irradiance"),("sensor.ruuvi_outside_temperature","Outside")],hist=[]),
+ dict(key="cooler_outside",group="Home",name="Cooler outside",icon="mdi:window-open-variant",color="teal",
+   tmpl="{{ "+f("sensor.ruuvi_kitchen_temperature",0)+" > 24 and "+f("sensor.ruuvi_outside_temperature",99)+" < "+f("sensor.ruuvi_kitchen_temperature",0)+" - 2 }}",
+   secondary="Outside {{ states('sensor.ruuvi_outside_temperature')|round(1) }} °C, kitchen {{ states('sensor.ruuvi_kitchen_temperature')|round(1) }} °C · open the windows",
+   rule="On when the kitchen is above 24 °C and it's at least 2 °C cooler outside.",
+   data=[("sensor.ruuvi_outside_temperature","Outside"),("sensor.ruuvi_kitchen_temperature","Kitchen")],
+   hist=["sensor.ruuvi_outside_temperature","sensor.ruuvi_kitchen_temperature"]),
+ # --- calendar & modes
+ dict(key="waste_collection",group="Calendar",name="Waste collection",icon="mdi:trash-can-outline",color="brown",
+   tmpl="{{ "+WASTE_DAY+" == "+TOMORROW+" or (is_state('"+WASTE+"','on') and now().hour < 10) }}",
+   secondary="{{ state_attr('"+WASTE+"','message') }} {{ 'tomorrow' if "+WASTE_DAY+" == "+TOMORROW+" else 'today' }}",
+   rule="On the evening before a collection and on collection mornings until 10:00. A calendar only shows its current or next event, so on two collection days in a row the second only appears after midnight.",
+   data=[(WASTE,"ZAKU collection")],hist=[]),
+ dict(key="birthday_today",group="Calendar",name="Birthday today",icon="mdi:cake-variant",color="pink",
+   tmpl="{{ is_state('calendar.birthdays_2','on') }}",
+   secondary="{{ state_attr('calendar.birthdays_2','message') }}",
+   rule="On while the Birthdays calendar has an event today.",
+   data=[("calendar.birthdays_2","Birthdays")],hist=[]),
+ dict(key="holiday_tomorrow",group="Calendar",name="Holiday tomorrow",icon="mdi:party-popper",color="purple",
+   tmpl="{{ (state_attr('calendar.holidays_in_switzerland','start_time') or '')[:10] == "+TOMORROW+" }}",
+   secondary="{{ state_attr('calendar.holidays_in_switzerland','message') }}",
+   rule="On the day before an event in the Swiss holidays calendar (this calendar also lists clock changes).",
+   data=[("calendar.holidays_in_switzerland","Swiss holidays")],hist=[]),
+ dict(key="on_vacation",group="Calendar",name="On vacation",icon="mdi:palm-tree",color="green",
+   tmpl="{{ is_state('calendar.copebit_vacations_vacation_calendar','on') and 'Jan' in (state_attr('calendar.copebit_vacations_vacation_calendar','message') or '') }}",
+   secondary="{{ state_attr('calendar.copebit_vacations_vacation_calendar','message') }}",
+   rule="On while the copebit vacation calendar has an entry with 'Jan' in its title (it also lists colleagues).",
+   data=[("calendar.copebit_vacations_vacation_calendar","copebit vacations")],hist=[]),
+ dict(key="guests",group="Calendar",name="Guests",icon="mdi:account-group",color="purple",
+   tmpl="{{ is_state('input_boolean.guest_mode','on') }}",secondary="Guest mode is on",
+   rule="On while guest mode is on.",data=[("input_boolean.guest_mode","Guest mode")],hist=[]),
+ dict(key="cleaning",group="Calendar",name="Cleaning mode",icon="mdi:broom",color="brown",
+   tmpl="{{ is_state('input_boolean.cleaning_mode','on') }}",secondary="Cleaning mode is on",
+   rule="On while cleaning mode is on.",data=[("input_boolean.cleaning_mode","Cleaning mode")],hist=[]),
+ dict(key="record_player_open",group="Home",name="Record player open",icon="mdi:album",color="deep-purple",
+   tmpl="{{ is_state('binary_sensor.aqara_record_player','on') }}",
+   secondary="Open since {{ states.binary_sensor.aqara_record_player.last_changed | as_local | relative_time }}",
+   rule="On while the record player's sensor reports it open.",
+   data=[("binary_sensor.aqara_record_player","Record player")],hist=[]),
+ # --- maintenance
+ dict(key="low_batteries",group="Maintenance",name="Low batteries",icon="mdi:battery-alert-variant-outline",color="orange",
+   tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
+   secondary=LOWBAT_LIST,
+   rule="On when any battery (phones excluded) is below 20 %, or a device reports its battery as critical.",
+   data=[("sensor.aqara_fridge_temp_battery","Fridge thermometer"),("sensor.lumi_lumi_vibration_aq1_battery","Vibration sensor"),
+         ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.nuki_schmatzknauf_battery_2","Nuki lock")],hist=[]),
+ dict(key="updates_waiting",group="Maintenance",name="Updates waiting",icon="mdi:package-up",color="grey",
+   tmpl="{{ "+UPDATES+" | count > 0 }}",
+   secondary="{{ "+UPDATES+" | count }} available: {{ "+UPDATES+" | map(attribute='name') | join(', ') }}",
+   rule="On when any update entity has an update available.",
+   data=[],hist=[]),
+]
+GROUPS=["Safety","Kitchen","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]

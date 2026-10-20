@@ -11,3 +11,8 @@ __pycache__/
 .esphome/
 m5stack/*/secrets.yaml
 kitchen-timer/secrets.yaml
+
+# Mobile alert pills: the HA token, and the dashboard configs sync.py saves
+# before each push.
+dashboards/mobile-alerts/.env
+dashboards/mobile-alerts/backups/
