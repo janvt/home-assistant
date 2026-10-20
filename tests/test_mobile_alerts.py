@@ -216,13 +216,11 @@ def test_dismiss_templates_parse() -> None:
         env.parse(template)
 
 
-def test_alerts_page_has_back_buttons_top_and_bottom() -> None:
-    """The header arrow is small on a phone and scrolls out of view on a long
-    page, so the first and the last section each carry a Back button to the
-    same place the arrow goes."""
+def test_alerts_page_has_back_chips_top_and_bottom() -> None:
+    """Every page of the Mobile dashboard starts with Mushroom's back chip; the
+    Alerts page is long, so it has one at the bottom too."""
     page = build.subview()
-    def backs(section):
-        return [c for c in section["cards"] if c.get("type") == "button"
-                and c.get("tap_action", {}).get("navigation_path") == page["back_path"]]
-    assert page["sections"][0]["cards"][0] in backs(page["sections"][0]), "no Back button at the top"
-    assert backs(page["sections"][-1]), "no Back button at the bottom"
+    def has_back(card):
+        return card.get("type") == "custom:mushroom-chips-card" and {"type": "back"} in card["chips"]
+    assert has_back(page["sections"][0]["cards"][0]), "no back chip at the top"
+    assert has_back(page["sections"][-1]["cards"][-1]), "no back chip at the bottom"
