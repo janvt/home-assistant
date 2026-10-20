@@ -11,3 +11,8 @@ __pycache__/
 .esphome/
 m5stack/*/secrets.yaml
 kitchen-timer/secrets.yaml
+
+# Dashboards: the HA token, and the dashboard configs each sync.py saves
+# before it pushes.
+dashboards/.env
+dashboards/*/backups/
