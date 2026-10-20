@@ -51,7 +51,9 @@ into the raw configuration editor.
 The pills read entities from all over the house: MeteoSwiss (the forked
 integration, including its forecast summary sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
-Athom plugs, the ultimatesensor, calendars (birthdays, Swiss holidays, copebit
-vacations, ZAKU waste collection) and `update.*`. A renamed entity doesn't
+Athom plugs, the ultimatesensor, Meteoalarm, FlightRadar24, calendars (birthdays,
+Swiss holidays, copebit vacations, ZAKU waste collection) and `update.*`.
+"Home" is Altdorf (HA's home zone): the rain, frost, shades and fog pills read
+Altdorf's sensors. Schlieren and Zürich only appear as a comparison (föhn). A renamed entity doesn't
 break anything loudly: its pill just stops turning on. The Alerts page shows
 each pill's inputs, which is the quickest place to spot an `unavailable`.
