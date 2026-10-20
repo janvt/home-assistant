@@ -249,7 +249,8 @@ def rivers_section() -> dict[str, Any]:
             cards.append({"type": "markdown", "content":
                 "<small>Flood danger level " + danger_level(r) +
                 " · level 2 from " + str(r["danger"][0]) + " m³/s · yearly mean " + str(r["mean"]) + " m³/s</small>"})
-        cards.append(dict(hist([river_entity(r, "discharge")], f"{r['title']} discharge (7 days)", 168),
+        main = r["conditions"][0]  # discharge, or level for a lake
+        cards.append(dict(hist([river_entity(r, main)], f"{r['title']} {main} (7 days)", 168),
                           grid_options={"columns": 12}))
     return {"type": "grid", "column_span": 4, "cards": cards}
 

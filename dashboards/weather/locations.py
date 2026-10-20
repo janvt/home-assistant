@@ -49,5 +49,9 @@ IMIS = {
 RIVERS = [
     dict(title="Reuss · Seedorf", station=2056, slug="reuss_seedorf", conditions=["discharge", "level", "temperature"],
          danger=[280, 450, 570, 690], mean=43),
+    dict(title="Schächen · Bürglen", station=2491, slug="schachen_burglen", conditions=["discharge", "level"]),
+    dict(title="Vierwaldstättersee · Brunnen", station=2025, slug="vierwaldstattersee_brunnen", conditions=["level"]),
     dict(title="Reuss · Andermatt", station=2087, slug="reuss_andermatt", conditions=["discharge", "level"]),
+    dict(title="Rhône · Gletsch", station=2268, slug="rhone_gletsch", conditions=["discharge", "level"]),
+    dict(title="Rein da Sumvitg · Sumvitg", station=2430, slug="rein_da_sumvitg_sumvitg", conditions=["discharge", "level"]),
 ]

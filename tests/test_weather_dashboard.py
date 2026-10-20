@@ -102,3 +102,16 @@ def test_templates_parse() -> None:
 def test_build_is_plain_json() -> None:
     """HA stores the config as JSON: a stray tuple or set would not survive."""
     assert json.loads(json.dumps(CONFIG)) == CONFIG
+
+
+def test_rivers_are_well_formed() -> None:
+    """The weather sync renames river sensors by unique id <station>_<condition>,
+    so a condition HA doesn't know never gets a sensor, and a slug used twice
+    would rename two stations onto one entity id. Danger thresholds must rise
+    or the computed flood level is wrong."""
+    slugs = [r["slug"] for r in build.RIVERS]
+    assert len(slugs) == len(set(slugs))
+    for r in build.RIVERS:
+        assert r["conditions"] and set(r["conditions"]) <= {"discharge", "level", "temperature"}, r["title"]
+        if r.get("danger"):
+            assert r["danger"] == sorted(r["danger"]) and "discharge" in r["conditions"], r["title"]
