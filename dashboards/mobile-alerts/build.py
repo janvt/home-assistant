@@ -22,8 +22,6 @@ HERE = Path(__file__).resolve().parent
 _pills = runpy.run_path(str(HERE / "pills.py"))
 ALERTS: list[dict[str, Any]] = _pills["ALERTS"]
 GROUPS: list[str] = _pills["GROUPS"]
-UPDATES: str = _pills["UPDATES"]
-LOWBAT_LIST: str = _pills["LOWBAT_LIST"]
 
 DASHBOARD = "dashboard-mobile"
 SUBVIEW = "weather-alerts"
@@ -33,7 +31,7 @@ PLACES = 6
 NAV = {"action": "navigate", "navigation_path": f"/{DASHBOARD}/{SUBVIEW}"}
 GROUP_ICONS = {
     "Safety": "mdi:shield-home-outline", "Kitchen": "mdi:fridge-outline",
-    "Forecast": "mdi:crystal-ball", "Weather now": "mdi:weather-partly-cloudy",
+    "Travel": "mdi:train", "Forecast": "mdi:crystal-ball", "Weather now": "mdi:weather-partly-cloudy",
     "Mountains": "mdi:image-filter-hdr", "Home": "mdi:home-outline",
     "Calendar": "mdi:calendar-star", "Maintenance": "mdi:wrench-outline",
 }
@@ -129,11 +127,8 @@ def subview() -> dict[str, Any]:
                                       "show_icon": False, "color": p["color"]}]})
             cards.append({"type": "markdown", "content": f"<small>{p['rule']}</small>"})
             cards += [_tile(e, n) for e, n in p["data"]]
-            if p["key"] == "updates_waiting":
-                cards.append({"type": "markdown", "content":
-                              "{{ " + UPDATES + " | map(attribute='name') | join(', ') or 'Everything is up to date.' }}"})
-            if p["key"] == "low_batteries":
-                cards.append({"type": "markdown", "content": LOWBAT_LIST})
+            if p.get("summary"):
+                cards.append({"type": "markdown", "content": p["summary"]})
             if p["hist"]:
                 cards.append({"type": "history-graph", "hours_to_show": 48,
                               "entities": [{"entity": e} for e in p["hist"]]})

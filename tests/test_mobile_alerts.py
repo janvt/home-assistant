@@ -97,10 +97,11 @@ def test_templates_compile() -> None:
     for p in build.ALERTS:
         templates[f"{p['key']} state"] = p["tmpl"]
         templates[f"{p['key']} detail"] = p["secondary"]
+        if p.get("summary"):
+            templates[f"{p['key']} summary"] = p["summary"]
     for i, place in enumerate(build.chips()[:-1]):
         templates[f"row place {i} icon"] = place["chip"]["icon"]
         templates[f"row place {i} colour"] = place["chip"]["icon_color"]
-    templates["low battery list"] = build.LOWBAT_LIST
     for label, template in templates.items():
         try:
             env.parse(template)

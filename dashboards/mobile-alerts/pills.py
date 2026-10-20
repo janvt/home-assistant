@@ -4,7 +4,8 @@ Each pill is a UI template helper `binary_sensor.pill_<key>` whose state is
 `tmpl`. The dashboard's alert row shows the icons of the active pills in this
 order, so the first entries win when more are active than the row has places.
 
-`secondary`, `rule` and `data` only feed the Alerts sub-page. Thresholds live
+`secondary`, `rule`, `data`, `hist` and the optional `summary` (a line that
+always shows in the pill's section, on or off) only feed the Alerts sub-page. Thresholds live
 in `tmpl`; change them here and run `sync.py`, not in the HA UI, or the next
 sync puts them back.
 """
@@ -27,6 +28,13 @@ WASTE="calendar.waste_collection_schedule_zaku_entsorgung"
 WASTE_DAY="(state_attr('"+WASTE+"','start_time') or '')[:10]"
 METEOALARM="binary_sensor.meteoalarm"
 FLIGHTS="(state_attr('sensor.flightradar24_current_in_area','flights') or []) | selectattr('distance','defined') | selectattr('distance','lt',3) | sort(attribute='distance') | list"
+TRAIN="sensor.altdorf_zurich"
+def hhmm(e): return "(states('"+e+"')|as_datetime|as_local).strftime('%H:%M') if states('"+e+"') not in ['unknown','unavailable']"
+NEXT_TRAINS=("{{ "+hhmm(TRAIN+"_departure")+" else '–' }} ({{ states('"+TRAIN+"_line') }}, platform {{ states('"+TRAIN+"_platform') }}"
+             "{{ ', +' ~ states('"+TRAIN+"_delay') ~ ' min' if states('"+TRAIN+"_delay')|int(0) > 0 }})"
+             " · then {{ "+hhmm(TRAIN+"_departure_1")+" else '–' }} and {{ "+hhmm(TRAIN+"_departure_2")+" else '–' }}"
+             " · {{ (states('"+TRAIN+"_trip_duration')|float(0) * 60)|round(0)|int }} min to Zürich"
+             "{{ ', ' ~ states('"+TRAIN+"_transfers') ~ ' change(s)' if states('"+TRAIN+"_transfers')|int(0) > 0 }}")
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -90,6 +98,14 @@ ALERTS=[
    data=[("sensor.ultimatesensor_scd41_co2","CO₂"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
    hist=["sensor.ultimatesensor_scd41_co2"]),
  # --- forecast
+ dict(key="train_delayed",group="Travel",name="Train delayed",icon="mdi:train-variant",color="deep-orange",
+   tmpl="{{ states('"+TRAIN+"_delay')|int(0) >= 5 }}",
+   secondary=NEXT_TRAINS,
+   summary="Next trains to Zürich: "+NEXT_TRAINS,
+   rule="On when the next train from Altdorf to Zürich is running at least 5 minutes late.",
+   data=[(TRAIN+"_departure","Next departure"),(TRAIN+"_delay","Delay"),(TRAIN+"_line","Line"),(TRAIN+"_platform","Platform"),
+         (TRAIN+"_departure_1","Then"),(TRAIN+"_departure_2","And then"),(TRAIN+"_trip_duration","Trip time"),(TRAIN+"_transfers","Changes")],
+   hist=[TRAIN+"_delay"]),
  dict(key="rain_next_hour",group="Forecast",name="Rain next hour",icon="mdi:umbrella",color="blue",
    tmpl="{{ "+f("sensor.altdorf_ur_chance_of_rain_next_hour",0)+" >= 60 and "+f("sensor.altdorf_ur_precipitation_next_hour",0)+" >= 0.3 }}",
    secondary="{{ states('sensor.altdorf_ur_chance_of_rain_next_hour')|round(0) }} % chance, {{ states('sensor.altdorf_ur_precipitation_next_hour') }} mm in Altdorf",
@@ -190,13 +206,15 @@ ALERTS=[
  dict(key="low_batteries",group="Maintenance",name="Low batteries",icon="mdi:battery-alert-variant-outline",color="orange",
    tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
    secondary=LOWBAT_LIST,
+   summary=LOWBAT_LIST,
    rule="On when any battery (phones excluded) is below 20 %, or a device reports its battery as critical.",
    data=[("sensor.aqara_fridge_temp_battery","Fridge thermometer"),("sensor.lumi_lumi_vibration_aq1_battery","Vibration sensor"),
          ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.nuki_schmatzknauf_battery_2","Nuki lock")],hist=[]),
  dict(key="updates_waiting",group="Maintenance",name="Updates waiting",icon="mdi:package-up",color="grey",
    tmpl="{{ "+UPDATES+" | count > 0 }}",
    secondary="{{ "+UPDATES+" | count }} available: {{ "+UPDATES+" | map(attribute='name') | join(', ') }}",
+   summary="{{ "+UPDATES+" | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
    rule="On when any update entity has an update available.",
    data=[],hist=[]),
 ]
-GROUPS=["Safety","Kitchen","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Forecast","Weather now","Mountains","Home","Calendar","Maintenance"]
