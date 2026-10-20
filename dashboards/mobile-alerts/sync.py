@@ -3,8 +3,7 @@
     python sync.py            show what would change, change nothing
     python sync.py --apply    create or update helpers, then save the dashboard
 
-Reads HASS_HOST, WEBSOCKET_PROTOCOL and HASS_TOKEN from `.env` next to this
-file (copy `.env.example`), the same three settings the Stream Decks use.
+Connection settings come from `dashboards/.env` (see `ha_client.py`).
 
 Helpers are UI template helpers, so they are config entries: a missing pill is
 created through the template config flow, an existing one is updated through
@@ -14,68 +13,23 @@ config HA had is written to `backups/` (git-ignored).
 from __future__ import annotations
 
 import argparse
-import json
 import sys
-import time
-import urllib.request
 from pathlib import Path
 from typing import Any
 
-from websockets.sync.client import connect
-
 import build
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ha_client import HA, load_env, save_dashboard  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 COUNT_TEMPLATE = ("{{ states.binary_sensor | selectattr('entity_id','match','binary_sensor\\\\.pill_')"
                   " | selectattr('state','eq','on') | list | count }}")
 
 
-def load_env(path: Path) -> dict[str, str]:
-    if not path.exists():
-        sys.exit(f"{path} is missing: copy .env.example and fill in the token")
-    env = {}
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            key, value = line.split("=", 1)
-            env[key.strip()] = value.strip()
-    return env
-
-
 def helper_title(key: str) -> str:
     """A title HA slugifies back to `pill_<key>`, so the entity id is predictable."""
     return "Pill " + key.replace("_", " ")
-
-
-class HA:
-    def __init__(self, env: dict[str, str]) -> None:
-        ws = env.get("WEBSOCKET_PROTOCOL", "ws")
-        host = env["HASS_HOST"]
-        self.base = f"{'https' if ws == 'wss' else 'http'}://{host}"
-        self.headers = {"Authorization": f"Bearer {env['HASS_TOKEN']}", "Content-Type": "application/json"}
-        self.ws = connect(f"{ws}://{host}/api/websocket", max_size=None)
-        self.ws.recv()
-        self.ws.send(json.dumps({"type": "auth", "access_token": env["HASS_TOKEN"]}))
-        if json.loads(self.ws.recv()).get("type") != "auth_ok":
-            sys.exit("Home Assistant rejected the token")
-        self._id = 0
-
-    def call(self, msg: dict[str, Any]) -> Any:
-        self._id += 1
-        self.ws.send(json.dumps({"id": self._id, **msg}))
-        while True:
-            reply = json.loads(self.ws.recv())
-            if reply.get("id") == self._id:
-                if not reply.get("success"):
-                    raise RuntimeError(f"{msg['type']}: {reply.get('error')}")
-                return reply.get("result")
-
-    def rest(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
-        req = urllib.request.Request(self.base + path, method=method, headers=self.headers,
-                                     data=json.dumps(body).encode() if body is not None else None)
-        with urllib.request.urlopen(req) as resp:
-            text = resp.read().decode()
-        return json.loads(text) if text else None
 
 
 def current_template(ha: HA, entry_id: str) -> tuple[str, str]:
@@ -109,7 +63,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="change Home Assistant (default: dry run)")
     args = parser.parse_args()
-    ha = HA(load_env(HERE / ".env"))
+    ha = HA(load_env())
 
     registry = {e["entity_id"]: e.get("config_entry_id") for e in ha.call({"type": "config/entity_registry/list"})}
     changes = []
@@ -135,11 +89,7 @@ def main() -> None:
     if new != old:
         changes.append(f"save {build.DASHBOARD}")
         if args.apply:
-            backups = HERE / "backups"
-            backups.mkdir(exist_ok=True)
-            (backups / f"{build.DASHBOARD}-{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(
-                json.dumps(old, indent=1, ensure_ascii=False))
-            ha.call({"type": "lovelace/config/save", "url_path": build.DASHBOARD, "config": new})
+            save_dashboard(ha, build.DASHBOARD, old, new, HERE / "backups")
 
     print("\n".join(changes) if changes else "everything already matches pills.py")
     if changes and not args.apply:

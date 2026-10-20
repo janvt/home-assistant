@@ -32,7 +32,7 @@ grouped by topic, every alert's rule and the live values it checks.
 1. Edit `pills.py`. Order matters: the first entries take the places in the
    row when many are active.
 2. Run the tests: `task -d streamdeck test` (or `pytest tests/test_mobile_alerts.py`).
-3. Copy `.env.example` to `.env`, fill in the token, then:
+3. Copy `dashboards/.env.example` to `dashboards/.env`, fill in the token, then:
 
 ```bash
 .venv-test/bin/python dashboards/mobile-alerts/sync.py
