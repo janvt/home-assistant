@@ -4,6 +4,9 @@ Each pill is a UI template helper `binary_sensor.pill_<key>` whose state is
 `tmpl`. The dashboard's alert row shows the icons of the active pills in this
 order, so the first entries win when more are active than the row has places.
 
+Every pill except those in CRITICAL can be dismissed on the Alerts page: it then
+stays hidden until it turns off and on again.
+
 `color_from` (optional) names one or more enum sensors whose highest
 yellow/orange/red state overrides `color` in the row and on the Alerts page.
 
@@ -133,6 +136,9 @@ MONTH_TEXT=("{{ state_attr('"+CLIM+"_month_vs_normal','days') }} days: {{ '%+.1f
 HIGH="state_attr('"+CLIM+"_high_vs_normal','high')"
 LOW="state_attr('"+CLIM+"_low_vs_normal','low')"
 RECORD="sensor.altdorf_record_high_for_the_date"
+# Pills you clear by acting (closing a door, checking the fridge) rather than
+# by acknowledging them. These can't be dismissed on the Alerts page.
+CRITICAL={"smoke_or_co","front_door_open","unlocked_nobody_home","fridge_open","fridge_not_cooling","heating_while_away"}
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",

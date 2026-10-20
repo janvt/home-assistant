@@ -176,3 +176,41 @@ def test_every_pill_has_a_card_on_the_alerts_page() -> None:
     active_cards = {c.get("entity") for c in page["sections"][0]["cards"]}
     for p in build.ALERTS:
         assert build.entity(p) in active_cards, p["key"]
+
+
+# ── dismissing ──────────────────────────────────────────────────────────────
+def test_critical_pills_exist() -> None:
+    """A typo in CRITICAL would quietly make a safety alert dismissable."""
+    assert build.CRITICAL <= {p["key"] for p in build.ALERTS}
+    assert {"smoke_or_co", "front_door_open"} <= build.CRITICAL
+
+
+def test_dismiss_helper_ids_match_their_titles() -> None:
+    """sync.py creates each helper from a title; HA slugifies it into the id
+    the row and the count look up. A mismatch means the pill can never be
+    dismissed."""
+    for p in build.ALERTS:
+        if build.dismissable(p):
+            title = f"Pill {p['key'].replace('_', ' ')} dismissed"
+            slug = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
+            assert f"input_datetime.{slug}" == build.dismissed_entity(p)
+
+
+def test_critical_cards_have_no_dismiss_action() -> None:
+    cards = {c["entity"]: c for c in build.subview()["sections"][0]["cards"] if c.get("entity")}
+    for p in build.ALERTS:
+        card = cards[build.entity(p)]
+        assert ("hold_action" in card) == build.dismissable(p), p["key"]
+
+
+def test_dismiss_templates_parse() -> None:
+    jinja2 = pytest.importorskip("jinja2")
+    env = jinja2.Environment()
+    templates = [build.COUNT_TEMPLATE, build.SCRIPT["sequence"][1]["value_template"],
+                 build.SCRIPT["sequence"][2]["data"]["timestamp"],
+                 *build.SCRIPT["sequence"][0]["variables"].values()]
+    for card in build.subview()["sections"][0]["cards"]:
+        if card.get("hold_action"):
+            templates += [card["secondary"], card["icon_color"]]
+    for template in templates:
+        env.parse(template)

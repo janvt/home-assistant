@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 _pills = runpy.run_path(str(HERE / "pills.py"))
 ALERTS: list[dict[str, Any]] = _pills["ALERTS"]
 GROUPS: list[str] = _pills["GROUPS"]
+CRITICAL: set[str] = _pills["CRITICAL"]
 NUMBERS: list[dict[str, Any]] = _pills.get("NUMBERS", [])
 STATISTICS: list[dict[str, Any]] = _pills.get("STATISTICS", [])
 
@@ -57,10 +58,50 @@ def _cond(states: list[str]) -> list[dict[str, Any]]:
     return [{"condition": "state", "entity": COUNT, "state": states}]
 
 
+def dismissed_entity(pill: dict[str, Any]) -> str:
+    return f"input_datetime.pill_{pill['key']}_dismissed"
+
+
+def dismissable(pill: dict[str, Any]) -> bool:
+    return pill["key"] not in CRITICAL
+
+
+# A pill is shown when it's on and turned on after its last dismissal. Critical
+# pills have no dismiss helper, so state_attr() gives 0 and they always show.
+# Dismissed pills come back by themselves the next time they turn on.
+SHOWN = ("is_state(b, 'on') and state_attr('input_datetime.' ~ b[14:] ~ '_dismissed', 'timestamp')|float(0)"
+         " < as_timestamp(states[b].last_changed)")
+COUNT_TEMPLATE = ("{% set ns = namespace(n=0) %}{% for s in states.binary_sensor"
+                  " | selectattr('entity_id','match','binary_sensor\\\\.pill_') %}{% set b = s.entity_id %}"
+                  "{% if " + SHOWN + " %}{% set ns.n = ns.n + 1 %}{% endif %}{% endfor %}{{ ns.n }}")
+TOGGLE_SCRIPT = "pill_toggle_dismiss"
+SCRIPT = {
+    "alias": "Pill: dismiss or bring back",
+    "description": "Hides an alert pill until it turns off and on again, or brings a dismissed one back. "
+                   "Managed by dashboards/mobile-alerts/sync.py.",
+    "mode": "queued",
+    "fields": {"key": {"name": "Pill", "description": "The pill's key, e.g. fohn_altdorf", "required": True,
+                       "selector": {"text": {}}}},
+    "sequence": [
+        {"variables": {"b": "binary_sensor.pill_{{ key }}", "d": "input_datetime.pill_{{ key }}_dismissed"}},
+        {"condition": "template", "value_template": "{{ states(d) not in ['unknown', 'unavailable'] }}"},
+        {"action": "input_datetime.set_datetime", "target": {"entity_id": "{{ d }}"},
+         "data": {"timestamp": "{{ 0 if state_attr(d, 'timestamp')|float(0) >= as_timestamp(states[b].last_changed)"
+                               " else now().timestamp() }}"}},
+    ],
+}
+
+
+def is_dismissed(pill: dict[str, Any]) -> str:
+    """Template test: the pill is on but dismissed."""
+    return ("state_attr('" + dismissed_entity(pill) + "','timestamp')|float(0) >= "
+            "as_timestamp(states." + entity(pill) + ".last_changed)")
+
+
 _ACTIVE = (
     "{% set ns = namespace(a=[]) %}{% for k in "
     + json.dumps([p["key"] for p in ALERTS])
-    + " %}{% if is_state('binary_sensor.pill_' ~ k, 'on') %}"
+    + " %}{% set b = 'binary_sensor.pill_' ~ k %}{% if " + SHOWN + " %}"
     "{% set ns.a = ns.a + [k] %}{% endif %}{% endfor %}"
 )
 
@@ -127,17 +168,26 @@ def _tile(entity_id: str, name: str) -> dict[str, Any]:
 def subview() -> dict[str, Any]:
     active = [
         {"type": "heading", "heading": "Active now", "heading_style": "title", "icon": "mdi:bell-ring-outline"},
+        {"type": "markdown", "content": "<small>Hold a card to dismiss it until it clears and comes back; hold "
+                                        "again to bring it back. Safety alerts can't be dismissed.</small>"},
         {"type": "markdown", "content": "All quiet: nothing needs your attention right now.",
          "visibility": [{"condition": "state", "entity": COUNT, "state": "0"}]},
     ]
     for p in ALERTS:
-        active.append({
+        card = {
             "type": "custom:mushroom-template-card", "entity": entity(p),
             "primary": p["name"], "secondary": p["secondary"], "icon": p["icon"], "icon_color": color(p),
             "multiline_secondary": True, "fill_container": True, "grid_options": {"columns": 12},
             "tap_action": {"action": "more-info"},
             "visibility": [{"condition": "state", "entity": entity(p), "state": "on"}],
-        })
+        }
+        if dismissable(p):
+            card["secondary"] = ("{% if " + is_dismissed(p) + " %}Dismissed · hold to bring back{% else %}"
+                                 + p["secondary"] + "{% endif %}")
+            card["icon_color"] = "{% if " + is_dismissed(p) + " %}disabled{% else %}" + color(p) + "{% endif %}"
+            card["hold_action"] = {"action": "perform-action", "perform_action": f"script.{TOGGLE_SCRIPT}",
+                                   "data": {"key": p["key"]}}
+        active.append(card)
     sections = [{"type": "grid", "column_span": 2, "cards": active}]
     for group in GROUPS:
         cards = [{"type": "heading", "heading": group, "heading_style": "title", "icon": GROUP_ICONS[group]}]

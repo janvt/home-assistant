@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import urllib.error
 from pathlib import Path
 from typing import Any
 
@@ -23,8 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ha_client import HA, load_env, save_dashboard  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-COUNT_TEMPLATE = ("{{ states.binary_sensor | selectattr('entity_id','match','binary_sensor\\\\.pill_')"
-                  " | selectattr('state','eq','on') | list | count }}")
+# The count helper counts shown pills: on, and not dismissed (see build.SHOWN).
 
 
 def helper_title(key: str) -> str:
@@ -72,7 +72,7 @@ def main() -> None:
                            pill["tmpl"], {}, args.apply)
         if what != "same":
             changes.append(f"{what} {build.entity(pill)}")
-    what = sync_helper(ha, registry.get(build.COUNT), "sensor", "Weather alerts active", COUNT_TEMPLATE,
+    what = sync_helper(ha, registry.get(build.COUNT), "sensor", "Weather alerts active", build.COUNT_TEMPLATE,
                        {"state_class": "measurement"}, args.apply)
     if what != "same":
         changes.append(f"{what} {build.COUNT}")
@@ -84,6 +84,27 @@ def main() -> None:
             if args.apply:
                 fields = {k: v for k, v in number.items() if k != "entity"}
                 ha.call({"type": "input_number/create", **fields})
+
+    for pill in build.ALERTS:
+        d = build.dismissed_entity(pill)
+        if build.dismissable(pill) and d not in have:
+            changes.append(f"create {d}")
+            if args.apply:
+                ha.call({"type": "input_datetime/create", "name": f"Pill {pill['key'].replace('_', ' ')} dismissed",
+                         "has_date": True, "has_time": True, "icon": "mdi:bell-off-outline"})
+                # A new helper starts at today 00:00, which would count a pill that
+                # has been on since before midnight as dismissed. Start at "never".
+                ha.call({"type": "call_service", "domain": "input_datetime", "service": "set_datetime",
+                         "target": {"entity_id": d}, "service_data": {"timestamp": 0}})
+
+    try:
+        current = ha.rest("GET", f"/api/config/script/config/{build.TOGGLE_SCRIPT}")
+    except urllib.error.HTTPError:
+        current = None
+    if current != build.SCRIPT:
+        changes.append(f"{'update' if current else 'create'} script.{build.TOGGLE_SCRIPT}")
+        if args.apply:
+            ha.rest("POST", f"/api/config/script/config/{build.TOGGLE_SCRIPT}", build.SCRIPT)
 
     for stat in build.STATISTICS:
         if stat["entity"] not in have:

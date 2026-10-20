@@ -25,6 +25,14 @@ grouped by topic, every alert's rule and the live values it checks.
   Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
   picks up new pills by itself.
+- **Dismissing:** hold a card on the Alerts page to dismiss it; hold again to
+  bring it back. A dismissed pill leaves the row and the count until it turns
+  off and on again, then it's back by itself. Each pill has an
+  `input_datetime.pill_<key>_dismissed` holding when you dismissed it, and
+  `script.pill_toggle_dismiss` does the toggling. The safety pills in
+  `CRITICAL` (smoke/CO, door, lock, fridge, heating while away) can't be
+  dismissed. An HA restart brings dismissed pills back, because template
+  sensors forget when they last turned on.
 - **The row never wraps.** Mushroom wraps chips onto a second line and card-mod
   isn't installed, so the row has a fixed number of places (`PLACES = 6`).
   Place *i* shows the *i*-th active pill in `pills.py` order. With more pills on
