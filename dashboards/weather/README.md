@@ -18,7 +18,8 @@ plus SLF, Bergfex and the Andermatt webcams.
   avalanche level and the snow depths. Then 48-hour comparison graphs, and a
   section per mountain or pass with its freezing level.
 - **One page per location:** MeteoSwiss warnings in full, hourly and daily
-  forecast, wind gauges, sun and rain, 72-hour trends. Andermatt adds the
+  forecast, wind gauges, sun and rain, 72-hour trends. Altdorf adds Blitzortung
+  lightning. Andermatt adds the
   webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
   their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
 - **One page per mountain:** the forecast for the summit's altitude, freezing

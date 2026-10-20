@@ -68,6 +68,9 @@ def warn_lines(entities):
             "{{ ' · ' if ns.seen|count > 1 }}{{ w.event }} ({{ w.level }}, {{ w.region }}) "
             "{{ ('until ' ~ off.strftime('%a %H:%M')) if on <= now() else ('from ' ~ on.strftime('%a %H:%M') ~ ' to ' ~ off.strftime('%a %H:%M')) }}"
             "{% endif %}{% endfor %}{% endfor %}")
+LIGHTNING="sensor.altdorf_lightning"
+COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
+         "{{ ['N','NE','E','SE','S','SW','W','NW'][((az + 22.5) // 45)|int % 8] if az >= 0 else '' }}")
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -120,6 +123,12 @@ ALERTS=[
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
    data=[("sensor.slf_imis_sca1_spjp_wind_gust","Gusts Gross Windgällen"),("sensor.slf_imis_urs1_prsf_wind_gust","Gusts Gross Schijen")],
    hist=["sensor.slf_imis_sca1_spjp_wind_gust","sensor.slf_imis_urs1_prsf_wind_gust"]),
+ dict(key="lightning_nearby",group="Weather now",name="Lightning nearby",icon="mdi:weather-lightning",color="yellow",
+   tmpl="{{ states('"+LIGHTNING+"_counter')|int(0) > 0 and states('"+LIGHTNING+"_distance')|float(999) <= 20 and now() - states."+LIGHTNING+"_counter.last_changed < timedelta(minutes=30) }}",
+   secondary="Last strike {{ states('"+LIGHTNING+"_distance')|float(0)|round(0)|int }} km "+COMPASS+" of Altdorf, {{ ((now() - states."+LIGHTNING+"_counter.last_changed).total_seconds() // 60)|int }} min ago · {{ states('"+LIGHTNING+"_counter') }} strikes within 100 km",
+   rule="On when Blitzortung has seen a strike within 20 km of Altdorf in the last 30 minutes.",
+   data=[(LIGHTNING+"_distance","Last strike distance"),(LIGHTNING+"_azimuth","Direction"),(LIGHTNING+"_counter","Strikes (100 km, 2 h)")],
+   hist=[LIGHTNING+"_counter"]),
  dict(key="weather_warning",group="Weather now",name="Weather warning",icon="mdi:alert-octagram",color="amber",color_from=WARN_HOME,
    tmpl="{{ states('"+WARN_HOME+"') in ['yellow','orange','red'] }}",
    secondary=warn_lines([WARN_HOME]),

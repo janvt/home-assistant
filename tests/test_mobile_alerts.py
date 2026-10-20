@@ -111,6 +111,21 @@ def test_templates_compile() -> None:
             pytest.fail(f"{label}: {err}")
 
 
+DOMAINS = {"sensor", "binary_sensor", "lock", "cover", "calendar", "input_boolean", "person", "climate",
+           "media_player", "camera", "light", "update", "sun", "weather", "todo", "image"}
+
+
+def test_state_objects_name_a_domain() -> None:
+    """`states.sensor.x.last_changed` works; `states.x.last_changed` (domain
+    left out) is None, and the template quietly renders the pill off for ever.
+    This happened to the lightning pill."""
+    pattern = re.compile(r"states\.([a-z_]+)\.([a-z0-9_]+)")
+    for p in build.ALERTS:
+        for field in ("tmpl", "secondary", "summary"):
+            for domain, _ in pattern.findall(p.get(field) or ""):
+                assert domain in DOMAINS, f"{p['key']} {field}: states.{domain}.… has no domain"
+
+
 # ── the row ─────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("active", range(0, len(build.ALERTS) + 3))
 def test_row_never_grows_past_one_line(active: int) -> None:

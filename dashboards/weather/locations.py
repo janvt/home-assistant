@@ -11,7 +11,7 @@ creates the ones a station measures, and wind-only stations have no snow.
 LOCATIONS = [
     dict(title="Altdorf", path="altdorf", icon="mdi:town-hall", weather="weather.altdorf_ur",
          station="altdorf", rain="sensor.bristen_10_minute_rain", stations_text="Altdorf · rain Bristen",
-         slf="altdorf_9r5z"),
+         slf="altdorf_9r5z", lightning="altdorf"),
     dict(title="Andermatt", path="andermatt", icon="mdi:summit", weather="weather.andermatt",
          station="andermatt", rain="sensor.goscheneralp_10_minute_rain",
          stations_text="Andermatt · rain Göscheneralp",

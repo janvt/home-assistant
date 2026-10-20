@@ -214,6 +214,18 @@ def imis_section(sfx: str) -> dict[str, Any]:
     return {"type": "grid", "cards": cards}
 
 
+def lightning_section(name: str) -> dict[str, Any]:
+    """Blitzortung: strikes within its radius (100 km) over its time window (2 h)."""
+    def e(x: str) -> str:
+        return f"sensor.{name}_lightning_{x}"
+    return {"type": "grid", "cards": [
+        {"type": "heading", "heading": "Lightning (Blitzortung)", "icon": "mdi:weather-lightning"},
+        tile(e("counter"), "Strikes (100 km, 2 h)", icon="mdi:flash"),
+        tile(e("distance"), "Last strike", icon="mdi:map-marker-distance"),
+        tile(e("azimuth"), "Direction", icon="mdi:compass-outline"),
+        hist([e("counter")], "Strikes (48 h)")]}
+
+
 def forecast_cards(w: str) -> list[dict[str, Any]]:
     return [{"type": "heading", "heading": "Hourly forecast", "icon": "mdi:clock-outline"},
             {"type": "weather-forecast", "entity": w, "forecast_type": "hourly", "show_current": False,
@@ -240,6 +252,7 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
         *([slf_section(loc["slf"])] if loc.get("slf") else []),
         *ski_sections(loc),
         *[imis_section(x) for x in loc.get("imis", [])],
+        *([lightning_section(loc["lightning"])] if loc.get("lightning") else []),
         {"type": "grid", "cards": [
             *forecast_cards(w),
             {"type": "heading", "heading": "Daily forecast", "icon": "mdi:calendar-week"},
