@@ -243,7 +243,7 @@ def rivers_section() -> dict[str, Any]:
     for r in RIVERS:
         cards.append({"type": "heading", "heading": r["title"], "heading_style": "subtitle", "icon": "mdi:waves-arrow-up"})
         names = {"discharge": "Discharge", "level": "Water level", "temperature": "Water temperature"}
-        cards += [tile(river_entity(r, c), names[c], state_content=["state", "max-24h"]) if c == "discharge"
+        cards += [tile(river_entity(r, c), names[c], state_content=["state", "max_24h"]) if c == "discharge"
                   else tile(river_entity(r, c), names[c]) for c in r["conditions"]]
         if r.get("danger"):
             cards.append({"type": "markdown", "content":

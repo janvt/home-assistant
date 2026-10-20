@@ -165,7 +165,7 @@ ALERTS=[
  # --- forecast
  dict(key="reuss_high",group="Home",name="Reuss too high for the dog walk",icon="mdi:dog-side",color="blue",
    tmpl="{{ states('"+REUSS+"_discharge') not in ['unknown','unavailable'] and states('"+REUSS+"_discharge')|float(0) >= states('"+REUSS_LIMIT+"')|float(9999) }}",
-   secondary="{{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s at Seedorf (your limit {{ states('"+REUSS_LIMIT+"')|int }}) · 24 h max {{ state_attr('"+REUSS+"_discharge','max-24h')|float(0)|round(0)|int }} · level {{ states('"+REUSS+"_level') }} m",
+   secondary="{{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s at Seedorf (your limit {{ states('"+REUSS_LIMIT+"')|int }}) · 24 h max {{ state_attr('"+REUSS+"_discharge','max_24h')|float(0)|round(0)|int }} · level {{ states('"+REUSS+"_level') }} m",
    summary="{% set q = states('"+REUSS+"_discharge') %}{{ ('Now ' ~ (q|float(0)|round(0)|int) ~ ' m³/s, your limit ' ~ states('"+REUSS_LIMIT+"')|int ~ ' m³/s. FOEN flood danger level 2 starts at 280 m³/s; the yearly mean is 43.') if q not in ['unknown','unavailable'] else 'No reading from the Seedorf station yet.' }}",
    rule="On when the Reuss at Seedorf carries at least your dog walk limit (change it below; it starts at 150 m³/s).",
    data=[(REUSS+"_discharge","Discharge"),(REUSS_LIMIT,"Your limit"),(REUSS+"_level","Water level"),(REUSS+"_temperature","Water temperature")],
