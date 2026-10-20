@@ -19,8 +19,10 @@ plus SLF, Bergfex and the Andermatt webcams.
   section per mountain or pass with its freezing level, and the FOEN river
   stations with a rising/falling trend against their 24-hour mean.
 - **One page per location:** MeteoSwiss warnings in full, hourly and daily
-  forecast, wind gauges, sun and rain, 72-hour trends. Altdorf adds Blitzortung
-  lightning. Altdorf and Andermatt show Luzern's pollen, Schlieren Zürich's.
+  forecast, wind gauges, sun and rain, 72-hour trends, and today and this month
+  against the 1991–2020 normals with the records for the date. Altdorf adds
+  Blitzortung lightning and the Föhn index and outlook; Altdorf and Andermatt
+  show their freezing level. Altdorf and Andermatt show Luzern's pollen, Schlieren Zürich's.
   Andermatt adds the
   webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
   their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.

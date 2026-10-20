@@ -115,6 +115,24 @@ GUEST_TABLE=("| Guest | Status | CPU | RAM |\n|:--|:--|--:|--:|\n{% for g in "+G
 STORAGE_TABLE=("| Storage | Used | Of | |\n|:--|--:|--:|--:|\n{% for s in "+STORAGES+" | sort(attribute='entity_id') %}{% set b = s.entity_id[:-6] %}"
                "| {{ s.name | regex_replace('^5\\\\. Storage: ','') | regex_replace(' Usage$','') }} | {{ states(b ~ '_used')|float(0)|round(0)|int }} GB "
                "| {{ states(b ~ '_total')|float(0)|round(0)|int }} GB | {{ s.state|float(0)|round(0)|int }} % |\n{% endfor %}")
+FOHN_DIFF="sensor.altdorf_ur_fohn_pressure_difference"
+FOHN_OUTLOOK="sensor.altdorf_ur_fohn_outlook"
+CLIM="sensor.altdorf"
+MONTH_DAYS="state_attr('"+CLIM+"_month_vs_normal','days')|int(0) >= 15"
+def month_pill(key,name,icon,color,cond,secondary,rule):
+    return dict(key=key,group="Climate",name=name,icon=icon,color=color,tmpl="{{ "+MONTH_DAYS+" and "+cond+" }}",
+                secondary=secondary,rule=rule+" Counted from the 15th of the month, so one odd day at the start can't trigger it.",
+                data=[(CLIM+"_month_vs_normal","Temperature vs normal"),(CLIM+"_month_s_rain_vs_normal","Rain vs normal"),
+                      (CLIM+"_month_s_sunshine_vs_normal","Sunshine vs normal")],hist=[])
+RAIN_PCT="states('"+CLIM+"_month_s_rain_vs_normal')|float(100)"
+SUN_PCT="states('"+CLIM+"_month_s_sunshine_vs_normal')|float(100)"
+MONTH_T="states('"+CLIM+"_month_vs_normal')|float(0)"
+MONTH_TEXT=("{{ state_attr('"+CLIM+"_month_vs_normal','days') }} days: {{ '%+.1f'|format("+MONTH_T+") }} °C, "
+            "{{ "+RAIN_PCT+"|round(0)|int }} % of normal rain ({{ state_attr('"+CLIM+"_month_s_rain_vs_normal','rain') }} of {{ state_attr('"+CLIM+"_month_s_rain_vs_normal','normal_rain') }} mm), "
+            "{{ "+SUN_PCT+"|round(0)|int }} % of normal sunshine")
+HIGH="state_attr('"+CLIM+"_high_vs_normal','high')"
+LOW="state_attr('"+CLIM+"_low_vs_normal','low')"
+RECORD="sensor.altdorf_record_high_for_the_date"
 ALERTS=[
  # --- safety
  dict(key="smoke_or_co",group="Safety",name="Smoke or CO alarm",icon="mdi:smoke-detector-alert",color="red",
@@ -282,12 +300,17 @@ ALERTS=[
    data=[("sensor.slf_imis_gos3_zwja_new_snow_1d","New snow Gütsch"),("sensor.slf_imis_tuj2_mr82_new_snow_1d","New snow Culmatsch"),
          ("sensor.slf_imis_gos3_zwja_snow_height","Snow depth Gütsch"),("sensor.slf_imis_tuj2_mr82_snow_height","Snow depth Culmatsch")],
    hist=["sensor.slf_imis_gos3_zwja_snow_height","sensor.slf_imis_tuj2_mr82_snow_height"]),
- dict(key="fohn_altdorf",tmpl="{% set d = states('sensor.altdorf_wind_direction')|float(-1) %}\n{% set g = states('sensor.altdorf_wind_speed_max')|float(0) %}\n{% set w = states('sensor.altdorf_wind_speed')|float(0) %}\n{% set h = states('sensor.altdorf_humidity')|float(100) %}\n{% set dt = states('sensor.altdorf_temperature')|float(0) - states('sensor.zurich_fluntern_temperature')|float(99) %}\n{{ 110 <= d <= 220 and (w >= 15 or g >= 35) and h < 50 and dt >= 5 }}",group="Weather now",name="Föhn in Altdorf",icon="mdi:weather-windy",color="amber",
+ dict(key="fohn_altdorf",tmpl="{% set d = states('sensor.altdorf_wind_direction')|float(-1) %}\n{% set g = states('sensor.altdorf_wind_speed_max')|float(0) %}\n{% set w = states('sensor.altdorf_wind_speed')|float(0) %}\n{% set h = states('sensor.altdorf_humidity')|float(100) %}\n{% set dt = states('sensor.altdorf_temperature')|float(0) - states('sensor.zurich_fluntern_temperature')|float(99) %}\n{% set rule = 110 <= d <= 220 and (w >= 15 or g >= 35) and h < 50 and dt >= 5 %}{% set i = states('sensor.altdorf_fohn') %}{{ i == 'foehn' or (i in ['mixed','unknown','unavailable'] and rule) }}",group="Weather now",name="Föhn in Altdorf",icon="mdi:weather-windy",color="amber",
    secondary="Wind {{ "+f('sensor.altdorf_wind_speed')+"|round(0) }} km/h, gusts {{ "+f('sensor.altdorf_wind_speed_max')+"|round(0) }} km/h from {{ "+f('sensor.altdorf_wind_direction')+"|round(0) }}°, {{ "+f('sensor.altdorf_humidity')+"|round(0) }} % humidity, {{ ("+f('sensor.altdorf_temperature')+" - "+f('sensor.zurich_fluntern_temperature')+")|round(1) }} °C warmer than Zürich",
-   rule="On when Altdorf has wind from 110–220° (south to south-east), at least 15 km/h of wind or 35 km/h gusts, humidity under 50 %, and is at least 5 °C warmer than Zürich: warm, dry air coming down from the south.",
-   data=[("sensor.altdorf_wind_speed","Wind"),("sensor.altdorf_wind_speed_max","Gusts"),("sensor.altdorf_wind_direction","Direction"),("sensor.altdorf_humidity","Humidity"),
+   rule="On when MeteoSwiss's Föhn index for Altdorf says föhn. When it says 'mixed', or isn't available, Altdorf also needs wind from 110–220°, 15 km/h of wind or 35 km/h gusts, humidity under 50 %, and to be 5 °C warmer than Zürich.",
+   data=[("sensor.altdorf_fohn","MeteoSwiss Föhn index"),("sensor.altdorf_wind_speed","Wind"),("sensor.altdorf_wind_speed_max","Gusts"),("sensor.altdorf_wind_direction","Direction"),("sensor.altdorf_humidity","Humidity"),
          ("sensor.altdorf_temperature","Altdorf"),("sensor.zurich_fluntern_temperature","Zürich")],
    hist=["sensor.altdorf_temperature","sensor.zurich_fluntern_temperature"]),
+ dict(key="fohn_coming",group="Weather now",name="Föhn coming",icon="mdi:weather-windy-variant",color="amber",
+   tmpl="{{ states('"+FOHN_OUTLOOK+"') in ['south','strong_south'] and states('sensor.altdorf_fohn') != 'foehn' }}",
+   secondary="{{ 'Strong south föhn' if is_state('"+FOHN_OUTLOOK+"','strong_south') else 'South föhn' }} likely: {{ states('"+FOHN_DIFF+"') }} hPa more pressure in Lugano than Kloten",
+   rule="On when the pressure in Lugano is at least 4 hPa above Kloten's (8 for strong), which drives south föhn, while Altdorf has no föhn yet. It often comes hours before the wind.",
+   data=[(FOHN_DIFF,"Lugano − Kloten"),(FOHN_OUTLOOK,"Outlook"),("sensor.altdorf_fohn","Föhn index now")],hist=[FOHN_DIFF]),
  dict(key="gemsstock_open",tmpl="{{ states('sensor.andermatt_gemsstock_status') not in ['Closed','unknown','unavailable',''] }}",group="Mountains",name="Gemsstock open",icon="mdi:gondola",color="green",
    secondary="{{ states('sensor.andermatt_gemsstock_lifts_open_count') }} lifts, {{ states('sensor.andermatt_gemsstock_slopes_open_km') }} km of slopes · Sedrun: {{ states('sensor.andermatt_oberalp_sedrun_status') }}",
    rule="On when Bergfex reports Gemsstock as anything other than closed.",
@@ -438,6 +461,31 @@ ALERTS=[
    summary="{{ "+UPDATES+" | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
    rule="On when any update entity has an update available.",
    data=[],hist=[]),
+ dict(key="record_warm",group="Climate",name="Record warm",icon="mdi:thermometer-chevron-up",color="red",
+   tmpl="{{ "+HIGH+" is number and "+HIGH+" >= states('"+RECORD+"')|float(99) }}",
+   secondary="{{ "+HIGH+" }} °C in Altdorf today, record for the date {{ states('"+RECORD+"') }} °C ({{ state_attr('"+RECORD+"','year') }})",
+   rule="On when today's high in Altdorf reaches the record for the date (records since 1864).",
+   data=[(CLIM+"_high_vs_normal","High vs normal"),(RECORD,"Record high")],hist=[]),
+ dict(key="record_cold",group="Climate",name="Record cold",icon="mdi:thermometer-chevron-down",color="blue",
+   tmpl="{{ "+LOW+" is number and "+LOW+" <= state_attr('"+RECORD+"','record_low')|float(-99) }}",
+   secondary="{{ "+LOW+" }} °C in Altdorf, record low for the date {{ state_attr('"+RECORD+"','record_low') }} °C ({{ state_attr('"+RECORD+"','record_low_year') }})",
+   rule="On when today's low in Altdorf reaches the record low for the date.",
+   data=[(CLIM+"_low_vs_normal","Low vs normal"),(RECORD,"Record high (record low in details)")],hist=[]),
+ dict(key="unusually_warm",group="Climate",name="Unusually warm",icon="mdi:thermometer-plus",color="orange",
+   tmpl="{{ states('"+CLIM+"_high_vs_normal')|float(0) >= 6 }}",
+   secondary="{{ "+HIGH+" }} °C, {{ '%+.1f'|format(states('"+CLIM+"_high_vs_normal')|float(0)) }} °C against the normal high of {{ state_attr('"+CLIM+"_high_vs_normal','normal_high') }} °C",
+   rule="On when today's high in Altdorf is at least 6 °C above the 1991–2020 normal for the date.",
+   data=[(CLIM+"_high_vs_normal","High vs normal")],hist=[CLIM+"_high_vs_normal"]),
+ dict(key="unusually_cold",group="Climate",name="Unusually cold",icon="mdi:thermometer-minus",color="light-blue",
+   tmpl="{{ states('"+CLIM+"_high_vs_normal')|float(0) <= -6 }}",
+   secondary="{{ "+HIGH+" }} °C, {{ '%+.1f'|format(states('"+CLIM+"_high_vs_normal')|float(0)) }} °C against the normal high of {{ state_attr('"+CLIM+"_high_vs_normal','normal_high') }} °C",
+   rule="On when today's high in Altdorf is at least 6 °C below the 1991–2020 normal for the date.",
+   data=[(CLIM+"_high_vs_normal","High vs normal")],hist=[CLIM+"_high_vs_normal"]),
+ dict(key="warm_night",group="Climate",name="Warm night",icon="mdi:weather-night",color="deep-purple",
+   tmpl="{{ states('"+CLIM+"_low_vs_normal')|float(0) >= 6 }}",
+   secondary="Low of {{ "+LOW+" }} °C, {{ '%+.1f'|format(states('"+CLIM+"_low_vs_normal')|float(0)) }} °C against the normal low of {{ state_attr('"+CLIM+"_low_vs_normal','normal_low') }} °C",
+   rule="On when the night's low in Altdorf is at least 6 °C above normal (föhn nights often are).",
+   data=[(CLIM+"_low_vs_normal","Low vs normal")],hist=[CLIM+"_low_vs_normal"]),
  dict(key="dog_walk_good",group="Rivers",name="Good time for a dog walk",icon="mdi:dog",color="green",
    tmpl="{% set q = states('"+REUSS+"_discharge') %}{{ is_state('sun.sun','above_horizon') and q not in ['unknown','unavailable'] and q|float(0) < states('"+REUSS_LIMIT+"')|float(0) and states('sensor.altdorf_ur_chance_of_rain_next_hour')|float(100) < 40 and 'wind' not in (state_attr('sensor.altdorf_ur_weather_warning','types') or []) and not is_state('binary_sensor.pill_lightning_nearby','on') and states('"+RAIN_24H+"')|float(0) < 10 }}",
    secondary="Reuss {{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s (limit {{ states('"+REUSS_LIMIT+"')|int }}), {{ states('sensor.altdorf_ur_chance_of_rain_next_hour')|round(0)|int }} % chance of rain in the next hour, no wind warning",
@@ -461,5 +509,11 @@ ALERTS=[
    secondary="{% for p in "+PLAYING+" %}{{ p.attributes.media_title or 'Something' }}{{ ' – ' ~ p.attributes.media_artist if p.attributes.media_artist }} ({{ p.name }}){{ ' · ' if not loop.last }}{% endfor %}",
    rule="On while a Sonos speaker or Spotify is playing.",
    data=[(m,n) for m,n in zip(PLAYERS,["Living Room","Madagascar","Living Room (2)","Spotify"])],hist=[]),
+ month_pill("dry_month","Dry month","mdi:water-off","brown",RAIN_PCT+" < 30",MONTH_TEXT,"On when Altdorf has had less than 30 % of the month's normal rain."),
+ month_pill("wet_month","Wet month","mdi:weather-pouring","blue",RAIN_PCT+" > 200",MONTH_TEXT,"On when Altdorf has had more than twice the month's normal rain."),
+ month_pill("sunny_month","Sunny month","mdi:white-balance-sunny","yellow",SUN_PCT+" > 150",MONTH_TEXT,"On when Altdorf has had more than 150 % of the month's normal sunshine."),
+ month_pill("grey_month","Grey month","mdi:weather-cloudy","grey",SUN_PCT+" < 50",MONTH_TEXT,"On when Altdorf has had less than half the month's normal sunshine."),
+ month_pill("warm_month","Warm month","mdi:trending-up","orange",MONTH_T+" >= 2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C warmer than normal."),
+ month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
-GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Proxmox","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","Maintenance"]

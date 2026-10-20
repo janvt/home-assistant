@@ -216,6 +216,39 @@ def imis_section(sfx: str) -> dict[str, Any]:
     return {"type": "grid", "cards": cards}
 
 
+def normals_section(loc: dict[str, Any]) -> dict[str, Any]:
+    """Today and this month against the station's 1991-2020 normals."""
+    def e(key: str) -> str:
+        return sensor(loc, key)
+    record = e("record_high_for_the_date")
+    return {"type": "grid", "cards": [
+        {"type": "heading", "heading": "Compared to normal (1991–2020)", "icon": "mdi:chart-bell-curve"},
+        tile(e("high_vs_normal"), "Today's high", state_content=["state", "high", "normal_high"]),
+        tile(e("low_vs_normal"), "Tonight's low", state_content=["state", "low", "normal_low"]),
+        tile(record, "Record high", state_content=["state", "year"]),
+        tile(record, "Record low", icon="mdi:thermometer-low", state_content=["record_low", "record_low_year"]),
+        tile(e("month_vs_normal"), "Month", state_content=["state", "mean", "normal_mean"]),
+        tile(e("month_s_rain_vs_normal"), "Month's rain", icon="mdi:weather-rainy",
+             state_content=["state", "rain", "normal_rain"]),
+        tile(e("month_s_sunshine_vs_normal"), "Month's sunshine", icon="mdi:weather-sunny",
+             state_content=["state", "sunshine", "normal_sunshine"]),
+        hist([e("high_vs_normal"), e("low_vs_normal")], "Day against normal (30 days)", 720)]}
+
+
+def foehn_section(loc: dict[str, Any]) -> dict[str, Any]:
+    """MeteoSwiss's measured Föhn index, and the outlook from the pressure across the Alps."""
+    s = slug(loc)
+    return {"type": "grid", "cards": [
+        {"type": "heading", "heading": "Föhn", "icon": "mdi:weather-windy-variant"},
+        tile(sensor(loc, "fohn"), "Föhn index (measured)", icon="mdi:weather-windy"),
+        tile(f"sensor.{s}_fohn_outlook", "Outlook", icon="mdi:crystal-ball"),
+        tile(f"sensor.{s}_fohn_pressure_difference", "Lugano − Kloten", icon="mdi:gauge"),
+        {"type": "markdown", "content": "<small>South föhn from 4 hPa more pressure in Lugano than Kloten, strong "
+                                        "from 8. Negative values mean north föhn (Ticino side).</small>"},
+        hist([f"sensor.{s}_fohn_pressure_difference"], "Pressure difference (48 h)"),
+        hist([sensor(loc, "fohn")], "Föhn index (48 h)")]}
+
+
 def pollen_section(station: str, prefix: str) -> dict[str, Any]:
     """Hourly concentrations (pollen/m³) from the MeteoSwiss pollen station."""
     def e(kind: str) -> str:
@@ -302,7 +335,9 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
             {"type": "weather-forecast", "entity": w, "forecast_type": "daily", "show_current": True,
              "show_forecast": False},
             tile(sensor(loc, "temperature"), "Temperature"), tile(sensor(loc, "dew_point"), "Dew point"),
-            tile(sensor(loc, "humidity"), "Humidity"), tile(sensor(loc, "pressure_qnh"), "Pressure (QNH)")]},
+            tile(sensor(loc, "humidity"), "Humidity"), tile(sensor(loc, "pressure_qnh"), "Pressure (QNH)"),
+            *([tile(f"sensor.{slug(loc)}_freezing_level", "Freezing level", icon="mdi:snowflake-thermometer")]
+              if loc.get("freezing") else [])]},
         *([{"type": "grid", "column_span": 2, "cards": [
             {"type": "heading", "heading": "Webcams", "icon": "mdi:webcam"},
             *[cam(c, grid_options={"columns": 12}) for c in loc["cams"]]]}] if loc.get("cams") else []),
@@ -310,6 +345,8 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
         *ski_sections(loc),
         *[imis_section(x) for x in loc.get("imis", [])],
         *([lightning_section(loc["lightning"])] if loc.get("lightning") else []),
+        normals_section(loc),
+        *([foehn_section(loc)] if loc.get("foehn") else []),
         *([pollen_section(*loc["pollen"])] if loc.get("pollen") else []),
         {"type": "grid", "cards": [
             *forecast_cards(w),

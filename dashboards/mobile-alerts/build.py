@@ -35,7 +35,7 @@ GROUP_ICONS = {
     "Safety": "mdi:shield-home-outline", "Kitchen": "mdi:fridge-outline",
     "Travel": "mdi:train", "Rivers": "mdi:waves", "Forecast": "mdi:crystal-ball", "Weather now": "mdi:weather-partly-cloudy",
     "Mountains": "mdi:image-filter-hdr", "Home": "mdi:home-outline",
-    "Calendar": "mdi:calendar-star", "Proxmox": "mdi:server", "Maintenance": "mdi:wrench-outline",
+    "Calendar": "mdi:calendar-star", "Climate": "mdi:chart-bell-curve", "Proxmox": "mdi:server", "Maintenance": "mdi:wrench-outline",
 }
 
 

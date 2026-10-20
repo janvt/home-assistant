@@ -1,6 +1,8 @@
 """What the Weather dashboard shows: the places, and the extras each one has.
 
-Each entry here is one MeteoSwiss config entry. Valley locations have a
+Each entry here is one MeteoSwiss config entry. `freezing` and `foehn` are
+per-entry options in the integration (Configure); every station also has
+climate normals. Valley locations have a
 weather station (`station`: the prefix of its sensors) and a rain station;
 mountains have only a forecast. Order is the order on the Overview.
 
@@ -11,7 +13,8 @@ creates the ones a station measures, and wind-only stations have no snow.
 LOCATIONS = [
     dict(title="Altdorf", path="altdorf", icon="mdi:town-hall", weather="weather.altdorf_ur",
          station="altdorf", rain="sensor.bristen_10_minute_rain", stations_text="Altdorf · rain Bristen",
-         slf="altdorf_9r5z", lightning="altdorf", pollen=("Luzern", "luzern_pollen")),
+         slf="altdorf_9r5z", lightning="altdorf", pollen=("Luzern", "luzern_pollen"),
+         freezing=True, foehn=True),
     dict(title="Andermatt", path="andermatt", icon="mdi:summit", weather="weather.andermatt",
          station="andermatt", rain="sensor.goscheneralp_10_minute_rain",
          stations_text="Andermatt · rain Göscheneralp",
@@ -20,7 +23,7 @@ LOCATIONS = [
          ski=[("andermatt_gemsstock", "Gemsstock"), ("andermatt_oberalp_sedrun", "Oberalp – Sedrun")],
          slf="andermatt_9pb7", imis=["gos3_zwja", "tuj2_mr82", "urs1_prsf"],
          # The Andermatt entry has its own copy (…_2); Altdorf's is the same station.
-         pollen=("Luzern", "luzern_pollen")),
+         pollen=("Luzern", "luzern_pollen"), freezing=True),
     dict(title="Schlieren", path="schlieren", icon="mdi:home-city", weather="weather.schlieren",
          station="zurich_fluntern", rain="sensor.uster_10_minute_rain",
          stations_text="Zürich / Fluntern · rain Uster", pollen=("Zürich", "zurich_pollen")),
