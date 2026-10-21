@@ -74,6 +74,14 @@ def warn_lines(entities):
 LIGHTNING="sensor.altdorf_lightning"
 COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
          "{{ ['N','NE','E','SE','S','SW','W','NW'][((az + 22.5) // 45)|int % 8] if az >= 0 else '' }}")
+# MeteoSwiss's weather radar at home, every 5 minutes (the fork's optional
+# Radar sensors). Below 0.3 mm/h it's drizzle the radar sees but that barely
+# wets anything.
+RADAR_RAIN="sensor.altdorf_ur_radar_rain_rate"
+RADAR_HAIL="sensor.altdorf_ur_radar_hail_probability"
+RADAR_HAIL_SIZE="sensor.altdorf_ur_radar_hail_size"
+RAINING="("+f(RADAR_RAIN)+" >= 0.3)"
+RADAR_TIME="' (' ~ (state_attr('"+RADAR_RAIN+"','time')|as_datetime|as_local).strftime('%H:%M') ~ ')' if state_attr('"+RADAR_RAIN+"','time')"
 REUSS="sensor.reuss_seedorf"
 REUSS_LIMIT="input_number.reuss_seedorf_dog_walk_limit"
 # Helpers the pills read that sync.py creates when missing. Their value is
@@ -192,6 +200,11 @@ ALERTS=[
    summary=GUEST_TABLE,
    rule="On when a VM or container that is set to start at boot isn't running. Guests you stopped on purpose (not started at boot) don't count. New guests are picked up automatically.",
    data=[("sensor.4_vm_haos_100_status","Home Assistant VM")],hist=[]),
+ dict(key="hail",group="Weather now",name="Hail",icon="mdi:weather-hail",color="red",
+   tmpl="{{ "+f(RADAR_HAIL)+" >= 50 }}",
+   secondary="{{ "+f(RADAR_HAIL)+"|round(0)|int }} % chance of hail at home on the radar{{ ', stones up to ' ~ "+f(RADAR_HAIL_SIZE)+"|round(0)|int ~ ' mm' if "+f(RADAR_HAIL_SIZE)+" > 0 }}",
+   rule="On when MeteoSwiss's radar gives a 50 % chance of hail or more over the home's square kilometre. Hail size reads 0 below 20 mm.",
+   data=[(RADAR_HAIL,"Hail probability"),(RADAR_HAIL_SIZE,"Largest hail"),(RADAR_RAIN,"Rain rate")],hist=[RADAR_HAIL]),
  dict(key="storm_on_the_summits",tmpl="{{ [states('sensor.slf_imis_sca1_spjp_wind_gust')|float(0), states('sensor.slf_imis_urs1_prsf_wind_gust')|float(0)]|max >= 100 }}",group="Weather now",name="Summit storm",icon="mdi:weather-hurricane",color="red",
    secondary="{{ ["+f('sensor.slf_imis_sca1_spjp_wind_gust')+","+f('sensor.slf_imis_urs1_prsf_wind_gust')+"]|max|round(0) }} km/h gusts measured (Gross Windgällen {{ "+f('sensor.slf_imis_sca1_spjp_wind_gust')+"|round(0) }}, Gross Schijen {{ "+f('sensor.slf_imis_urs1_prsf_wind_gust')+"|round(0) }})",
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
@@ -203,6 +216,11 @@ ALERTS=[
    rule="On when Blitzortung has seen a strike within 20 km of Altdorf in the last 30 minutes.",
    data=[(LIGHTNING+"_distance","Last strike distance"),(LIGHTNING+"_azimuth","Direction"),(LIGHTNING+"_counter","Strikes (100 km, 2 h)")],
    hist=[LIGHTNING+"_counter"]),
+ dict(key="raining_now",group="Weather now",name="Raining now",icon="mdi:weather-rainy",color="blue",
+   tmpl="{{ "+RAINING+" }}",
+   secondary="{{ "+f(RADAR_RAIN)+"|round(1) }} mm/h at home on the radar{{ "+RADAR_TIME+" }}",
+   rule="On while MeteoSwiss's radar shows at least 0.3 mm/h of rain over the home's square kilometre. It sees rain start within a minute or two; the Altdorf station's 10-minute total comes 10 minutes later.",
+   data=[(RADAR_RAIN,"Rain rate (radar)"),("sensor.altdorf_10_minute_rain","Rain 10 min (station)")],hist=[RADAR_RAIN]),
  dict(key="weather_warning",group="Weather now",name="Weather warning",icon="mdi:alert-octagram",color="amber",color_from=WARN_HOME,
    tmpl="{{ states('"+WARN_HOME+"') in ['yellow','orange','red'] }}",
    secondary=warn_lines([WARN_HOME]),
@@ -336,10 +354,10 @@ ALERTS=[
    rule="On in the morning (sun azimuth 60–160°) when the east shades are open, irradiance is above 500 W/m² and it's warmer than 18 °C outside.",
    data=[("cover.east_facing_shades","East shades"),("sensor.altdorf_sun_irradiation","Irradiance (Altdorf)"),("sensor.ruuvi_outside_temperature","Outside")],hist=[]),
  dict(key="cooler_outside",group="Home",name="Cooler outside",icon="mdi:window-open-variant",color="teal",
-   tmpl="{{ "+f("sensor.ruuvi_kitchen_temperature",0)+" > 24 and "+f("sensor.ruuvi_outside_temperature",99)+" < "+f("sensor.ruuvi_kitchen_temperature",0)+" - 2 }}",
+   tmpl="{{ "+f("sensor.ruuvi_kitchen_temperature",0)+" > 24 and "+f("sensor.ruuvi_outside_temperature",99)+" < "+f("sensor.ruuvi_kitchen_temperature",0)+" - 2 and not "+RAINING+" }}",
    secondary="Outside {{ states('sensor.ruuvi_outside_temperature')|round(1) }} °C, kitchen {{ states('sensor.ruuvi_kitchen_temperature')|round(1) }} °C · open the windows",
-   rule="On when the kitchen is above 24 °C and it's at least 2 °C cooler outside.",
-   data=[("sensor.ruuvi_outside_temperature","Outside"),("sensor.ruuvi_kitchen_temperature","Kitchen")],
+   rule="On when the kitchen is above 24 °C, it's at least 2 °C cooler outside, and it isn't raining at home (radar).",
+   data=[("sensor.ruuvi_outside_temperature","Outside"),("sensor.ruuvi_kitchen_temperature","Kitchen"),(RADAR_RAIN,"Rain rate (radar)")],
    hist=["sensor.ruuvi_outside_temperature","sensor.ruuvi_kitchen_temperature"]),
  # --- calendar & modes
  dict(key="pollen_high",group="Home",name="Pollen high",icon="mdi:flower-pollen",color="lime",
@@ -493,10 +511,10 @@ ALERTS=[
    rule="On when the night's low in Altdorf is at least 6 °C above normal (föhn nights often are).",
    data=[(CLIM+"_low_vs_normal","Low vs normal")],hist=[CLIM+"_low_vs_normal"]),
  dict(key="dog_walk_good",group="Rivers",name="Good time for a dog walk",icon="mdi:dog",color="green",
-   tmpl="{% set q = states('"+REUSS+"_discharge') %}{{ is_state('sun.sun','above_horizon') and q not in ['unknown','unavailable'] and q|float(0) < states('"+REUSS_LIMIT+"')|float(0) and states('sensor.altdorf_ur_chance_of_rain_next_hour')|float(100) < 40 and 'wind' not in (state_attr('sensor.altdorf_ur_weather_warning','types') or []) and not is_state('binary_sensor.pill_lightning_nearby','on') and states('"+RAIN_24H+"')|float(0) < 10 }}",
+   tmpl="{% set q = states('"+REUSS+"_discharge') %}{{ is_state('sun.sun','above_horizon') and q not in ['unknown','unavailable'] and q|float(0) < states('"+REUSS_LIMIT+"')|float(0) and states('sensor.altdorf_ur_chance_of_rain_next_hour')|float(100) < 40 and not "+RAINING+" and 'wind' not in (state_attr('sensor.altdorf_ur_weather_warning','types') or []) and not is_state('binary_sensor.pill_lightning_nearby','on') and states('"+RAIN_24H+"')|float(0) < 10 }}",
    secondary="Reuss {{ states('"+REUSS+"_discharge')|float(0)|round(0)|int }} m³/s (limit {{ states('"+REUSS_LIMIT+"')|int }}), {{ states('sensor.altdorf_ur_chance_of_rain_next_hour')|round(0)|int }} % chance of rain in the next hour, no wind warning",
-   rule="On in daylight when the Reuss is below your limit, rain in the next hour is unlikely (under 40 %), there's no wind warning or lightning nearby, and the paths aren't muddy.",
-   data=[(REUSS+"_discharge","Reuss"),(REUSS_LIMIT,"Your limit"),("sensor.altdorf_ur_chance_of_rain_next_hour","Rain next hour"),(RAIN_24H,"Rain 24 h")],hist=[]),
+   rule="On in daylight when the Reuss is below your limit, rain in the next hour is unlikely (under 40 %) and it isn't raining now (radar), there's no wind warning or lightning nearby, and the paths aren't muddy.",
+   data=[(REUSS+"_discharge","Reuss"),(REUSS_LIMIT,"Your limit"),("sensor.altdorf_ur_chance_of_rain_next_hour","Rain next hour"),(RADAR_RAIN,"Rain now (radar)"),(RAIN_24H,"Rain 24 h")],hist=[]),
  dict(key="big_load",group="Home",name="Big load",icon="mdi:flash-alert",color="yellow",
    tmpl="{{ states('sensor.apartment_consumption_total_active_power')|float(0) > 1500 }}",
    secondary="{{ states('sensor.apartment_consumption_total_active_power')|round(0) }} W right now (usually around 260 W)",

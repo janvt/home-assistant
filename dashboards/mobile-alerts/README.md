@@ -62,7 +62,7 @@ into the raw configuration editor.
 ## Data sources
 
 The pills read entities from all over the house: MeteoSwiss (the forked
-integration, including its forecast summary and warning sensors), SLF bulletins and IMIS
+integration, including its forecast summary, warning and radar rain and hail sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
 Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
