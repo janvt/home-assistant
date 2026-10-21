@@ -71,6 +71,23 @@ def slug(loc: dict[str, Any]) -> str:
     return loc["weather"].split(".")[1]
 
 
+def radar(place_slug: str, kind: str) -> str:
+    """MeteoSwiss's weather radar for an entry: rain_rate, hail_probability or hail_size."""
+    return f"sensor.{place_slug}_radar_{kind}"
+
+
+def hail_tile(place_slug: str, **extra: Any) -> dict[str, Any]:
+    """Hail probability, shown only while the radar sees any."""
+    e = radar(place_slug, "hail_probability")
+    return tile(e, "Hail", visibility=[{"condition": "numeric_state", "entity": e, "above": 0}], **extra)
+
+
+def radar_cards(place_slug: str) -> list[dict[str, Any]]:
+    return [tile(radar(place_slug, "rain_rate"), "Rain now (radar)"),
+            tile(radar(place_slug, "hail_probability"), "Hail chance (radar)"),
+            tile(radar(place_slug, "hail_size"), "Hail size (radar)")]
+
+
 def details_button(title: str, tap: dict[str, Any]) -> dict[str, Any]:
     return {"type": "button", "name": f"{title} details", "icon": "mdi:chevron-right-circle-outline",
             "show_state": False, "tap_action": tap, "grid_options": {"columns": 12, "rows": 1}}
@@ -114,8 +131,9 @@ def overview_section(loc: dict[str, Any]) -> dict[str, Any]:
         *([cam(loc["cams"][0], tap_action={"action": "more-info"})] if loc.get("cams") else []),
         tile(sensor(loc, "wind_speed"), "Wind", tap_action=t),
         tile(sensor(loc, "wind_speed_max"), "Gusts", tap_action=t),
-        tile(loc["rain"], "Rain 10 min", tap_action=t),
+        tile(radar(slug(loc), "rain_rate"), "Rain now", tap_action=t),
         tile(sensor(loc, "humidity"), "Humidity", tap_action=t),
+        hail_tile(slug(loc), tap_action=t),
         *([tile(f"sensor.slf_avalanche_danger_level_{loc['slf']}", "Avalanche danger", tap_action=t)]
           if loc.get("slf") else []),
         *([tile(f"sensor.slf_imis_{loc['imis'][0]}_snow_height", f"Snow {IMIS[loc['imis'][0]]['name']} (measured)",
@@ -133,7 +151,7 @@ def compare_section() -> dict[str, Any]:
         {"type": "heading", "heading": "Compare locations", "heading_style": "title", "icon": "mdi:compare-horizontal"},
         g([sensor(l, "temperature") for l in LOCATIONS], "Temperature (48 h)", 12),
         g([sensor(l, "wind_speed_max") for l in LOCATIONS], "Gusts (48 h)", 6),
-        g([l["rain"] for l in LOCATIONS], "Rain per 10 min (48 h)", 6),
+        g([radar(slug(l), "rain_rate") for l in LOCATIONS], "Rain rate, radar (48 h)", 6),
         g([sensor(l, "sun_irradiation") for l in LOCATIONS], "Irradiation (48 h)", 6),
         g([sensor(l, "pressure_qnh") for l in LOCATIONS], "Pressure QNH (48 h)", 6),
     ]}
@@ -360,11 +378,17 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
             tile(sensor(loc, "wind_direction"), "Direction", icon="mdi:compass-outline"),
             hist([sensor(loc, "wind_speed"), sensor(loc, "wind_speed_max")], "Wind & gusts (48 h)")]},
         {"type": "grid", "cards": [
-            {"type": "heading", "heading": "Sun & rain", "icon": "mdi:weather-sunny"},
+            {"type": "heading", "heading": "Sun, rain & hail", "icon": "mdi:weather-sunny"},
             tile(sensor(loc, "sun_irradiation"), "Irradiation"), tile(sensor(loc, "10_minute_sun"), "Sun (10 min)"),
-            tile(loc["rain"], "Rain (10 min)"),
+            *radar_cards(slug(loc)),
+            tile(loc["rain"], f"Rain 10 min ({loc['rain_station']})"),
+            {"type": "markdown", "content": "<small>Radar: MeteoSwiss's weather radar every 5 minutes, over this "
+                                            "place's square kilometre. It sees rain start first; for how much fell, "
+                                            f"the {loc['rain_station']} station's 10-minute total is more accurate.</small>"},
             hist([sensor(loc, "sun_irradiation")], "Irradiation (48 h)"),
-            hist([loc["rain"]], "Rain (48 h)")]},
+            hist([radar(slug(loc), "rain_rate")], "Rain rate, radar (48 h)"),
+            hist([radar(slug(loc), "hail_probability")], "Hail chance, radar (48 h)"),
+            hist([loc["rain"]], f"Rain per 10 min, {loc['rain_station']} (48 h)")]},
         {"type": "grid", "cards": [
             {"type": "heading", "heading": "Trends", "icon": "mdi:chart-line"},
             hist([sensor(loc, "temperature"), sensor(loc, "dew_point")], "Temperature & dew point", 72),
@@ -388,6 +412,8 @@ def mountain_section(m: dict[str, Any]) -> dict[str, Any]:
          "show_forecast": True, "tap_action": t},
         warn_tile(m["slug"], t),
         tile(m["freezing"], "Freezing level", tap_action=t),
+        tile(radar(m["slug"], "rain_rate"), "Precipitation now", tap_action=t),
+        hail_tile(m["slug"], tap_action=t),
         tile(m["weather"], "Wind / gusts", icon="mdi:weather-windy", state_content=["wind_speed", "wind_gust_speed"],
              tap_action=t),
         *([tile(f"sensor.slf_imis_{m['imis']}_air_temperature", "Measured temp", tap_action=t),
@@ -405,7 +431,8 @@ def mountain_view(m: dict[str, Any]) -> dict[str, Any]:
             {"type": "heading", "heading": f"{m['title']} · {m['elevation']} m", "heading_style": "title",
              "icon": m["icon"]},
             {"type": "markdown",
-             "content": "<small>Forecast for the summit altitude; current conditions are forecast, not measured.</small>"},
+             "content": "<small>Forecast for the summit altitude; current conditions are forecast, not measured, "
+                        "except the radar's precipitation and hail over the summit.</small>"},
             warn_markdown(m["slug"]),
             {"type": "weather-forecast", "entity": w, "forecast_type": "daily", "show_current": True,
              "show_forecast": False},
@@ -413,7 +440,9 @@ def mountain_view(m: dict[str, Any]) -> dict[str, Any]:
             tile(w, "Temperature", icon="mdi:thermometer", state_content=["temperature"]),
             tile(w, "Wind / gusts", icon="mdi:weather-windy", state_content=["wind_speed", "wind_gust_speed"]),
             tile(w, "Cloud cover", icon="mdi:weather-cloudy", state_content=["cloud_coverage"]),
-            hist([m["freezing"]], "Freezing level (72 h)", 72)]},
+            *radar_cards(m["slug"]),
+            hist([m["freezing"]], "Freezing level (72 h)", 72),
+            hist([radar(m["slug"], "rain_rate")], "Precipitation rate, radar (48 h)")]},
         *([imis_section(m["imis"])] if m.get("imis") else []),
         {"type": "grid", "cards": forecast_cards(w)},
         {"type": "grid", "cards": [

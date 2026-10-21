@@ -3,8 +3,9 @@
 Each entry here is one MeteoSwiss config entry. `freezing` and `foehn` are
 per-entry options in the integration (Configure); every station also has
 climate normals. Valley locations have a
-weather station (`station`: the prefix of its sensors) and a rain station;
-mountains have only a forecast. Order is the order on the Overview.
+weather station (`station`: the prefix of its sensors) and a rain station
+for totals; rain now and hail come from the fork's Radar sensors, which every
+entry has (mountains: over the summit). Mountains otherwise have only a forecast. Order is the order on the Overview.
 
 The IMIS stations list their sensors explicitly: the SLF integration only
 creates the ones a station measures, and wind-only stations have no snow.
@@ -12,12 +13,13 @@ creates the ones a station measures, and wind-only stations have no snow.
 
 LOCATIONS = [
     dict(title="Altdorf", path="altdorf", icon="mdi:town-hall", weather="weather.altdorf_ur",
-         station="altdorf", rain="sensor.bristen_10_minute_rain", stations_text="Altdorf · rain Bristen",
+         station="altdorf", rain="sensor.bristen_10_minute_rain", rain_station="Bristen",
+         stations_text="Altdorf · rain radar, totals Bristen",
          slf="altdorf_9r5z", lightning="altdorf", pollen=("Luzern", "luzern_pollen"),
          freezing=True, foehn=True),
     dict(title="Andermatt", path="andermatt", icon="mdi:summit", weather="weather.andermatt",
-         station="andermatt", rain="sensor.goscheneralp_10_minute_rain",
-         stations_text="Andermatt · rain Göscheneralp",
+         station="andermatt", rain="sensor.goscheneralp_10_minute_rain", rain_station="Göscheneralp",
+         stations_text="Andermatt · rain radar, totals Göscheneralp",
          cams=["camera.andermatt_gemsstock", "camera.andermatt_baezberg"],
          # Bergfex resort id, name on the dashboard.
          ski=[("andermatt_gemsstock", "Gemsstock"), ("andermatt_oberalp_sedrun", "Oberalp – Sedrun")],
@@ -25,8 +27,8 @@ LOCATIONS = [
          # The Andermatt entry has its own copy (…_2); Altdorf's is the same station.
          pollen=("Luzern", "luzern_pollen"), freezing=True),
     dict(title="Schlieren", path="schlieren", icon="mdi:home-city", weather="weather.schlieren",
-         station="zurich_fluntern", rain="sensor.uster_10_minute_rain",
-         stations_text="Zürich / Fluntern · rain Uster", pollen=("Zürich", "zurich_pollen")),
+         station="zurich_fluntern", rain="sensor.uster_10_minute_rain", rain_station="Uster",
+         stations_text="Zürich / Fluntern · rain radar, totals Uster", pollen=("Zürich", "zurich_pollen")),
 ]
 
 MOUNTAINS = [
