@@ -214,3 +214,13 @@ def test_dismiss_templates_parse() -> None:
             templates += [card["secondary"], card["icon_color"]]
     for template in templates:
         env.parse(template)
+
+
+def test_alerts_page_has_back_chips_top_and_bottom() -> None:
+    """Every page of the Mobile dashboard starts with Mushroom's back chip; the
+    Alerts page is long, so it has one at the bottom too."""
+    page = build.subview()
+    def has_back(card):
+        return card.get("type") == "custom:mushroom-chips-card" and {"type": "back"} in card["chips"]
+    assert has_back(page["sections"][0]["cards"][0]), "no back chip at the top"
+    assert has_back(page["sections"][-1]["cards"][-1]), "no back chip at the bottom"

@@ -165,8 +165,17 @@ def _tile(entity_id: str, name: str) -> dict[str, Any]:
     return {"type": "tile", "entity": entity_id, "name": name, "vertical": True}
 
 
+BACK = f"/{DASHBOARD}/0"
+
+
+def back_chips(*extra: dict[str, Any]) -> dict[str, Any]:
+    """Mushroom's back chip, the way every other page of this dashboard starts."""
+    return {"type": "custom:mushroom-chips-card", "chips": [{"type": "back"}, *extra]}
+
+
 def subview() -> dict[str, Any]:
     active = [
+        back_chips(),
         {"type": "heading", "heading": "Active now", "heading_style": "title", "icon": "mdi:bell-ring-outline"},
         {"type": "markdown", "content": "<small>Hold a card to dismiss it until it clears and comes back; hold "
                                         "again to bring it back. Safety alerts can't be dismissed.</small>"},
@@ -203,12 +212,11 @@ def subview() -> dict[str, Any]:
                 cards.append({"type": "history-graph", "hours_to_show": 48,
                               "entities": [{"entity": e} for e in p["hist"]]})
         sections.append({"type": "grid", "cards": cards})
-    sections.append({"type": "grid", "column_span": 2, "cards": [{
-        "type": "button", "name": "Open the Weather dashboard", "icon": "mdi:sun-snowflake", "show_state": False,
-        "tap_action": {"action": "navigate", "navigation_path": "/dashboard-weather/overview"},
-        "grid_options": {"columns": 12, "rows": 1}}]})
+    sections.append({"type": "grid", "column_span": 2, "cards": [back_chips(
+        {"type": "template", "icon": "mdi:sun-snowflake", "content": "Weather",
+         "tap_action": {"action": "navigate", "navigation_path": "/dashboard-weather/overview"}})]})
     return {"title": "Alerts", "path": SUBVIEW, "icon": "mdi:bell-ring-outline", "type": "sections",
-            "max_columns": 2, "subview": True, "back_path": f"/{DASHBOARD}/0", "sections": sections}
+            "max_columns": 2, "subview": True, "back_path": BACK, "sections": sections}
 
 
 def apply(dashboard: dict[str, Any]) -> dict[str, Any]:
