@@ -9,6 +9,10 @@ zone is the part a train has to cross. `train_slice` is the wide view on the
 sub stream and keeps the recordings and the microphone. In the sub stream a
 train is too small for the model, so its own detection finds nothing.
 
+`train_tele` is an iPhone telephoto (Blackmagic Camera, via MediaMTX) that
+detects trains too, with no zone yet. Both counts run side by side for now,
+to see which camera gets them right; the pill stays on the Reolink one.
+
 The page shows the picture Frigate detects on and the one it draws its boxes
 on, whether it thinks a train is there right now, the knobs that decide that,
 how hard the box is working, and the last 24 hours of it.
@@ -22,6 +26,7 @@ TITLE = "Trains"
 ICON = "mdi:train"
 CAMERA = "train_track"      # detects
 WIDE = "train_slice"        # records, listens
+TELE = "train_tele"         # iPhone telephoto, detects too
 ZONE = "track_hd"
 FRIGATE = "http://10.69.42.175:5000"
 # The train count, made by the Mobile alert pills' sync (mobile-alerts/pills.py):
@@ -29,6 +34,9 @@ FRIGATE = "http://10.69.42.175:5000"
 PASSING = "binary_sensor.train_passing"
 TODAY = "sensor.trains_today"
 THIS_HOUR = "sensor.trains_this_hour"
+TELE_PASSING = "binary_sensor.train_passing_tele"
+TELE_TODAY = "sensor.trains_today_tele"
+TELE_THIS_HOUR = "sensor.trains_this_hour_tele"
 # Frigate's own debug picture: object boxes, the zone and motion boxes drawn
 # in. HA doesn't proxy it, so it only loads on the LAN over http.
 DEBUG_IMAGE = (f"{FRIGATE}/api/{CAMERA}/latest.jpg"
@@ -43,6 +51,7 @@ DISABLED_BY_DEFAULT = [
     "sensor.frigate_ov_inference_speed", "sensor.frigate_core_i3_n300_igpu_gpu_load",
     "sensor.frigate_status", "sensor.frigate_uptime",
     f"number.{CAMERA}_threshold", f"number.{CAMERA}_contour_area", f"switch.{CAMERA}_improve_contrast",
+    f"sensor.{TELE}_camera_fps", f"sensor.{TELE}_detection_fps", f"sensor.{TELE}_skipped_fps",
 ]
 
 
@@ -54,6 +63,10 @@ def cam(kind: str, camera: str = CAMERA) -> str:
 
 def wide(kind: str) -> str:
     return cam(kind, WIDE)
+
+
+def tele(kind: str) -> str:
+    return cam(kind, TELE)
 
 
 def zone(kind: str) -> str:
@@ -95,10 +108,10 @@ def full(card: dict[str, Any]) -> dict[str, Any]:
 
 # ── sections ────────────────────────────────────────────────────────────────
 def camera_card(view: str, **extra: Any) -> dict[str, Any]:
-    """The advanced camera card on both cameras, opening on `view` (live,
-    timeline …). The crop comes first; the wide view has the recordings."""
+    """The advanced camera card on all three cameras, opening on `view` (live,
+    timeline …). The crop comes first; the wide view and the iPhone record."""
     card = {"type": "custom:advanced-camera-card",
-            "cameras": [{"camera_entity": f"camera.{c}", "frigate": {"url": FRIGATE}} for c in (CAMERA, WIDE)],
+            "cameras": [{"camera_entity": f"camera.{c}", "frigate": {"url": FRIGATE}} for c in (CAMERA, TELE, WIDE)],
             "view": {"default": view}, "grid_options": {"columns": "full"}}
     card.update(extra)
     return card
@@ -134,8 +147,13 @@ def now_section() -> dict[str, Any]:
         tile(zone("sensor.train_count"), "On track", grid_options={"columns": 4}),
         tile(cam("sensor.train_count"), "In frame", grid_options={"columns": 4}),
         tile(wide("sensor.sound_level"), "Sound level", grid_options={"columns": 12}),
+        tile(tele("binary_sensor.train_occupancy"), "iPhone: train in frame", grid_options={"columns": 6}),
+        tile(tele("binary_sensor.motion"), "iPhone: motion", grid_options={"columns": 6}),
         heading("Last train", "mdi:image", "subtitle"),
-        {"type": "picture-entity", "entity": f"image.{CAMERA}_train", "show_state": False, "show_name": False},
+        {"type": "picture-entity", "entity": f"image.{CAMERA}_train", "name": "Reolink", "show_state": False,
+         "grid_options": {"columns": 6}},
+        {"type": "picture-entity", "entity": f"image.{TELE}_train", "name": "iPhone", "show_state": False,
+         "grid_options": {"columns": 6}},
     ]}
 
 
@@ -172,6 +190,9 @@ def health_section() -> dict[str, Any]:
         tile(cam("sensor.detection_fps"), "Detections/s", grid_options={"columns": 6}),
         tile("sensor.frigate_ov_inference_speed", "Inference", grid_options={"columns": 6}),
         tile("sensor.frigate_core_i3_n300_igpu_gpu_load", "GPU", grid_options={"columns": 6}),
+        tile(tele("sensor.camera_fps"), "iPhone fps", grid_options={"columns": 4}),
+        tile(tele("sensor.detection_fps"), "iPhone det/s", grid_options={"columns": 4}),
+        tile(tele("sensor.skipped_fps"), "iPhone skipped", grid_options={"columns": 4}),
         tile(cam("sensor.ffmpeg_cpu_usage"), "ffmpeg CPU", grid_options={"columns": 4}),
         tile(cam("sensor.capture_cpu_usage"), "Capture CPU", grid_options={"columns": 4}),
         tile(cam("sensor.detect_cpu_usage"), "Detect CPU", grid_options={"columns": 4}),
@@ -182,28 +203,36 @@ def health_section() -> dict[str, Any]:
     ]}
 
 
-def bars(entity: str, title: str, period: str, days: int, **extra: Any) -> dict[str, Any]:
-    """One bar per hour or day: the count's maximum in it, which is its total
-    since the count resets at the start of each."""
-    card = {"type": "statistics-graph", "title": title, "entities": [entity], "stat_types": ["max"],
-            "period": period, "days_to_show": days, "chart_type": "bar", "hide_legend": True}
+def bars(entities: dict[str, str], title: str, period: str, days: int, **extra: Any) -> dict[str, Any]:
+    """One bar per hour or day and camera ({entity: legend name}): the count's
+    maximum in it, which is its total since the count resets at the start of each."""
+    card = {"type": "statistics-graph", "title": title, "stat_types": ["max"],
+            "entities": [{"entity": e, "name": n} for e, n in entities.items()],
+            "period": period, "days_to_show": days, "chart_type": "bar"}
     card.update(extra)
     return card
 
 
 def count_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 4, "cards": [
-        heading("Train count", "mdi:counter"),
-        tile(TODAY, "Today", grid_options={"columns": 4}),
-        tile(THIS_HOUR, "This hour", grid_options={"columns": 4}),
-        tile(PASSING, "Passing now", grid_options={"columns": 4}),
-        full(hist([TODAY], "Today's count (live)")),
-        dict(bars(THIS_HOUR, "Trains per hour (48 h)", "hour", 2), grid_options={"columns": 6}),
-        dict(bars(TODAY, "Trains per day (30 days)", "day", 30), grid_options={"columns": 6}),
-        dict({"type": "logbook", "title": "Latest trains", "hours_to_show": 24, "target": {"entity_id": [PASSING]}},
-             grid_options={"columns": 12}),
+        heading("Train count: Reolink and iPhone side by side", "mdi:counter"),
+        tile(TODAY, "Reolink today", grid_options={"columns": 4}),
+        tile(THIS_HOUR, "Reolink this hour", grid_options={"columns": 4}),
+        tile(PASSING, "Reolink passing", grid_options={"columns": 4}),
+        tile(TELE_TODAY, "iPhone today", grid_options={"columns": 4}),
+        tile(TELE_THIS_HOUR, "iPhone this hour", grid_options={"columns": 4}),
+        tile(TELE_PASSING, "iPhone passing", grid_options={"columns": 4}),
+        full(hist([TODAY, TELE_TODAY], "Today's count (live)")),
+        dict(bars({THIS_HOUR: "Reolink", TELE_THIS_HOUR: "iPhone"}, "Trains per hour (48 h)", "hour", 2),
+             grid_options={"columns": 6}),
+        dict(bars({TODAY: "Reolink", TELE_TODAY: "iPhone"}, "Trains per day (30 days)", "day", 30),
+             grid_options={"columns": 6}),
+        dict({"type": "logbook", "title": "Latest trains (both cameras)", "hours_to_show": 24,
+              "target": {"entity_id": [PASSING, TELE_PASSING]}}, grid_options={"columns": 12}),
         {"type": "markdown", "content":
-            "A train counts when it enters the **track_hd** zone; one that drops out for under 30 s counts once. "
+            "Reolink: a train counts when it enters the **track_hd** zone. iPhone: when Frigate sees a train "
+            "anywhere in its picture (no zone yet, so the far track counts too). "
+            "For both, one that drops out for under 30 s counts once. "
             "HA adds a bar once its hour is over, so the hour that is running only shows in the "
             "tiles and the live chart; today's bar counts up to the last full hour. "
             "The charts only start from when the count was set up.",
@@ -215,7 +244,8 @@ def history_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 4, "cards": [
         heading("Last 24 hours", "mdi:chart-timeline-variant"),
         full(hist([zone("binary_sensor.train_occupancy"), cam("binary_sensor.train_occupancy"),
-                   cam("binary_sensor.motion"), wide("binary_sensor.train_sound")], "Train, motion and sound")),
+                   tele("binary_sensor.train_occupancy"), cam("binary_sensor.motion"),
+                   wide("binary_sensor.train_sound")], "Train, motion and sound")),
         dict(hist([wide("sensor.sound_level")], "Sound level"), grid_options={"columns": 6}),
         dict(hist([cam("sensor.camera_fps"), cam("sensor.process_fps"), cam("sensor.detection_fps"),
                    cam("sensor.skipped_fps")], "Frames per second"), grid_options={"columns": 6}),

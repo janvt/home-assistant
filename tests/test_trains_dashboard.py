@@ -44,6 +44,7 @@ def test_every_enabled_diagnostic_is_shown() -> None:
 
 def test_only_frigate_entities() -> None:
     """Frigate's own entities, plus the train count the pills' sync makes."""
-    prefixes = (f"{build.CAMERA}_", f"{build.WIDE}_", f"{build.ZONE}_", "frigate_")
-    others = {f"camera.{build.CAMERA}", f"camera.{build.WIDE}", build.PASSING, build.TODAY, build.THIS_HOUR}
+    prefixes = (f"{build.CAMERA}_", f"{build.WIDE}_", f"{build.TELE}_", f"{build.ZONE}_", "frigate_")
+    others = {f"camera.{c}" for c in (build.CAMERA, build.WIDE, build.TELE)} | {
+        build.PASSING, build.TODAY, build.THIS_HOUR, build.TELE_PASSING, build.TELE_TODAY, build.TELE_THIS_HOUR}
     assert all(e.split(".", 1)[1].startswith(prefixes) or e in others for e in USED), sorted(USED)

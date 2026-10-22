@@ -23,7 +23,11 @@ detection there finds nothing.
   Frigate at `10.69.42.175:5000`, so it only loads on the LAN over http.
 - **Right now:** train on the track and in frame, motion, train sound, review
   status, the counts, sound level and the last train snapshot.
-- **Train count:** today, this hour, and whether one is passing; a live chart
+- **iPhone telephoto (`train_tele`):** Blackmagic Camera on an iPhone, pushing
+  to MediaMTX (`10.69.42.222`), which Frigate reads. It detects trains too,
+  with no zone yet; its live picture, last train, frame rates and count sit
+  next to the Reolink's, to compare the two cameras.
+- **Train count:** Reolink and iPhone side by side: today, this hour, and whether one is passing; a live chart
   of today's count; bars of
   trains per hour (48 h) and per day (30 days), and the latest trains. The
   count helpers come from the Mobile alert pills' sync (`HISTORY_STATS` in
