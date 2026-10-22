@@ -97,18 +97,33 @@ TRAIN_ON_TRACK="binary_sensor.track_hd_train_occupancy"
 TRAIN_PASSING="binary_sensor.train_passing"
 TRAINS_TODAY="sensor.trains_today"
 TRAINS_THIS_HOUR="sensor.trains_this_hour"
+# The same count from the iPhone (Frigate camera train_tele, no zone yet), run
+# in parallel to compare the two cameras. The pill stays on the Reolink one.
+TELE_TRAIN="binary_sensor.train_tele_train_occupancy"
+TELE_PASSING="binary_sensor.train_passing_tele"
+TELE_TODAY="sensor.trains_today_tele"
+TELE_THIS_HOUR="sensor.trains_this_hour_tele"
+# The last match to the timetable per camera, written by the Trains dashboard's
+# sync (dashboards/trains/timetable.py).
+LAST_TRAIN="input_text.last_train"
+LAST_TRAIN_TELE="input_text.last_train_tele"
+HOLD={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}}
+TODAY_START="{{ today_at() }}"
+HOUR_START="{{ now().replace(minute=0, second=0, microsecond=0) }}"
 # Template helpers the pills read that aren't pills; sync.py creates and updates them.
 TEMPLATES=[dict(entity=TRAIN_PASSING, kind="binary_sensor", name="Train passing",
-                tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}",
-                extra={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}})]
+                tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}", extra=HOLD),
+           dict(entity=TELE_PASSING, kind="binary_sensor", name="Train passing tele",
+                tmpl="{{ is_state('"+TELE_TRAIN+"','on') }}", extra=HOLD)]
 # History stats helpers; sync.py creates them and keeps their period and
-# state class. Both keep long-term statistics, so the Trains dashboard can
+# state class. They keep long-term statistics, so the Trains dashboard can
 # chart the hourly and daily maximum as bars; "this hour" is only for that.
-HISTORY_STATS=[dict(entity=TRAINS_TODAY, name="Trains today", source=TRAIN_PASSING, state=["on"], type="count",
-                    start="{{ today_at() }}", end="{{ now() }}", state_class="measurement"),
-               dict(entity=TRAINS_THIS_HOUR, name="Trains this hour", source=TRAIN_PASSING, state=["on"], type="count",
-                    start="{{ now().replace(minute=0, second=0, microsecond=0) }}", end="{{ now() }}",
-                    state_class="measurement")]
+def train_counts(passing, today, this_hour, suffix=""):
+    return [dict(entity=today, name="Trains today"+suffix, source=passing, state=["on"], type="count",
+                 start=TODAY_START, end="{{ now() }}", state_class="measurement"),
+            dict(entity=this_hour, name="Trains this hour"+suffix, source=passing, state=["on"], type="count",
+                 start=HOUR_START, end="{{ now() }}", state_class="measurement")]
+HISTORY_STATS=train_counts(TRAIN_PASSING,TRAINS_TODAY,TRAINS_THIS_HOUR)+train_counts(TELE_PASSING,TELE_TODAY,TELE_THIS_HOUR," tele")
 RAIN_24H="sensor.altdorf_rain_24_h"
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
@@ -554,13 +569,17 @@ ALERTS=[
  month_pill("grey_month","Grey month","mdi:weather-cloudy","grey",SUN_PCT+" < 50",MONTH_TEXT,"On when Altdorf has had less than half the month's normal sunshine."),
  month_pill("warm_month","Warm month","mdi:trending-up","orange",MONTH_T+" >= 2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C warmer than normal."),
  dict(key="trains_today",group="Travel",name="Trains today",icon="mdi:train",color="green",
-   tmpl="{{ states('"+TRAINS_TODAY+"')|int(0) > 0 }}",
-   content="{{ states('"+TRAINS_TODAY+"')|int(0) }}",
-   secondary="{{ states('"+TRAINS_TODAY+"')|int(0) }} trains past the window since midnight"
-             "{{ ' · one on the track now' if is_state('"+TRAIN_PASSING+"','on') }}",
-   rule="On from the first train of the day; the row shows the count. A train counts when Frigate sees it in the track zone of the full-resolution crop camera, and one that drops out for under 30 s still counts once.",
-   data=[(TRAINS_TODAY,"Trains today"),(TRAIN_PASSING,"Train passing"),(TRAIN_ON_TRACK,"Frigate: train on the track")],
-   hist=[TRAIN_PASSING]),
+   tmpl="{{ states('"+TRAINS_TODAY+"')|int(0) > 0 or states('"+TELE_TODAY+"')|int(0) > 0 }}",
+   # Both cameras while they're compared: "Reolink|iPhone".
+   content="{{ states('"+TRAINS_TODAY+"')|int(0) }}|{{ states('"+TELE_TODAY+"')|int(0) }}",
+   secondary="Reolink {{ states('"+TRAINS_TODAY+"')|int(0) }}, iPhone {{ states('"+TELE_TODAY+"')|int(0) }} trains since midnight"
+             "{{ ' · one on the track now' if is_state('"+TRAIN_PASSING+"','on') or is_state('"+TELE_PASSING+"','on') }}",
+   summary="Last train, Reolink: {{ states('"+LAST_TRAIN+"') if states('"+LAST_TRAIN+"') not in ['unknown',''] else '–' }}<br>"
+           "Last train, iPhone: {{ states('"+LAST_TRAIN_TELE+"') if states('"+LAST_TRAIN_TELE+"') not in ['unknown',''] else '–' }}",
+   rule="On from the first train of the day; the row shows the count of each camera, Reolink|iPhone. The Reolink counts a train when Frigate sees it in the track zone of the full-resolution crop camera, the iPhone anywhere in its picture; one that drops out for under 30 s still counts once. Each train is matched to the timetable (dashboards/trains/timetable.py).",
+   data=[(TRAINS_TODAY,"Reolink today"),(TELE_TODAY,"iPhone today"),(TRAIN_PASSING,"Reolink: train passing"),
+         (TELE_PASSING,"iPhone: train passing"),(LAST_TRAIN,"Reolink: last train"),(LAST_TRAIN_TELE,"iPhone: last train")],
+   hist=[TRAIN_PASSING,TELE_PASSING]),
  month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
 GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","Maintenance"]
