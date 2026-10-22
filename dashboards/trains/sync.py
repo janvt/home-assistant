@@ -64,7 +64,7 @@ def main() -> None:
     have = set(states(ha))
     missing_boards = [b for b in timetable.BOARDS + [timetable.PAST] if b not in have]
     if missing_boards:
-        print("timetable sensors missing (paste ha-timetable.yaml into HA's configuration, restart):\n  "
+        print("timetable sensors missing (copy ha-timetable.yaml to /config/packages/, restart HA):\n  "
               + "\n  ".join(missing_boards))
     for number in timetable.NUMBERS:
         if number["entity"] not in have:

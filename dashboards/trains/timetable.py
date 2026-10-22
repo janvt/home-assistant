@@ -190,9 +190,14 @@ HEADER = """\
 #     saw today.
 #
 # INSTALL
-#   Paste both blocks into configuration.yaml (or a package) and restart Home
-#   Assistant. Everything else (helpers, the matching automation, the
-#   dashboard) is pushed by dashboards/trains/sync.py over the API.
+#   As a package: copy this file to /config/packages/trains_timetable.yaml,
+#   have configuration.yaml load the folder,
+#       homeassistant:
+#         packages: !include_dir_named packages
+#   and restart Home Assistant (packages load only on a restart). After a
+#   change, replace the file and restart again. Everything else (helpers, the
+#   matching automation, the dashboard) is pushed by
+#   dashboards/trains/sync.py over the API.
 #
 # RATE
 #   3 boards every 300 s is ~860 requests a day. transport.opendata.ch is a
