@@ -45,10 +45,12 @@ def test_every_enabled_diagnostic_is_shown() -> None:
 
 
 def test_only_frigate_entities() -> None:
-    """Frigate's own entities, plus the train count the pills' sync makes."""
+    """Frigate's own entities, plus the train count the pills' sync makes and the
+    timetable's past-trains sensor."""
     prefixes = (f"{build.CAMERA}_", f"{build.WIDE}_", f"{build.TELE}_", f"{build.ZONE}_", "frigate_")
     others = {f"camera.{c}" for c in (build.CAMERA, build.WIDE, build.TELE)} | {
-        build.PASSING, build.TODAY, build.THIS_HOUR, build.TELE_PASSING, build.TELE_TODAY, build.TELE_THIS_HOUR}
+        build.PASSING, build.TODAY, build.THIS_HOUR, build.TELE_PASSING, build.TELE_TODAY, build.TELE_THIS_HOUR,
+        build._tt["PAST"]}
     assert all(e.split(".", 1)[1].startswith(prefixes) or e in others for e in USED), sorted(USED)
 
 
@@ -58,6 +60,12 @@ timetable = _load("timetable")
 
 def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def test_ha_timetable_yaml_is_generated_from_timetable_py() -> None:
+    """The pasted YAML and the automation share the matching template; edit
+    the YAML by hand and the two drift apart without a sound."""
+    assert (HERE / "ha-timetable.yaml").read_text() == timetable.render(), "run python dashboards/trains/timetable.py"
 
 
 def test_timetable_sensors_are_the_ones_the_matching_reads() -> None:
@@ -84,8 +92,13 @@ def test_timetable_templates_parse() -> None:
     env.filters.setdefault("int", lambda value, *args: value)
     env.parse(timetable.MATCH)
     yaml = pytest.importorskip("yaml")
-    for block in yaml.safe_load((HERE / "ha-timetable.yaml").read_text())["rest"]:
+    package = yaml.safe_load((HERE / "ha-timetable.yaml").read_text())
+    for block in package["rest"]:
         env.parse(block["resource_template"])
+    for block in package["template"]:
+        for sensor in block["sensor"]:
+            for template in (sensor["state"], *sensor["attributes"].values()):
+                env.parse(template)
 
 
 def test_the_automation_handles_every_camera() -> None:

@@ -62,9 +62,9 @@ def main() -> None:
             ha.call({"type": "config/entity_registry/update", "entity_id": entity, "disabled_by": None})
 
     have = set(states(ha))
-    missing_boards = [b for b in timetable.BOARDS if b not in have]
+    missing_boards = [b for b in timetable.BOARDS + [timetable.PAST] if b not in have]
     if missing_boards:
-        print("timetable boards missing (paste ha-timetable.yaml into HA's configuration, restart):\n  "
+        print("timetable sensors missing (paste ha-timetable.yaml into HA's configuration, restart):\n  "
               + "\n  ".join(missing_boards))
     for number in timetable.NUMBERS:
         if number["entity"] not in have:

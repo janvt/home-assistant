@@ -220,6 +220,24 @@ def bars(entities: dict[str, str], title: str, period: str, days: int, **extra: 
     return card
 
 
+def past_table() -> str:
+    """Today's tally per camera, then the last 20 timetable trains with a
+    tick or cross per camera. Built every 5 minutes by the past-trains sensor."""
+    past, cams = _tt["PAST"], list(_tt["CAMERAS"])
+    head = ("{% set p = state_attr('" + past + "','past') or [] %}"
+            "{% set today = p | selectattr('t', 'gt', today_at().timestamp()) | list %}"
+            "**Today:** {{ today | count }} timetable trains past"
+            + "".join(" · " + c + " saw {{ today | selectattr('" + c.lower() + "') | list | count }}" for c in cams)
+            + " · **missed by both: {{ states('" + past + "') }}**\n\n"
+            "| Time | Train | | " + " | ".join(cams) + " |\n|:--|:--|:--|" + ":-:|" * len(cams) + "\n")
+    rows = ("{% for e in (p | sort(attribute='t', reverse=true))[:20] %}"
+            "| {{ e.t | timestamp_custom('%H:%M') }} | {{ e.n }} | {{ e.k }} | "
+            + " | ".join("{{ '✓' if e." + c.lower() + " else '✗' }}" for c in cams)
+            + " |\n{% else %}| | Nothing yet: the list fills every 5 minutes. | | " + " | " * (len(cams) - 1)
+            + " |\n{% endfor %}")
+    return head + rows
+
+
 def count_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 4, "cards": [
         heading("Train count: Reolink and iPhone side by side", "mdi:counter"),
@@ -239,6 +257,8 @@ def count_section() -> dict[str, Any]:
         tile(_tt["CAMERAS"]["iPhone"][1], "iPhone: last train", grid_options={"columns": 12}),
         dict({"type": "logbook", "title": "Latest trains, matched to the timetable", "hours_to_show": 24,
               "target": {"entity_id": [text for _, text in _tt["CAMERAS"].values()]}}, grid_options={"columns": 12}),
+        heading("Timetable trains past: did the cameras see them?", "mdi:train-car", "subtitle"),
+        {"type": "markdown", "content": past_table(), "grid_options": {"columns": "full"}},
         {"type": "markdown", "content":
             "Each counted train is matched to the closest timetable train at Altdorf: trains that stop, and "
             "through trains (EC, IC 21) estimated from Arth-Goldau (southbound) and Bellinzona (northbound). "
