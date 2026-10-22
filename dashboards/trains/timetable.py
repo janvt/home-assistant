@@ -136,7 +136,8 @@ def past_sensor() -> dict[str, Any]:
              + "".join(", '" + label.lower() + "': f_" + label.lower() for label in CAMERAS) + "}")
     past = (
         "{% set old = " + _attr("past") + " | selectattr('t', 'gt', now().timestamp() - 86400) | list %}"
-        "{% set since = " + _attr("since", "0") + " | int(0) %}"
+        # On the very first check `since` isn't set yet: then it starts now.
+        "{% set since = (" + _attr("since", "0") + " | int(0)) or now().timestamp() %}"
         "{% if trigger.id != 'check' %}{{ old }}{% else %}"
         + CANDIDATES
         + "{% set w = states('" + WINDOW + "') | float(3) * 60 %}"
