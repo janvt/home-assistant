@@ -24,6 +24,11 @@ CAMERA = "train_track"      # detects
 WIDE = "train_slice"        # records, listens
 ZONE = "track_hd"
 FRIGATE = "http://10.69.42.175:5000"
+# The train count, made by the Mobile alert pills' sync (mobile-alerts/pills.py):
+# "passing" is the zone sensor held on for 30 s, the counts keep statistics.
+PASSING = "binary_sensor.train_passing"
+TODAY = "sensor.trains_today"
+THIS_HOUR = "sensor.trains_this_hour"
 # Frigate's own debug picture: object boxes, the zone and motion boxes drawn
 # in. HA doesn't proxy it, so it only loads on the LAN over http.
 DEBUG_IMAGE = (f"{FRIGATE}/api/{CAMERA}/latest.jpg"
@@ -177,6 +182,32 @@ def health_section() -> dict[str, Any]:
     ]}
 
 
+def bars(entity: str, title: str, period: str, days: int, **extra: Any) -> dict[str, Any]:
+    """One bar per hour or day: the count's maximum in it, which is its total
+    since the count resets at the start of each."""
+    card = {"type": "statistics-graph", "title": title, "entities": [entity], "stat_types": ["max"],
+            "period": period, "days_to_show": days, "chart_type": "bar", "hide_legend": True}
+    card.update(extra)
+    return card
+
+
+def count_section() -> dict[str, Any]:
+    return {"type": "grid", "column_span": 4, "cards": [
+        heading("Train count", "mdi:counter"),
+        tile(TODAY, "Today", grid_options={"columns": 4}),
+        tile(THIS_HOUR, "This hour", grid_options={"columns": 4}),
+        tile(PASSING, "Passing now", grid_options={"columns": 4}),
+        dict(bars(THIS_HOUR, "Trains per hour (48 h)", "hour", 2), grid_options={"columns": 6}),
+        dict(bars(TODAY, "Trains per day (30 days)", "day", 30), grid_options={"columns": 6}),
+        dict({"type": "logbook", "title": "Latest trains", "hours_to_show": 24, "target": {"entity_id": [PASSING]}},
+             grid_options={"columns": 12}),
+        {"type": "markdown", "content":
+            "A train counts when it enters the **track_hd** zone; one that drops out for under 30 s counts once. "
+            "The charts only start from when the count was set up.",
+         "grid_options": {"columns": "full"}},
+    ]}
+
+
 def history_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 4, "cards": [
         heading("Last 24 hours", "mdi:chart-timeline-variant"),
@@ -195,5 +226,5 @@ def history_section() -> dict[str, Any]:
 
 def build() -> dict[str, Any]:
     return {"views": [{"title": "Tracks", "path": "tracks", "icon": ICON, "type": "sections", "max_columns": 4,
-                       "sections": [picture_section(), now_section(), settings_section(), health_section(),
-                                    history_section()]}]}
+                       "sections": [picture_section(), now_section(), count_section(), settings_section(),
+                                    health_section(), history_section()]}]}
