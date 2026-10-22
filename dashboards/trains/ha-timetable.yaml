@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Trains past the window: the timetable to match detected trains against
+#
+# PURPOSE
+#   Three station boards from transport.opendata.ch (free, no key), refreshed
+#   every 5 minutes. dashboards/trains/sync.py's automation matches each train
+#   Frigate counts against them:
+#     - Altdorf UR arrivals: trains that stop at Altdorf.
+#     - Arth-Goldau departures: southbound trains; those whose stops skip
+#       Altdorf fly through it, about 18 min after leaving Arth-Goldau.
+#     - Bellinzona departures: northbound trains; those that skip Altdorf fly
+#       through it about 32 min after leaving Bellinzona.
+#   Each board starts a little in the past, so a train that has just passed is
+#   still on it. Only the fields the matching needs are fetched, to keep each
+#   sensor's attributes small. The board's trains are in the `stationboard`
+#   attribute; the state is how many there are.
+#
+# INSTALL
+#   Paste the `rest:` block into configuration.yaml (or a package) once and
+#   restart Home Assistant. Everything else (helpers, the matching automation,
+#   the dashboard) is pushed by dashboards/trains/sync.py over the API.
+#
+# RATE
+#   3 boards every 300 s is ~860 requests a day. transport.opendata.ch is a
+#   free community service: don't poll faster.
+# ─────────────────────────────────────────────────────────────────────────────
+
+rest:
+  - resource_template: >-
+      https://transport.opendata.ch/v1/stationboard?station=8505113&type=arrival&limit=20&datetime={{ (now() - timedelta(minutes=15)).strftime('%Y-%m-%d') }}%20{{ (now() - timedelta(minutes=15)).strftime('%H:%M') }}&fields[]=stationboard/category&fields[]=stationboard/number&fields[]=stationboard/to&fields[]=stationboard/stop/arrival&fields[]=stationboard/stop/departure&fields[]=stationboard/stop/delay&fields[]=stationboard/stop/platform
+    scan_interval: 300
+    timeout: 20
+    sensor:
+      - name: Altdorf arrivals
+        unique_id: trains_board_altdorf_arrivals
+        icon: mdi:train
+        value_template: "{{ value_json.stationboard | count }}"
+        json_attributes:
+          - stationboard
+  - resource_template: >-
+      https://transport.opendata.ch/v1/stationboard?station=Arth-Goldau&limit=40&datetime={{ (now() - timedelta(minutes=40)).strftime('%Y-%m-%d') }}%20{{ (now() - timedelta(minutes=40)).strftime('%H:%M') }}&fields[]=stationboard/category&fields[]=stationboard/number&fields[]=stationboard/to&fields[]=stationboard/stop/departure&fields[]=stationboard/stop/delay&fields[]=stationboard/passList/station/name
+    scan_interval: 300
+    timeout: 20
+    sensor:
+      - name: Arth-Goldau departures
+        unique_id: trains_board_arth_goldau_departures
+        icon: mdi:train
+        value_template: "{{ value_json.stationboard | count }}"
+        json_attributes:
+          - stationboard
+  - resource_template: >-
+      https://transport.opendata.ch/v1/stationboard?station=Bellinzona&limit=40&datetime={{ (now() - timedelta(minutes=60)).strftime('%Y-%m-%d') }}%20{{ (now() - timedelta(minutes=60)).strftime('%H:%M') }}&fields[]=stationboard/category&fields[]=stationboard/number&fields[]=stationboard/to&fields[]=stationboard/stop/departure&fields[]=stationboard/stop/delay&fields[]=stationboard/passList/station/name
+    scan_interval: 300
+    timeout: 20
+    sensor:
+      - name: Bellinzona departures
+        unique_id: trains_board_bellinzona_departures
+        icon: mdi:train
+        value_template: "{{ value_json.stationboard | count }}"
+        json_attributes:
+          - stationboard

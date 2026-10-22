@@ -19,7 +19,11 @@ how hard the box is working, and the last 24 hours of it.
 """
 from __future__ import annotations
 
+import runpy
+from pathlib import Path
 from typing import Any
+
+_tt = runpy.run_path(str(Path(__file__).resolve().parent / "timetable.py"))
 
 DASHBOARD = "dashboard-trains"
 TITLE = "Trains"
@@ -170,6 +174,9 @@ def settings_section() -> dict[str, Any]:
         toggle(wide("switch.recordings"), "Record (wide)"),
         slider(cam("number.threshold"), "Motion threshold"),
         slider(cam("number.contour_area"), "Contour area"),
+        slider(_tt["TRAVEL_SOUTH"], "Through, Arth-Goldau → Altdorf"),
+        slider(_tt["TRAVEL_NORTH"], "Through, Bellinzona → Altdorf"),
+        slider(_tt["WINDOW"], "Match window ±"),
         {"type": "markdown", "content":
             "Changes here last until Frigate restarts: the config file wins after that. "
             "Lower the **motion threshold** or **contour area** if a train goes by without a red box. "
@@ -227,8 +234,17 @@ def count_section() -> dict[str, Any]:
              grid_options={"columns": 6}),
         dict(bars({TODAY: "Reolink", TELE_TODAY: "iPhone"}, "Trains per day (30 days)", "day", 30),
              grid_options={"columns": 6}),
-        dict({"type": "logbook", "title": "Latest trains (both cameras)", "hours_to_show": 24,
-              "target": {"entity_id": [PASSING, TELE_PASSING]}}, grid_options={"columns": 12}),
+        heading("Which train was it?", "mdi:timetable", "subtitle"),
+        tile(_tt["CAMERAS"]["Reolink"][1], "Reolink: last train", grid_options={"columns": 12}),
+        tile(_tt["CAMERAS"]["iPhone"][1], "iPhone: last train", grid_options={"columns": 12}),
+        dict({"type": "logbook", "title": "Latest trains, matched to the timetable", "hours_to_show": 24,
+              "target": {"entity_id": [text for _, text in _tt["CAMERAS"].values()]}}, grid_options={"columns": 12}),
+        {"type": "markdown", "content":
+            "Each counted train is matched to the closest timetable train at Altdorf: trains that stop, and "
+            "through trains (EC, IC 21) estimated from Arth-Goldau (southbound) and Bellinzona (northbound). "
+            "No train within the window means one the timetable doesn't list, usually freight. "
+            "Tune the travel times under Settings if through trains keep landing a few minutes off.",
+         "grid_options": {"columns": "full"}},
         {"type": "markdown", "content":
             "Reolink: a train counts when it enters the **track_hd** zone. iPhone: when Frigate sees a train "
             "anywhere in its picture (no zone yet, so the far track counts too). "

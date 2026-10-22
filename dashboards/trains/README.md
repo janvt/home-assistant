@@ -14,6 +14,8 @@ detection there finds nothing.
 |------|------|
 | [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. |
 | [`sync.py`](sync.py) | Creates the dashboard if needed, enables the Frigate diagnostics it uses, pushes it. |
+| [`timetable.py`](timetable.py) | Matches each counted train to the timetable: the tuning helpers, the `input_text` per camera and the automation, all pushed by `sync.py`. |
+| [`ha-timetable.yaml`](ha-timetable.yaml) | The three station boards as REST sensors. **Paste into HA's configuration once** and restart; the API can't create REST sensors. |
 
 ## What's on it
 
@@ -32,6 +34,12 @@ detection there finds nothing.
   trains per hour (48 h) and per day (30 days), and the latest trains. The
   count helpers come from the Mobile alert pills' sync (`HISTORY_STATS` in
   `mobile-alerts/pills.py`).
+- **Which train was it?** Each counted train, per camera, matched to the closest
+  timetable train at Altdorf: trains that stop (Altdorf arrivals) and through
+  trains, estimated from Arth-Goldau (southbound, +18 min) and Bellinzona
+  (northbound, +32 min). Nothing within ±3 min means a train the timetable
+  doesn't list, usually freight. The travel times and the window are helpers
+  under Settings, so they can be tuned without touching the code.
 - **Settings:** the crop's switches, motion threshold and contour area, plus
   audio and recording on the wide camera. They
   last until Frigate restarts; its config file wins after that.
