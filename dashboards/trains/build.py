@@ -3,10 +3,15 @@
 `build()` returns the whole dashboard config, owned by the script like the
 Weather one: a card added in the UI is gone after the next sync.
 
-One camera, `train_slice`, watches the tracks; its `track` zone is the part a
-train has to cross. The page shows the picture Frigate gets and the one it
-draws its boxes on, whether it thinks a train is there right now, the knobs
-that decide that, how hard the box is working, and the last 24 hours of it.
+Two Frigate cameras look at the same lens. `train_track` is a full-resolution
+crop of the track from the main stream and does the detecting; its `track_hd`
+zone is the part a train has to cross. `train_slice` is the wide view on the
+sub stream and keeps the recordings and the microphone. In the sub stream a
+train is too small for the model, so its own detection finds nothing.
+
+The page shows the picture Frigate detects on and the one it draws its boxes
+on, whether it thinks a train is there right now, the knobs that decide that,
+how hard the box is working, and the last 24 hours of it.
 """
 from __future__ import annotations
 
@@ -15,11 +20,12 @@ from typing import Any
 DASHBOARD = "dashboard-trains"
 TITLE = "Trains"
 ICON = "mdi:train"
-CAMERA = "train_slice"
-ZONE = "track"
+CAMERA = "train_track"      # detects
+WIDE = "train_slice"        # records, listens
+ZONE = "track_hd"
 FRIGATE = "http://10.69.42.175:5000"
-# Frigate's own debug picture: object boxes, the zone, masks and motion boxes
-# drawn in. HA doesn't proxy it, so it only loads on the LAN over http.
+# Frigate's own debug picture: object boxes, the zone and motion boxes drawn
+# in. HA doesn't proxy it, so it only loads on the LAN over http.
 DEBUG_IMAGE = (f"{FRIGATE}/api/{CAMERA}/latest.jpg"
                "?bbox=1&zones=1&mask=1&motion=1&regions=1&timestamp=1&h=480")
 
@@ -35,10 +41,14 @@ DISABLED_BY_DEFAULT = [
 ]
 
 
-def cam(kind: str) -> str:
-    """`binary_sensor.train_slice_motion` from ("binary_sensor", "motion")."""
+def cam(kind: str, camera: str = CAMERA) -> str:
+    """`binary_sensor.train_track_motion` from ("binary_sensor", "motion")."""
     domain, _, key = kind.partition(".")
-    return f"{domain}.{CAMERA}_{key}"
+    return f"{domain}.{camera}_{key}"
+
+
+def wide(kind: str) -> str:
+    return cam(kind, WIDE)
 
 
 def zone(kind: str) -> str:
@@ -74,15 +84,16 @@ def hist(entities: list[str], title: str, hours: int = 24, **extra: Any) -> dict
     return card
 
 
-def wide(card: dict[str, Any]) -> dict[str, Any]:
+def full(card: dict[str, Any]) -> dict[str, Any]:
     return dict(card, grid_options={"columns": "full"})
 
 
 # ── sections ────────────────────────────────────────────────────────────────
 def camera_card(view: str, **extra: Any) -> dict[str, Any]:
-    """The advanced camera card, opening on `view` (live, timeline, clips …)."""
+    """The advanced camera card on both cameras, opening on `view` (live,
+    timeline …). The crop comes first; the wide view has the recordings."""
     card = {"type": "custom:advanced-camera-card",
-            "cameras": [{"camera_entity": f"camera.{CAMERA}", "frigate": {"url": FRIGATE}}],
+            "cameras": [{"camera_entity": f"camera.{c}", "frigate": {"url": FRIGATE}} for c in (CAMERA, WIDE)],
             "view": {"default": view}, "grid_options": {"columns": "full"}}
     card.update(extra)
     return card
@@ -98,8 +109,8 @@ def picture_section() -> dict[str, Any]:
                       "live_provider": "image", "image": {"mode": "url", "url": DEBUG_IMAGE, "refresh_seconds": 1}}],
          "menu": {"style": "none"}, "grid_options": {"columns": "full"}},
         {"type": "markdown", "content":
-            "The outlined area is the **track** zone a train has to cross; the shaded part is the "
-            "motion mask, ignored. Red boxes: motion. Green: the regions sent to the detector. "
+            "The full-resolution crop Frigate detects on. The outlined area is the **track_hd** zone a "
+            "train has to cross. Red boxes: motion. Green: the regions sent to the detector. "
             "Labelled boxes: tracked objects with their score. Comes straight from Frigate, so it "
             "stays blank on ha.janvt.dev.",
          "grid_options": {"columns": "full"}},
@@ -112,12 +123,12 @@ def now_section() -> dict[str, Any]:
         tile(zone("binary_sensor.train_occupancy"), "Train on the track", grid_options={"columns": 6}),
         tile(cam("binary_sensor.train_occupancy"), "Train in frame", grid_options={"columns": 6}),
         tile(cam("binary_sensor.motion"), "Motion", grid_options={"columns": 4}),
-        tile(cam("binary_sensor.train_sound"), "Train sound", grid_options={"columns": 4}),
+        tile(wide("binary_sensor.train_sound"), "Train sound", grid_options={"columns": 4}),
         tile(cam("sensor.review_status"), "Review", grid_options={"columns": 4}),
         tile(zone("sensor.train_active_count"), "Moving on track", grid_options={"columns": 4}),
         tile(zone("sensor.train_count"), "On track", grid_options={"columns": 4}),
         tile(cam("sensor.train_count"), "In frame", grid_options={"columns": 4}),
-        tile(cam("sensor.sound_level"), "Sound level", grid_options={"columns": 12}),
+        tile(wide("sensor.sound_level"), "Sound level", grid_options={"columns": 12}),
         heading("Last train", "mdi:image", "subtitle"),
         {"type": "picture-entity", "entity": f"image.{CAMERA}_train", "show_state": False, "show_name": False},
     ]}
@@ -128,18 +139,18 @@ def settings_section() -> dict[str, Any]:
         heading("Settings", "mdi:tune-variant"),
         toggle(cam("switch.detect"), "Detect"),
         toggle(cam("switch.motion"), "Motion"),
-        toggle(cam("switch.audio_detection"), "Audio"),
         toggle(cam("switch.improve_contrast"), "Contrast boost"),
-        toggle(cam("switch.recordings"), "Record"),
         toggle(cam("switch.snapshots"), "Snapshots"),
         toggle(cam("switch.review_alerts"), "Alerts"),
         toggle(cam("switch.review_detections"), "Detections"),
+        toggle(wide("switch.audio_detection"), "Audio (wide)"),
+        toggle(wide("switch.recordings"), "Record (wide)"),
         slider(cam("number.threshold"), "Motion threshold"),
         slider(cam("number.contour_area"), "Contour area"),
         {"type": "markdown", "content":
             "Changes here last until Frigate restarts: the config file wins after that. "
             "Lower the **motion threshold** or **contour area** if a train goes by without a red box. "
-            "Trains only land in Frigate's *detections* review; *alerts* are set to people and cars.",
+            "A train on **track_hd** is an alert. Audio and recordings run on the wide camera.",
          "grid_options": {"columns": "full"}},
     ]}
 
@@ -169,15 +180,15 @@ def health_section() -> dict[str, Any]:
 def history_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 4, "cards": [
         heading("Last 24 hours", "mdi:chart-timeline-variant"),
-        wide(hist([zone("binary_sensor.train_occupancy"), cam("binary_sensor.train_occupancy"),
-                   cam("binary_sensor.motion"), cam("binary_sensor.train_sound")], "Train, motion and sound")),
-        dict(hist([cam("sensor.sound_level")], "Sound level"), grid_options={"columns": 6}),
+        full(hist([zone("binary_sensor.train_occupancy"), cam("binary_sensor.train_occupancy"),
+                   cam("binary_sensor.motion"), wide("binary_sensor.train_sound")], "Train, motion and sound")),
+        dict(hist([wide("sensor.sound_level")], "Sound level"), grid_options={"columns": 6}),
         dict(hist([cam("sensor.camera_fps"), cam("sensor.process_fps"), cam("sensor.detection_fps"),
                    cam("sensor.skipped_fps")], "Frames per second"), grid_options={"columns": 6}),
         dict(camera_card("timeline"), grid_options={"columns": 6}),
         dict({"type": "logbook", "title": "Logbook", "hours_to_show": 24,
               "target": {"entity_id": [zone("binary_sensor.train_occupancy"), cam("binary_sensor.train_occupancy"),
-                                       cam("binary_sensor.train_sound"), cam("sensor.review_status")]}},
+                                       wide("binary_sensor.train_sound"), cam("sensor.review_status")]}},
              grid_options={"columns": 6}),
     ]}
 

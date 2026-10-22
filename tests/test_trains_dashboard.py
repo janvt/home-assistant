@@ -43,5 +43,5 @@ def test_every_enabled_diagnostic_is_shown() -> None:
 
 
 def test_only_frigate_entities() -> None:
-    prefixes = (f"{build.CAMERA}_", f"{build.ZONE}_", "frigate_")
-    assert all(e.split(".", 1)[1].startswith(prefixes) or e == f"camera.{build.CAMERA}" for e in USED), sorted(USED)
+    prefixes = (f"{build.CAMERA}_", f"{build.WIDE}_", f"{build.ZONE}_", "frigate_")
+    assert all(e.split(".", 1)[1].startswith(prefixes) or e in (f"camera.{build.CAMERA}", f"camera.{build.WIDE}") for e in USED), sorted(USED)

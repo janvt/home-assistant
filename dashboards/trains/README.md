@@ -1,7 +1,14 @@
 # Trains debug dashboard
 
 The **Trains** dashboard (`/dashboard-trains`, admins only) is for tuning
-Frigate's train detection on the `train_slice` camera and its `track` zone.
+Frigate's train detection.
+
+Frigate has two cameras on the same Reolink. `train_track` is a full-resolution
+crop of the track from the 2560×1920 main stream (go2rtc crops it) and does the
+detecting; a train has to cross its `track_hd` zone. `train_slice` is the wide
+view on the 640×480 sub stream and keeps the recordings and the microphone. In
+the sub stream a train is only about 120×45 px, too small for the model, so
+detection there finds nothing.
 
 | File | What |
 |------|------|
@@ -10,13 +17,14 @@ Frigate's train detection on the `train_slice` camera and its `track` zone.
 
 ## What's on it
 
-- **What Frigate sees:** the live stream (advanced camera card), and Frigate's
-  debug picture with the zone, motion mask, motion boxes, detector regions and
+- **What Frigate sees:** both cameras live (advanced camera card, crop first),
+  and the crop's debug picture with the zone, motion boxes, detector regions and
   object boxes drawn in, refreshed every second. That one comes straight from
   Frigate at `10.69.42.175:5000`, so it only loads on the LAN over http.
 - **Right now:** train on the track and in frame, motion, train sound, review
   status, the counts, sound level and the last train snapshot.
-- **Settings:** the camera's switches, motion threshold and contour area. They
+- **Settings:** the crop's switches, motion threshold and contour area, plus
+  audio and recording on the wide camera. They
   last until Frigate restarts; its config file wins after that.
 - **Frigate:** status, uptime, fps (camera, processed, detections, skipped),
   inference speed, GPU and CPU load, version, and a link to Frigate's review page.
