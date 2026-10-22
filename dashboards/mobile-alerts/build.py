@@ -25,6 +25,8 @@ GROUPS: list[str] = _pills["GROUPS"]
 CRITICAL: set[str] = _pills["CRITICAL"]
 NUMBERS: list[dict[str, Any]] = _pills.get("NUMBERS", [])
 STATISTICS: list[dict[str, Any]] = _pills.get("STATISTICS", [])
+TEMPLATES: list[dict[str, Any]] = _pills.get("TEMPLATES", [])
+HISTORY_STATS: list[dict[str, Any]] = _pills.get("HISTORY_STATS", [])
 
 DASHBOARD = "dashboard-mobile"
 SUBVIEW = "weather-alerts"
@@ -119,15 +121,18 @@ def color(pill: dict[str, Any]) -> str:
 
 
 def _pick(index: int, field: str) -> str:
-    """Template for the icon or colour of the index-th active pill."""
-    table = json.dumps({p["key"]: p[field] for p in ALERTS})
+    """Template for the icon, colour or content of the index-th active pill."""
+    table = json.dumps({p["key"]: p.get(field, "") for p in ALERTS if field != "content"})
     head = (_ACTIVE + "{% set m = " + table + " %}"
             "{% set k = ns.a[" + str(index) + "] if ns.a|count > " + str(index) + " else '' %}")
-    dynamic = [p for p in ALERTS if field == "color" and p.get("color_from")]
+    if field == "content":
+        dynamic = {p["key"]: p["content"] for p in ALERTS if p.get("content")}
+    else:
+        dynamic = {p["key"]: color(p) for p in ALERTS if field == "color" and p.get("color_from")}
     if not dynamic:
         return head + "{{ m[k] if k else '' }}"
-    branches = "".join(("{% if " if i == 0 else "{% elif ") + f"k == '{p['key']}' %}}" + color(p)
-                       for i, p in enumerate(dynamic))
+    branches = "".join(("{% if " if i == 0 else "{% elif ") + f"k == '{key}' %}}" + value
+                       for i, (key, value) in enumerate(dynamic.items()))
     return head + branches + "{% else %}{{ m[k] if k else '' }}{% endif %}"
 
 
@@ -135,9 +140,11 @@ def chips() -> list[dict[str, Any]]:
     states = count_states()
 
     def place(index: int, shown_for: list[str]) -> dict[str, Any]:
-        return {"type": "conditional", "conditions": _cond(shown_for),
-                "chip": {"type": "template", "icon": _pick(index, "icon"),
-                         "icon_color": _pick(index, "color"), "tap_action": NAV}}
+        chip = {"type": "template", "icon": _pick(index, "icon"), "icon_color": _pick(index, "color"),
+                "tap_action": NAV}
+        if any(p.get("content") for p in ALERTS):
+            chip["content"] = _pick(index, "content")
+        return {"type": "conditional", "conditions": _cond(shown_for), "chip": chip}
 
     # Places 0..PLACES-2 show whenever at least index+1 pills are on.
     row = [place(i, states[i:]) for i in range(PLACES - 1)]

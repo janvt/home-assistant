@@ -72,6 +72,11 @@ def main() -> None:
                            pill["tmpl"], {}, args.apply)
         if what != "same":
             changes.append(f"{what} {build.entity(pill)}")
+    for helper in build.TEMPLATES:
+        what = sync_helper(ha, registry.get(helper["entity"]), helper["kind"], helper["name"], helper["tmpl"],
+                           helper.get("extra", {}), args.apply)
+        if what != "same":
+            changes.append(f"{what} {helper['entity']}")
     what = sync_helper(ha, registry.get(build.COUNT), "sensor", "Weather alerts active", build.COUNT_TEMPLATE,
                        {"state_class": "measurement"}, args.apply)
     if what != "same":
@@ -117,6 +122,16 @@ def main() -> None:
                 ha.rest("POST", url, {"entity_id": stat["source"], "state_characteristic": stat["characteristic"],
                                       "sampling_size": stat["sampling_size"], "max_age": stat["max_age"],
                                       "keep_last_sample": False, "precision": stat["precision"]})
+
+    for stat in build.HISTORY_STATS:
+        if stat["entity"] not in have:
+            changes.append(f"create {stat['entity']}")
+            if args.apply:
+                flow = ha.rest("POST", "/api/config/config_entries/flow", {"handler": "history_stats"})
+                url = f"/api/config/config_entries/flow/{flow['flow_id']}"
+                ha.rest("POST", url, {"name": stat["name"], "entity_id": stat["source"], "type": stat["type"]})
+                ha.rest("POST", url, {"state": stat["state"]})
+                ha.rest("POST", url, {"start": stat["start"], "end": stat["end"]})
 
     if args.apply:
         # A just-created helper's entity id is HA's slug of its title: check it.
