@@ -10,6 +10,8 @@ stays hidden until it turns off and on again.
 `color_from` (optional) names one or more enum sensors whose highest
 yellow/orange/red state overrides `color` in the row and on the Alerts page.
 
+`content` (optional) is a template shown next to the icon in the row, e.g. a count.
+
 `secondary`, `rule`, `data`, `hist` and the optional `summary` (a line that
 always shows in the pill's section, on or off) only feed the Alerts sub-page. Thresholds live
 in `tmpl`; change them here and run `sync.py`, not in the HA UI, or the next
@@ -88,6 +90,25 @@ REUSS_LIMIT="input_number.reuss_seedorf_dog_walk_limit"
 # yours to change on the Alerts page; sync never resets it.
 NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, max=700, step=10, initial=150,
               unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box")]
+# Frigate's train detection on the full-resolution crop of the track. A train
+# can flicker in and out of the zone, so "passing" holds on for 30 s and the
+# count only sees one train.
+TRAIN_ON_TRACK="binary_sensor.track_hd_train_occupancy"
+TRAIN_PASSING="binary_sensor.train_passing"
+TRAINS_TODAY="sensor.trains_today"
+TRAINS_THIS_HOUR="sensor.trains_this_hour"
+# Template helpers the pills read that aren't pills; sync.py creates and updates them.
+TEMPLATES=[dict(entity=TRAIN_PASSING, kind="binary_sensor", name="Train passing",
+                tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}",
+                extra={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}})]
+# History stats helpers; sync.py creates them and keeps their period and
+# state class. Both keep long-term statistics, so the Trains dashboard can
+# chart the hourly and daily maximum as bars; "this hour" is only for that.
+HISTORY_STATS=[dict(entity=TRAINS_TODAY, name="Trains today", source=TRAIN_PASSING, state=["on"], type="count",
+                    start="{{ today_at() }}", end="{{ now() }}", state_class="measurement"),
+               dict(entity=TRAINS_THIS_HOUR, name="Trains this hour", source=TRAIN_PASSING, state=["on"], type="count",
+                    start="{{ now().replace(minute=0, second=0, microsecond=0) }}", end="{{ now() }}",
+                    state_class="measurement")]
 RAIN_24H="sensor.altdorf_rain_24_h"
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
@@ -532,6 +553,14 @@ ALERTS=[
  month_pill("sunny_month","Sunny month","mdi:white-balance-sunny","yellow",SUN_PCT+" > 150",MONTH_TEXT,"On when Altdorf has had more than 150 % of the month's normal sunshine."),
  month_pill("grey_month","Grey month","mdi:weather-cloudy","grey",SUN_PCT+" < 50",MONTH_TEXT,"On when Altdorf has had less than half the month's normal sunshine."),
  month_pill("warm_month","Warm month","mdi:trending-up","orange",MONTH_T+" >= 2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C warmer than normal."),
+ dict(key="trains_today",group="Travel",name="Trains today",icon="mdi:train",color="green",
+   tmpl="{{ states('"+TRAINS_TODAY+"')|int(0) > 0 }}",
+   content="{{ states('"+TRAINS_TODAY+"')|int(0) }}",
+   secondary="{{ states('"+TRAINS_TODAY+"')|int(0) }} trains past the window since midnight"
+             "{{ ' · one on the track now' if is_state('"+TRAIN_PASSING+"','on') }}",
+   rule="On from the first train of the day; the row shows the count. A train counts when Frigate sees it in the track zone of the full-resolution crop camera, and one that drops out for under 30 s still counts once.",
+   data=[(TRAINS_TODAY,"Trains today"),(TRAIN_PASSING,"Train passing"),(TRAIN_ON_TRACK,"Frigate: train on the track")],
+   hist=[TRAIN_PASSING]),
  month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
 GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","Maintenance"]

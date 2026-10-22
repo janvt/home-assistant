@@ -104,6 +104,7 @@ def test_templates_compile() -> None:
     for i, place in enumerate(build.chips()[:-1]):
         templates[f"row place {i} icon"] = place["chip"]["icon"]
         templates[f"row place {i} colour"] = place["chip"]["icon_color"]
+        templates[f"row place {i} content"] = place["chip"].get("content", "")
     for label, template in templates.items():
         try:
             env.parse(template)
@@ -136,7 +137,7 @@ def test_row_never_grows_past_one_line(active: int) -> None:
     shown = [c for c in row["chips"] if _visible(c["conditions"], active)]
     assert _visible(row["visibility"], active) == (active > 0), "row should hide when nothing is on"
     assert len(shown) == min(active, build.PLACES)
-    overflow = [c for c in shown if c["chip"].get("content")]
+    overflow = [c for c in shown if c["chip"]["icon"] == ""]
     assert len(overflow) == (1 if active > build.PLACES else 0)
 
 

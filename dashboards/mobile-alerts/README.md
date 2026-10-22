@@ -23,6 +23,15 @@ grouped by topic, every alert's rule and the live values it checks.
   when it's missing and never touches its value; change it on the Alerts page.
 - A few pills read a **Statistics** helper (`STATISTICS` in `pills.py`), e.g.
   Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
+- "Trains today" reads a **History stats** helper (`HISTORY_STATS`):
+  `sensor.trains_today` counts how often `binary_sensor.train_passing` turned
+  on since midnight. That one is a plain template helper (`TEMPLATES`) on
+  Frigate's train-on-the-track sensor, held on for 30 s so a train that
+  flickers out of the zone counts once. `sensor.trains_this_hour` counts the
+  same per hour; both keep long-term statistics for the Trains dashboard's
+  bar charts.
+- A pill with `content` shows that template next to its icon in the row, e.g.
+  the number of trains.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
   picks up new pills by itself.
 - **Dismissing:** hold a card on the Alerts page to dismiss it; hold again to
