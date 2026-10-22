@@ -97,18 +97,29 @@ TRAIN_ON_TRACK="binary_sensor.track_hd_train_occupancy"
 TRAIN_PASSING="binary_sensor.train_passing"
 TRAINS_TODAY="sensor.trains_today"
 TRAINS_THIS_HOUR="sensor.trains_this_hour"
+# The same count from the iPhone (Frigate camera train_tele, no zone yet), run
+# in parallel to compare the two cameras. The pill stays on the Reolink one.
+TELE_TRAIN="binary_sensor.train_tele_train_occupancy"
+TELE_PASSING="binary_sensor.train_passing_tele"
+TELE_TODAY="sensor.trains_today_tele"
+TELE_THIS_HOUR="sensor.trains_this_hour_tele"
+HOLD={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}}
+TODAY_START="{{ today_at() }}"
+HOUR_START="{{ now().replace(minute=0, second=0, microsecond=0) }}"
 # Template helpers the pills read that aren't pills; sync.py creates and updates them.
 TEMPLATES=[dict(entity=TRAIN_PASSING, kind="binary_sensor", name="Train passing",
-                tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}",
-                extra={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}})]
+                tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}", extra=HOLD),
+           dict(entity=TELE_PASSING, kind="binary_sensor", name="Train passing tele",
+                tmpl="{{ is_state('"+TELE_TRAIN+"','on') }}", extra=HOLD)]
 # History stats helpers; sync.py creates them and keeps their period and
-# state class. Both keep long-term statistics, so the Trains dashboard can
+# state class. They keep long-term statistics, so the Trains dashboard can
 # chart the hourly and daily maximum as bars; "this hour" is only for that.
-HISTORY_STATS=[dict(entity=TRAINS_TODAY, name="Trains today", source=TRAIN_PASSING, state=["on"], type="count",
-                    start="{{ today_at() }}", end="{{ now() }}", state_class="measurement"),
-               dict(entity=TRAINS_THIS_HOUR, name="Trains this hour", source=TRAIN_PASSING, state=["on"], type="count",
-                    start="{{ now().replace(minute=0, second=0, microsecond=0) }}", end="{{ now() }}",
-                    state_class="measurement")]
+def train_counts(passing, today, this_hour, suffix=""):
+    return [dict(entity=today, name="Trains today"+suffix, source=passing, state=["on"], type="count",
+                 start=TODAY_START, end="{{ now() }}", state_class="measurement"),
+            dict(entity=this_hour, name="Trains this hour"+suffix, source=passing, state=["on"], type="count",
+                 start=HOUR_START, end="{{ now() }}", state_class="measurement")]
+HISTORY_STATS=train_counts(TRAIN_PASSING,TRAINS_TODAY,TRAINS_THIS_HOUR)+train_counts(TELE_PASSING,TELE_TODAY,TELE_THIS_HOUR," tele")
 RAIN_24H="sensor.altdorf_rain_24_h"
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",

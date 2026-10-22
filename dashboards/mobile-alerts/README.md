@@ -29,7 +29,10 @@ grouped by topic, every alert's rule and the live values it checks.
   Frigate's train-on-the-track sensor, held on for 30 s so a train that
   flickers out of the zone counts once. `sensor.trains_this_hour` counts the
   same per hour; both keep long-term statistics for the Trains dashboard's
-  bar charts.
+  bar charts. The `_tele` versions (`binary_sensor.train_passing_tele`,
+  `sensor.trains_today_tele`, `sensor.trains_this_hour_tele`) count the same
+  from the iPhone camera `train_tele`, in parallel, to compare the two; the
+  pill stays on the Reolink count.
 - A pill with `content` shows that template next to its icon in the row, e.g.
   the number of trains.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
