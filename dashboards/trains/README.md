@@ -23,7 +23,8 @@ detection there finds nothing.
   Frigate at `10.69.42.175:5000`, so it only loads on the LAN over http.
 - **Right now:** train on the track and in frame, motion, train sound, review
   status, the counts, sound level and the last train snapshot.
-- **Train count:** today, this hour, and whether one is passing; bars of
+- **Train count:** today, this hour, and whether one is passing; a live chart
+  of today's count; bars of
   trains per hour (48 h) and per day (30 days), and the latest trains. The
   count helpers come from the Mobile alert pills' sync (`HISTORY_STATS` in
   `mobile-alerts/pills.py`).
