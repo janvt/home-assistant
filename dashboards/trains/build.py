@@ -203,6 +203,8 @@ def count_section() -> dict[str, Any]:
              grid_options={"columns": 12}),
         {"type": "markdown", "content":
             "A train counts when it enters the **track_hd** zone; one that drops out for under 30 s counts once. "
+            "HA adds a bar once its hour is over, so the hour that is running only shows in the "
+            "tiles above; today's bar counts up to the last full hour. "
             "The charts only start from when the count was set up.",
          "grid_options": {"columns": "full"}},
     ]}
