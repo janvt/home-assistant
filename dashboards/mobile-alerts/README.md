@@ -32,7 +32,8 @@ grouped by topic, every alert's rule and the live values it checks.
   bar charts. The `_tele` versions (`binary_sensor.train_passing_tele`,
   `sensor.trains_today_tele`, `sensor.trains_this_hour_tele`) count the same
   from the iPhone camera `train_tele`, in parallel, to compare the two; the
-  pill stays on the Reolink count.
+  pill shows both counts while the cameras are compared, "Reolink|iPhone", and
+  its Alerts card both last trains matched to the timetable.
 - A pill with `content` shows that template next to its icon in the row, e.g.
   the number of trains.
 - `sensor.weather_alerts_active` counts the `pill_` sensors that are on. It
