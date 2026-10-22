@@ -124,6 +124,7 @@ def main() -> None:
                                       "keep_last_sample": False, "precision": stat["precision"]})
 
     for stat in build.HISTORY_STATS:
+        period = {"start": stat["start"], "end": stat["end"], "state_class": stat["state_class"]}
         if stat["entity"] not in have:
             changes.append(f"create {stat['entity']}")
             if args.apply:
@@ -131,7 +132,19 @@ def main() -> None:
                 url = f"/api/config/config_entries/flow/{flow['flow_id']}"
                 ha.rest("POST", url, {"name": stat["name"], "entity_id": stat["source"], "type": stat["type"]})
                 ha.rest("POST", url, {"state": stat["state"]})
-                ha.rest("POST", url, {"start": stat["start"], "end": stat["end"]})
+                ha.rest("POST", url, period)
+            continue
+        flow = ha.rest("POST", "/api/config/config_entries/options/flow", {"handler": registry[stat["entity"]]})
+        url = f"/api/config/config_entries/options/flow/{flow['flow_id']}"
+        now = {f["name"]: (f.get("description") or {}).get("suggested_value") for f in flow["data_schema"]}
+        if all(now.get(k) == v for k, v in period.items()):
+            ha.rest("DELETE", url)
+            continue
+        changes.append(f"update {stat['entity']}")
+        if args.apply:
+            ha.rest("POST", url, {"state": stat["state"], "type": stat["type"], **period})
+        else:
+            ha.rest("DELETE", url)
 
     if args.apply:
         # A just-created helper's entity id is HA's slug of its title: check it.

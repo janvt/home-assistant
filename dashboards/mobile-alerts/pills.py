@@ -96,13 +96,19 @@ NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, m
 TRAIN_ON_TRACK="binary_sensor.track_hd_train_occupancy"
 TRAIN_PASSING="binary_sensor.train_passing"
 TRAINS_TODAY="sensor.trains_today"
+TRAINS_THIS_HOUR="sensor.trains_this_hour"
 # Template helpers the pills read that aren't pills; sync.py creates and updates them.
 TEMPLATES=[dict(entity=TRAIN_PASSING, kind="binary_sensor", name="Train passing",
                 tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}",
                 extra={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}})]
-# History stats helpers; sync.py creates them when missing.
+# History stats helpers; sync.py creates them and keeps their period and
+# state class. Both keep long-term statistics, so the Trains dashboard can
+# chart the hourly and daily maximum as bars; "this hour" is only for that.
 HISTORY_STATS=[dict(entity=TRAINS_TODAY, name="Trains today", source=TRAIN_PASSING, state=["on"], type="count",
-                    start="{{ today_at() }}", end="{{ now() }}")]
+                    start="{{ today_at() }}", end="{{ now() }}", state_class="measurement"),
+               dict(entity=TRAINS_THIS_HOUR, name="Trains this hour", source=TRAIN_PASSING, state=["on"], type="count",
+                    start="{{ now().replace(minute=0, second=0, microsecond=0) }}", end="{{ now() }}",
+                    state_class="measurement")]
 RAIN_24H="sensor.altdorf_rain_24_h"
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
