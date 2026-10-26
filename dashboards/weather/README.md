@@ -13,13 +13,15 @@ plus SLF, Bergfex and the Andermatt webcams.
 ## What's on it
 
 - **Overview:** one section per location (Altdorf, Andermatt, Schlieren) with
-  the current weather, the daily forecast, wind, rain now (radar), humidity, a
+  the current weather, the daily forecast, wind, rain now and in the last hour
+  (radar), humidity, a
   hail tile while the radar sees any, a MeteoSwiss warning tile when one is out, and for Andermatt the Gemsstock webcam, the
   avalanche level and the snow depths. Then 48-hour comparison graphs, and a
   section per mountain or pass with its freezing level and radar precipitation, and the FOEN river
   stations with a rising/falling trend against their 24-hour mean.
 - **One page per location:** MeteoSwiss warnings in full, hourly and daily
-  forecast, wind gauges, sun, radar rain and hail next to the rain station's
+  forecast, wind gauges, sun, the animated rain radar loop, radar rain (now and
+  the last hour) and hail next to the rain station's
   10-minute totals, 72-hour trends, and today and this month
   against the 1991–2020 normals with the records for the date. Altdorf adds
   Blitzortung lightning and the Föhn index and outlook; Altdorf and Andermatt
@@ -28,7 +30,8 @@ plus SLF, Bergfex and the Andermatt webcams.
   webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
   their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
 - **One page per mountain:** the forecast for the summit's altitude, freezing
-  level, and for Gross Windgällen the measured values of its IMIS station.
+  level, the radar loop over the summit, and for Gross Windgällen the measured
+  values of its IMIS station.
 
 ## Changing it
 
