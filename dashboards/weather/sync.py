@@ -22,7 +22,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 from ha_client import HA, load_env, save_dashboard, states  # noqa: E402
 
-ENTITY = re.compile(r"\b(?:sensor|binary_sensor|weather|camera|image)\.[a-z0-9_]+")
+ENTITY = re.compile(r"\b(?:sensor|binary_sensor|weather|camera|image|switch)\.[a-z0-9_]+")
 
 
 def referenced(config: dict) -> set[str]:

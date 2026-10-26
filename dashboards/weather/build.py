@@ -95,6 +95,36 @@ def radar_cards(place_slug: str) -> list[dict[str, Any]]:
             tile(radar(place_slug, "hail_size"), "Hail size (radar)")]
 
 
+def today_heading(place_slug: str, tap: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Today's forecast high, low, rain and sunshine, as badges on a subtitle."""
+    def badge(key: str, icon: str) -> dict[str, Any]:
+        b = {"type": "entity", "entity": f"sensor.{place_slug}_{key}", "show_state": True, "show_icon": True,
+             "icon": icon}
+        if tap:
+            b["tap_action"] = tap
+        return b
+    return {"type": "heading", "heading": "Today", "heading_style": "subtitle", "icon": "mdi:calendar-today",
+            "badges": [badge("highest_temperature_today", "mdi:thermometer-high"),
+                       badge("lowest_temperature_today", "mdi:thermometer-low"),
+                       badge("precipitation_today", "mdi:weather-rainy"),
+                       badge("sunshine_today", "mdi:weather-sunny")]}
+
+
+def today_cards(place_slug: str) -> list[dict[str, Any]]:
+    """Today's forecast, and the lowest freezing level of the next two days."""
+    low = f"sensor.{place_slug}_lowest_freezing_level_next_48_hours"
+    return [{"type": "heading", "heading": "Today & next 48 h", "icon": "mdi:calendar-today"},
+            tile(f"sensor.{place_slug}_highest_temperature_today", "High today", icon="mdi:thermometer-high"),
+            tile(f"sensor.{place_slug}_lowest_temperature_today", "Low today", icon="mdi:thermometer-low"),
+            tile(f"sensor.{place_slug}_precipitation_today", "Rain today", icon="mdi:weather-rainy"),
+            tile(f"sensor.{place_slug}_sunshine_today", "Sun today", icon="mdi:weather-sunny"),
+            tile(low, "Lowest freezing level (48 h)", icon="mdi:snowflake-melt"),
+            {"type": "markdown", "content":
+                "{% set at = state_attr('" + low + "','at') %}<small>{% if at %}Lowest "
+                "{{ (at|as_datetime|as_local).strftime('%a %H:%M') }}. {% endif %}Today's values are MeteoSwiss's "
+                "forecast for the whole day, the hours already past included.</small>"}]
+
+
 def details_button(title: str, tap: dict[str, Any]) -> dict[str, Any]:
     return {"type": "button", "name": f"{title} details", "icon": "mdi:chevron-right-circle-outline",
             "show_state": False, "tap_action": tap, "grid_options": {"columns": 12, "rows": 1}}
@@ -134,6 +164,7 @@ def overview_section(loc: dict[str, Any]) -> dict[str, Any]:
                      "show_icon": True, "tap_action": t}]},
         {"type": "weather-forecast", "entity": loc["weather"], "forecast_type": "daily", "show_current": True,
          "show_forecast": True, "tap_action": t},
+        today_heading(slug(loc), t),
         warn_tile(slug(loc), t),
         *([cam(loc["cams"][0], tap_action={"action": "more-info"})] if loc.get("cams") else []),
         tile(sensor(loc, "wind_speed"), "Wind", tap_action=t),
@@ -142,6 +173,8 @@ def overview_section(loc: dict[str, Any]) -> dict[str, Any]:
         tile(radar(slug(loc), "rain_last_hour"), "Rain last hour", tap_action=t),
         tile(sensor(loc, "humidity"), "Humidity", tap_action=t),
         hail_tile(slug(loc), tap_action=t),
+        tile(sensor(loc, "snow_depth"), "Snow on the ground", icon="mdi:snowflake", tap_action=t,
+             visibility=[{"condition": "numeric_state", "entity": sensor(loc, "snow_depth"), "above": 0}]),
         *([tile(f"sensor.slf_avalanche_danger_level_{loc['slf']}", "Avalanche danger", tap_action=t)]
           if loc.get("slf") else []),
         *([tile(f"sensor.slf_imis_{loc['imis'][0]}_snow_height", f"Snow {IMIS[loc['imis'][0]]['name']} (measured)",
@@ -362,8 +395,11 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
              "show_forecast": False},
             tile(sensor(loc, "temperature"), "Temperature"), tile(sensor(loc, "dew_point"), "Dew point"),
             tile(sensor(loc, "humidity"), "Humidity"), tile(sensor(loc, "pressure_qnh"), "Pressure (QNH)"),
+            tile(sensor(loc, "temperature_5_cm_above_ground"), "Ground (5 cm)", icon="mdi:grass"),
+            tile(sensor(loc, "snow_depth"), "Snow depth", icon="mdi:snowflake"),
             *([tile(f"sensor.{slug(loc)}_freezing_level", "Freezing level", icon="mdi:snowflake-thermometer")]
               if loc.get("freezing") else [])]},
+        {"type": "grid", "cards": today_cards(slug(loc))},
         *([{"type": "grid", "column_span": 2, "cards": [
             {"type": "heading", "heading": "Webcams", "icon": "mdi:webcam"},
             *[cam(c, grid_options={"columns": 12}) for c in loc["cams"]]]}] if loc.get("cams") else []),
@@ -402,7 +438,9 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
             hist([loc["rain"]], f"Rain per 10 min, {loc['rain_station']} (48 h)")]},
         {"type": "grid", "cards": [
             {"type": "heading", "heading": "Trends", "icon": "mdi:chart-line"},
-            hist([sensor(loc, "temperature"), sensor(loc, "dew_point")], "Temperature & dew point", 72),
+            hist([sensor(loc, "temperature"), sensor(loc, "dew_point"), sensor(loc, "temperature_5_cm_above_ground")],
+                 "Temperature, dew point & ground", 72),
+            hist([sensor(loc, "snow_depth")], "Snow depth (30 days)", 720),
             hist([sensor(loc, "humidity")], "Humidity", 72),
             hist([sensor(loc, "pressure_qnh"), sensor(loc, "pressure_qff")], "Pressure", 72)]},
     ]}
@@ -410,7 +448,8 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
 
 def _mountain(m: dict[str, Any]) -> dict[str, Any]:
     return dict(m, path=f"mtn-{m['slug'].replace('_', '-')}", weather=f"weather.{m['slug']}",
-                freezing=f"sensor.{m['slug']}_freezing_level")
+                freezing=f"sensor.{m['slug']}_freezing_level",
+                low_freezing=f"sensor.{m['slug']}_lowest_freezing_level_next_48_hours")
 
 
 def mountain_section(m: dict[str, Any]) -> dict[str, Any]:
@@ -422,7 +461,9 @@ def mountain_section(m: dict[str, Any]) -> dict[str, Any]:
         {"type": "weather-forecast", "entity": m["weather"], "forecast_type": "daily", "show_current": True,
          "show_forecast": True, "tap_action": t},
         warn_tile(m["slug"], t),
+        today_heading(m["slug"], t),
         tile(m["freezing"], "Freezing level", tap_action=t),
+        tile(m["low_freezing"], "Lowest in 48 h", icon="mdi:snowflake-melt", tap_action=t),
         tile(radar(m["slug"], "rain_rate"), "Precipitation now", tap_action=t),
         hail_tile(m["slug"], tap_action=t),
         tile(m["weather"], "Wind / gusts", icon="mdi:weather-windy", state_content=["wind_speed", "wind_gust_speed"],
@@ -455,6 +496,7 @@ def mountain_view(m: dict[str, Any]) -> dict[str, Any]:
             *radar_cards(m["slug"]),
             hist([m["freezing"]], "Freezing level (72 h)", 72),
             hist([radar(m["slug"], "rain_rate")], "Precipitation rate, radar (48 h)")]},
+        {"type": "grid", "cards": today_cards(m["slug"])},
         *([imis_section(m["imis"])] if m.get("imis") else []),
         {"type": "grid", "cards": forecast_cards(w)},
         {"type": "grid", "cards": [
@@ -477,7 +519,24 @@ def overview() -> dict[str, Any]:
         {"type": "grid", "column_span": 4, "cards": [
             dict(hist([_mountain(m)["freezing"] for m in MOUNTAINS], "Freezing level (72 h)", 72),
                  grid_options={"columns": 12})]},
+        data_section(),
     ]}
+
+
+def data_section() -> dict[str, Any]:
+    """What MeteoSwiss downloads, for all places together, and a switch per place to pause it."""
+    first = slug(LOCATIONS[0])
+    places = [(slug(l), l["title"]) for l in LOCATIONS] + [(m["slug"], m["title"]) for m in MOUNTAINS]
+    return {"type": "grid", "column_span": 4, "cards": [
+        {"type": "heading", "heading": "MeteoSwiss data", "heading_style": "title", "icon": "mdi:download-network"},
+        dict(tile(f"sensor.{first}_downloaded_last_24_hours", "Downloaded, last 24 h"), grid_options={"columns": 6}),
+        dict(tile(f"sensor.{first}_downloaded_this_month", "Downloaded this month"), grid_options={"columns": 6}),
+        {"type": "markdown", "content": "<small>For all places together. Turning a place's switch off stops its "
+                                        "downloads, warnings and radar included, until it is turned on again.</small>"},
+        *[dict(tile(f"switch.{s}_downloads", t, vertical=False, features=[{"type": "toggle"}]),
+               grid_options={"columns": 3}) for s, t in places],
+        dict(hist([f"sensor.{first}_downloaded_this_month"], "Downloaded this month (30 days)", 720),
+             grid_options={"columns": 12})]}
 
 
 def build() -> dict[str, Any]:
