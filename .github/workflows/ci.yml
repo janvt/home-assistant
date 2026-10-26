@@ -159,7 +159,7 @@ jobs:
           pip install pytest-homeassistant-custom-component
 
       - name: Run the integration in Home Assistant
-        run: pytest -q -o asyncio_mode=auto tests_alert_pills
+        run: python -m pytest -q -o asyncio_mode=auto tests_alert_pills
 
   # Home Assistant's own manifest/strings/services checks, and HACS's check
   # that the repo installs as an integration. The repo has no brand images and

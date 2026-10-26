@@ -32,7 +32,7 @@ from .manager import PillManager
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.SENSOR]
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
-type AlertPillsConfigEntry = ConfigEntry[PillManager]
+AlertPillsConfigEntry = ConfigEntry[PillManager]
 
 PILL_SCHEMA = vol.Schema({
     vol.Required("key"): vol.Match(r"^[a-z0-9]+(_[a-z0-9]+)*$"),
