@@ -115,3 +115,12 @@ def test_rivers_are_well_formed() -> None:
         assert r["conditions"] and set(r["conditions"]) <= {"discharge", "level", "temperature"}, r["title"]
         if r.get("danger"):
             assert r["danger"] == sorted(r["danger"]) and "discharge" in r["conditions"], r["title"]
+
+
+def test_every_page_has_its_radar_loop() -> None:
+    """Each place's page shows its own entry's radar loop, not another's."""
+    pages = {v["path"]: v for v in VIEWS[1:]}
+    places = [*build.LOCATIONS, *[build._mountain(m) for m in build.MOUNTAINS]]
+    for place in places:
+        entities = set(_walk(pages[place["path"]], "entity"))
+        assert f"image.{place['weather'].split('.')[1]}_radar_loop" in entities, place["title"]

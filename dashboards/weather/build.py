@@ -72,8 +72,14 @@ def slug(loc: dict[str, Any]) -> str:
 
 
 def radar(place_slug: str, kind: str) -> str:
-    """MeteoSwiss's weather radar for an entry: rain_rate, hail_probability or hail_size."""
+    """MeteoSwiss's weather radar for an entry: rain_rate, rain_last_hour, hail_probability or hail_size."""
     return f"sensor.{place_slug}_radar_{kind}"
+
+
+def radar_loop(place_slug: str) -> dict[str, Any]:
+    """The animated rain radar, the last 20 minutes over 60 km around the place."""
+    return cam(f"image.{place_slug}_radar_loop", name="Rain radar, last 20 min", tap_action={"action": "more-info"},
+               grid_options={"columns": 12})
 
 
 def hail_tile(place_slug: str, **extra: Any) -> dict[str, Any]:
@@ -84,6 +90,7 @@ def hail_tile(place_slug: str, **extra: Any) -> dict[str, Any]:
 
 def radar_cards(place_slug: str) -> list[dict[str, Any]]:
     return [tile(radar(place_slug, "rain_rate"), "Rain now (radar)"),
+            tile(radar(place_slug, "rain_last_hour"), "Rain last hour (radar)"),
             tile(radar(place_slug, "hail_probability"), "Hail chance (radar)"),
             tile(radar(place_slug, "hail_size"), "Hail size (radar)")]
 
@@ -132,6 +139,7 @@ def overview_section(loc: dict[str, Any]) -> dict[str, Any]:
         tile(sensor(loc, "wind_speed"), "Wind", tap_action=t),
         tile(sensor(loc, "wind_speed_max"), "Gusts", tap_action=t),
         tile(radar(slug(loc), "rain_rate"), "Rain now", tap_action=t),
+        tile(radar(slug(loc), "rain_last_hour"), "Rain last hour", tap_action=t),
         tile(sensor(loc, "humidity"), "Humidity", tap_action=t),
         hail_tile(slug(loc), tap_action=t),
         *([tile(f"sensor.slf_avalanche_danger_level_{loc['slf']}", "Avalanche danger", tap_action=t)]
@@ -379,14 +387,17 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
             hist([sensor(loc, "wind_speed"), sensor(loc, "wind_speed_max")], "Wind & gusts (48 h)")]},
         {"type": "grid", "cards": [
             {"type": "heading", "heading": "Sun, rain & hail", "icon": "mdi:weather-sunny"},
+            radar_loop(slug(loc)),
             tile(sensor(loc, "sun_irradiation"), "Irradiation"), tile(sensor(loc, "10_minute_sun"), "Sun (10 min)"),
             *radar_cards(slug(loc)),
             tile(loc["rain"], f"Rain 10 min ({loc['rain_station']})"),
             {"type": "markdown", "content": "<small>Radar: MeteoSwiss's weather radar every 5 minutes, over this "
-                                            "place's square kilometre. It sees rain start first; for how much fell, "
-                                            f"the {loc['rain_station']} station's 10-minute total is more accurate.</small>"},
+                                            "place's square kilometre. It sees rain start first. The rain of the last "
+                                            "hour is the radar adjusted to the rain gauges (CombiPrecip); "
+                                            f"the {loc['rain_station']} station's 10-minute total is measured.</small>"},
             hist([sensor(loc, "sun_irradiation")], "Irradiation (48 h)"),
             hist([radar(slug(loc), "rain_rate")], "Rain rate, radar (48 h)"),
+            hist([radar(slug(loc), "rain_last_hour")], "Rain last hour, radar (48 h)"),
             hist([radar(slug(loc), "hail_probability")], "Hail chance, radar (48 h)"),
             hist([loc["rain"]], f"Rain per 10 min, {loc['rain_station']} (48 h)")]},
         {"type": "grid", "cards": [
@@ -440,6 +451,7 @@ def mountain_view(m: dict[str, Any]) -> dict[str, Any]:
             tile(w, "Temperature", icon="mdi:thermometer", state_content=["temperature"]),
             tile(w, "Wind / gusts", icon="mdi:weather-windy", state_content=["wind_speed", "wind_gust_speed"]),
             tile(w, "Cloud cover", icon="mdi:weather-cloudy", state_content=["cloud_coverage"]),
+            radar_loop(m["slug"]),
             *radar_cards(m["slug"]),
             hist([m["freezing"]], "Freezing level (72 h)", 72),
             hist([radar(m["slug"], "rain_rate")], "Precipitation rate, radar (48 h)")]},
