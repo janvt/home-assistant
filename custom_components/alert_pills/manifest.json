@@ -1,0 +1,14 @@
+{
+  "domain": "alert_pills",
+  "name": "Alert Pills",
+  "codeowners": ["@janvt"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/janvt/home-assistant/tree/main/custom_components/alert_pills",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/janvt/home-assistant/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

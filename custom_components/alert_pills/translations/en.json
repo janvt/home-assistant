@@ -1,0 +1,59 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Alert pills is already set up.",
+      "single_instance_allowed": "Alert pills is already set up."
+    },
+    "step": {
+      "user": {
+        "description": "Adds the alert pills. The pills themselves arrive from dashboards/mobile-alerts/sync.py."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Alert pills",
+        "description": "{count} pills, defined in dashboards/mobile-alerts/pills.py.",
+        "data": {
+          "disabled": "Switched off",
+          "disabled_groups": "Groups switched off",
+          "card_only": "Card only, no icon in the row",
+          "places": "Icons in the row"
+        },
+        "data_description": {
+          "disabled": "Never evaluated, never in the row or the count, even when its condition is true.",
+          "disabled_groups": "Switches off every pill in the group.",
+          "card_only": "Still counted and on the Alerts page, but never takes a place in the row.",
+          "places": "With more pills on than places, the last one shows +N."
+        }
+      }
+    }
+  },
+  "services": {
+    "load": {
+      "name": "Load pills",
+      "description": "Replaces the pill definitions. Called by dashboards/mobile-alerts/sync.py.",
+      "fields": {
+        "pills": {"name": "Pills", "description": "One entry per pill, in priority order: key, name, group, icon, color, state, and optionally content and critical."},
+        "groups": {"name": "Groups", "description": "The groups, in the order the Alerts page shows them."},
+        "dry_run": {"name": "Dry run", "description": "Only report what would change."}
+      }
+    },
+    "dismiss": {
+      "name": "Dismiss",
+      "description": "Hides a pill that is on until it turns off and on again.",
+      "fields": {"key": {"name": "Pill", "description": "The pill's key."}}
+    },
+    "restore": {
+      "name": "Bring back",
+      "description": "Brings a dismissed pill back.",
+      "fields": {"key": {"name": "Pill", "description": "The pill's key."}}
+    },
+    "toggle_dismiss": {
+      "name": "Dismiss or bring back",
+      "description": "Dismisses a pill, or brings it back if it is dismissed.",
+      "fields": {"key": {"name": "Pill", "description": "The pill's key."}}
+    }
+  }
+}

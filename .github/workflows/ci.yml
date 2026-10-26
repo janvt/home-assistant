@@ -1,14 +1,16 @@
 name: CI
 
-# Nothing here touches hardware: no Stream Deck, no ESP32, no Home Assistant.
-# The suite runs against stubbed decks and a stubbed macOS bridge, so it can
-# validate both deck configs, the icon renderer and the ESPHome device configs
-# on a plain Linux runner.
+# Nothing here touches hardware: no Stream Deck, no ESP32, no real Home
+# Assistant. The suite runs against stubbed decks and a stubbed macOS bridge, so
+# it can validate both deck configs, the icon renderer and the ESPHome device
+# configs on a plain Linux runner. The alert_pills integration runs in Home
+# Assistant's test harness, an in-process HA with nothing connected.
 #
 # Local equivalents:
 #   task -d streamdeck test          the whole suite
 #   task -d streamdeck test:esphome  the ESPHome validation job
 #   task -d streamdeck xl:test       just the deck extension's own suite
+#   task -d streamdeck test:alert-pills  the alert_pills integration job
 
 on:
   push:
@@ -138,6 +140,45 @@ jobs:
       # tests/test_esphome_configs.py rather than skipped.
       - name: Validate every device config
         run: pytest -q -m esphome tests/test_esphome_configs.py
+
+  alert-pills:
+    name: alert_pills integration
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # The test harness pins the Home Assistant release it matches, and HA
+      # moves to new Pythons quickly.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+
+      - name: Install the Home Assistant test harness
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest-homeassistant-custom-component
+
+      - name: Run the integration in Home Assistant
+        run: pytest -q -o asyncio_mode=auto tests_alert_pills
+
+  # Home Assistant's own manifest/strings/services checks, and HACS's check
+  # that the repo installs as an integration. The repo has no brand images and
+  # isn't in the HACS default store, so those two checks don't apply.
+  hassfest:
+    name: hassfest
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          ignore: brands topics description
 
   macos:
     name: macos (deck host paths)

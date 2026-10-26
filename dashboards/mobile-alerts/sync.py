@@ -1,14 +1,20 @@
-"""Push `pills.py` to Home Assistant: the pill helpers and the Mobile dashboard.
+"""Push `pills.py` to Home Assistant: the pills, their helpers and the Mobile dashboard.
 
     python sync.py            show what would change, change nothing
-    python sync.py --apply    create or update helpers, then save the dashboard
+    python sync.py --apply    load the pills, create or update helpers, then save the dashboard
 
 Connection settings come from `dashboards/.env` (see `ha_client.py`).
 
-Helpers are UI template helpers, so they are config entries: a missing pill is
-created through the template config flow, an existing one is updated through
-its options flow when its template differs. Before the dashboard is saved, the
-config HA had is written to `backups/` (git-ignored).
+The pills go to the `alert_pills` integration (installed through HACS from this
+repo) with its `alert_pills.load` service. The few helpers some pills read are
+UI helpers, so they are config entries: a missing one is created through its
+config flow, an existing template helper is updated through its options flow
+when its template differs. Before the dashboard is saved, the config HA had is
+written to `backups/` (git-ignored).
+
+The pills used to be template helpers with an `input_datetime` and a script for
+dismissing; the first `--apply` removes those so the integration's entities get
+the same entity ids.
 """
 from __future__ import annotations
 
@@ -24,12 +30,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ha_client import HA, load_env, save_dashboard  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-# The count helper counts shown pills: on, and not dismissed (see build.SHOWN).
-
-
-def helper_title(key: str) -> str:
-    """A title HA slugifies back to `pill_<key>`, so the entity id is predictable."""
-    return "Pill " + key.replace("_", " ")
+OLD_SCRIPT = "pill_toggle_dismiss"
+INSTALL = ("the alert_pills integration isn't installed: in HACS, add https://github.com/janvt/home-assistant "
+           "as a custom repository (type Integration), download Alert Pills and restart Home Assistant")
 
 
 def current_template(ha: HA, entry_id: str) -> tuple[str, str]:
@@ -59,28 +62,74 @@ def sync_helper(ha: HA, entry_id: str | None, kind: str, title: str, template: s
     return "update"
 
 
+def ensure_entry(ha: HA, apply: bool) -> bool:
+    """Whether the integration has its config entry, creating it on --apply."""
+    if ha.call({"type": "config_entries/get", "domain": build.DOMAIN}):
+        return True
+    if not apply:
+        return False
+    try:
+        ha.rest("POST", "/api/config/config_entries/flow", {"handler": build.DOMAIN})
+    except urllib.error.HTTPError:
+        sys.exit(INSTALL)
+    return True
+
+
+def remove_old_helpers(ha: HA, registry: list[dict[str, Any]], apply: bool) -> list[str]:
+    """The template helpers, dismiss helpers and script the integration replaces."""
+    changes = []
+    pills = {build.entity(p) for p in build.ALERTS} | {build.COUNT}
+    for e in registry:
+        if e["entity_id"] in pills and e["platform"] == "template":
+            changes.append(f"remove template helper {e['entity_id']}")
+            if apply:
+                ha.rest("DELETE", f"/api/config/config_entries/entry/{e['config_entry_id']}")
+        elif (e["platform"] == "input_datetime" and e["entity_id"].startswith("input_datetime.pill_")
+              and e["entity_id"].endswith("_dismissed")):
+            changes.append(f"remove {e['entity_id']}")
+            if apply:
+                ha.call({"type": "input_datetime/delete", "input_datetime_id": e["unique_id"]})
+    try:
+        ha.rest("GET", f"/api/config/script/config/{OLD_SCRIPT}")
+    except urllib.error.HTTPError:
+        pass
+    else:
+        changes.append(f"remove script.{OLD_SCRIPT}")
+        if apply:
+            ha.rest("DELETE", f"/api/config/script/config/{OLD_SCRIPT}")
+    return changes
+
+
+def load_pills(ha: HA, apply: bool) -> list[str]:
+    reply = ha.call({"type": "call_service", "domain": build.DOMAIN, "service": "load",
+                     "service_data": {**build.definitions(), "dry_run": not apply}, "return_response": True})
+    diff = reply["response"]
+    changes = [f"{what} pill {key}" for what in ("added", "removed", "changed") for key in diff[what]]
+    if diff["order_changed"] and not changes:
+        changes.append("reorder pills")
+    return changes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="change Home Assistant (default: dry run)")
     args = parser.parse_args()
     ha = HA(load_env())
 
-    registry = {e["entity_id"]: e.get("config_entry_id") for e in ha.call({"type": "config/entity_registry/list"})}
-    changes = []
-    for pill in build.ALERTS:
-        what = sync_helper(ha, registry.get(build.entity(pill)), "binary_sensor", helper_title(pill["key"]),
-                           pill["tmpl"], {}, args.apply)
-        if what != "same":
-            changes.append(f"{what} {build.entity(pill)}")
+    has_entry = ensure_entry(ha, args.apply)
+    registry_list = ha.call({"type": "config/entity_registry/list"})
+    changes = remove_old_helpers(ha, registry_list, args.apply)
+    if has_entry:
+        changes += load_pills(ha, args.apply)
+    else:
+        changes.append(f"set up {build.DOMAIN} and load {len(build.ALERTS)} pills")
+
+    registry = {e["entity_id"]: e.get("config_entry_id") for e in registry_list}
     for helper in build.TEMPLATES:
         what = sync_helper(ha, registry.get(helper["entity"]), helper["kind"], helper["name"], helper["tmpl"],
                            helper.get("extra", {}), args.apply)
         if what != "same":
             changes.append(f"{what} {helper['entity']}")
-    what = sync_helper(ha, registry.get(build.COUNT), "sensor", "Weather alerts active", build.COUNT_TEMPLATE,
-                       {"state_class": "measurement"}, args.apply)
-    if what != "same":
-        changes.append(f"{what} {build.COUNT}")
 
     have = {s["entity_id"] for s in ha.call({"type": "get_states"})}
     for number in build.NUMBERS:
@@ -89,28 +138,6 @@ def main() -> None:
             if args.apply:
                 fields = {k: v for k, v in number.items() if k != "entity"}
                 ha.call({"type": "input_number/create", **fields})
-
-    for pill in build.ALERTS:
-        d = build.dismissed_entity(pill)
-        if build.dismissable(pill) and d not in have:
-            changes.append(f"create {d}")
-            if args.apply:
-                ha.call({"type": "input_datetime/create", "name": f"Pill {pill['key'].replace('_', ' ')} dismissed",
-                         "has_date": True, "has_time": True, "icon": "mdi:bell-off-outline"})
-                # A new helper starts at today 00:00, which would count a pill that
-                # has been on since before midnight as dismissed. Start at "never".
-                ha.call({"type": "call_service", "domain": "input_datetime", "service": "set_datetime",
-                         "target": {"entity_id": d}, "service_data": {"timestamp": 0}})
-
-    try:
-        current = ha.rest("GET", f"/api/config/script/config/{build.TOGGLE_SCRIPT}")
-    except urllib.error.HTTPError:
-        current = None
-    if current != build.SCRIPT:
-        changes.append(f"{'update' if current else 'create'} script.{build.TOGGLE_SCRIPT}")
-        if args.apply:
-            ha.rest("POST", f"/api/config/script/config/{build.TOGGLE_SCRIPT}", build.SCRIPT)
-
     for stat in build.STATISTICS:
         if stat["entity"] not in have:
             changes.append(f"create {stat['entity']}")
@@ -147,11 +174,12 @@ def main() -> None:
             ha.rest("DELETE", url)
 
     if args.apply:
-        # A just-created helper's entity id is HA's slug of its title: check it.
-        registry = {e["entity_id"] for e in ha.call({"type": "config/entity_registry/list"})}
-        missing = [build.entity(p) for p in build.ALERTS if build.entity(p) not in registry]
-        if missing:
-            sys.exit(f"created helpers did not get the expected entity ids: {missing}")
+        # The pills must have taken over the old helpers' entity ids.
+        mine = {e["entity_id"] for e in ha.call({"type": "config/entity_registry/list"})
+                if e["platform"] == build.DOMAIN}
+        missing = [build.entity(p) for p in build.ALERTS if build.entity(p) not in mine]
+        if missing or build.COUNT not in mine:
+            sys.exit(f"the pills did not get the expected entity ids: {missing or [build.COUNT]}")
 
     old = ha.call({"type": "lovelace/config", "url_path": build.DASHBOARD, "force": True})
     new = build.apply(old)
