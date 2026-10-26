@@ -86,10 +86,26 @@ RAINING="("+f(RADAR_RAIN)+" >= 0.3)"
 RADAR_TIME="' (' ~ (state_attr('"+RADAR_RAIN+"','time')|as_datetime|as_local).strftime('%H:%M') ~ ')' if state_attr('"+RADAR_RAIN+"','time')"
 REUSS="sensor.reuss_seedorf"
 REUSS_LIMIT="input_number.reuss_seedorf_dog_walk_limit"
+# MeteoSwiss: what the integration downloaded this month (all places together,
+# in MB), the limit you set for it, and each place's switch that pauses its
+# downloads. A paused place gets no forecasts, warnings or radar.
+METEO_MONTH="sensor.altdorf_ur_downloaded_this_month"
+METEO_LIMIT="input_number.meteoswiss_monthly_data_limit"
+METEO_SWITCHES=["switch.altdorf_ur_downloads","switch.andermatt_downloads","switch.schlieren_downloads",
+                "switch.uri_rotstock_downloads","switch.gross_windgallen_downloads","switch.bristen_downloads",
+                "switch.oberalppass_downloads"]
+METEO_PAUSED="("+str(METEO_SWITCHES)+" | select('is_state','off') | list)"
+# The Altdorf station: the ground 5 cm up, and the snow depth.
+GROUND="sensor.altdorf_temperature_5_cm_above_ground"
+SNOW_DEPTH="sensor.altdorf_snow_depth"
+RADAR_LAST_HOUR="sensor.altdorf_ur_radar_rain_last_hour"
+ANDERMATT_LOW_FREEZING="sensor.andermatt_lowest_freezing_level_next_48_hours"
 # Helpers the pills read that sync.py creates when missing. Their value is
 # yours to change on the Alerts page; sync never resets it.
 NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, max=700, step=10, initial=150,
-              unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box")]
+              unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box"),
+         dict(entity=METEO_LIMIT, name="MeteoSwiss monthly data limit", min=100, max=50000, step=100, initial=3000,
+              unit_of_measurement="MB", icon="mdi:download-network", mode="box")]
 # Frigate's train detection on the full-resolution crop of the track. A train
 # can flicker in and out of the zone, so "passing" holds on for 30 s and the
 # count only sees one train.
@@ -236,11 +252,26 @@ ALERTS=[
    summary=GUEST_TABLE,
    rule="On when a VM or container that is set to start at boot isn't running. Guests you stopped on purpose (not started at boot) don't count. New guests are picked up automatically.",
    data=[("sensor.4_vm_haos_100_status","Home Assistant VM")],hist=[]),
+ dict(key="meteoswiss_paused",group="Maintenance",name="MeteoSwiss paused",icon="mdi:download-off",color="red",
+   tmpl="{{ "+METEO_PAUSED+" | count > 0 }}",
+   secondary="Paused: {{ "+METEO_PAUSED+" | map('state_attr','friendly_name') | map('replace',' Downloads','') | join(', ') }} · no forecasts, warnings or radar for them",
+   rule="On while a MeteoSwiss place's Downloads switch is off. A paused place keeps its last values but gets no new forecasts, measurements, warnings or radar, so a warning would be missed.",
+   data=[(e,e.split('.')[1].replace('_downloads','').replace('_',' ').title()) for e in METEO_SWITCHES],hist=[]),
+ dict(key="meteoswiss_data_allowance",group="Maintenance",name="MeteoSwiss data nearly used",icon="mdi:download-network",color="orange",
+   tmpl="{% set lim = states('"+METEO_LIMIT+"')|float(0) %}{{ lim > 0 and "+f(METEO_MONTH)+" >= lim * 0.8 }}",
+   secondary="{{ "+f(METEO_MONTH)+"|round(0)|int }} of {{ states('"+METEO_LIMIT+"')|int }} MB this month, all places together",
+   rule="On when MeteoSwiss has downloaded 80 % of your monthly limit this month. It counts from the first of the month (local time), for all places together.",
+   data=[(METEO_MONTH,"This month"),(METEO_LIMIT,"Your limit"),("sensor.altdorf_ur_downloaded_last_24_hours","Last 24 h")],hist=[METEO_MONTH]),
  dict(key="hail",group="Weather now",name="Hail",icon="mdi:weather-hail",color="red",
    tmpl="{{ "+f(RADAR_HAIL)+" >= 50 }}",
    secondary="{{ "+f(RADAR_HAIL)+"|round(0)|int }} % chance of hail at home on the radar{{ ', stones up to ' ~ "+f(RADAR_HAIL_SIZE)+"|round(0)|int ~ ' mm' if "+f(RADAR_HAIL_SIZE)+" > 0 }}",
    rule="On when MeteoSwiss's radar gives a 50 % chance of hail or more over the home's square kilometre. Hail size reads 0 below 20 mm.",
    data=[(RADAR_HAIL,"Hail probability"),(RADAR_HAIL_SIZE,"Largest hail"),(RADAR_RAIN,"Rain rate")],hist=[RADAR_HAIL]),
+ dict(key="downpour",group="Weather now",name="Downpour",icon="mdi:weather-pouring",color="indigo",
+   tmpl="{{ "+f(RADAR_LAST_HOUR)+" >= 10 }}",
+   secondary="{{ "+f(RADAR_LAST_HOUR)+"|round(1) }} mm at home in the last hour (radar) · check the gutters and the cellar",
+   rule="On when MeteoSwiss's radar, adjusted to the rain gauges (CombiPrecip), puts 10 mm or more of rain over the home in the last hour.",
+   data=[(RADAR_LAST_HOUR,"Rain last hour (radar)"),(RADAR_RAIN,"Rain rate now (radar)"),("sensor.altdorf_10_minute_rain","Rain 10 min (station)")],hist=[RADAR_LAST_HOUR]),
  dict(key="storm_on_the_summits",tmpl="{{ [states('sensor.slf_imis_sca1_spjp_wind_gust')|float(0), states('sensor.slf_imis_urs1_prsf_wind_gust')|float(0)]|max >= 100 }}",group="Weather now",name="Summit storm",icon="mdi:weather-hurricane",color="red",
    secondary="{{ ["+f('sensor.slf_imis_sca1_spjp_wind_gust')+","+f('sensor.slf_imis_urs1_prsf_wind_gust')+"]|max|round(0) }} km/h gusts measured (Gross Windgällen {{ "+f('sensor.slf_imis_sca1_spjp_wind_gust')+"|round(0) }}, Gross Schijen {{ "+f('sensor.slf_imis_urs1_prsf_wind_gust')+"|round(0) }})",
    rule="On when gusts measured at Gross Windgällen or Gross Schijen reach 100 km/h.",
@@ -257,6 +288,17 @@ ALERTS=[
    secondary="{{ "+f(RADAR_RAIN)+"|round(1) }} mm/h at home on the radar{{ "+RADAR_TIME+" }}",
    rule="On while MeteoSwiss's radar shows at least 0.3 mm/h of rain over the home's square kilometre. It sees rain start within a minute or two; the Altdorf station's 10-minute total comes 10 minutes later.",
    data=[(RADAR_RAIN,"Rain rate (radar)"),("sensor.altdorf_10_minute_rain","Rain 10 min (station)")],hist=[RADAR_RAIN]),
+ dict(key="ground_frost",group="Weather now",name="Ground frost",icon="mdi:snowflake-alert",color="cyan",
+   tmpl="{{ states('"+GROUND+"') not in ['unknown','unavailable'] and "+f(GROUND,9)+" <= 0 }}",
+   secondary="{{ "+f(GROUND)+"|round(1) }} °C on the ground, {{ "+f("sensor.altdorf_temperature")+"|round(1) }} °C in the air in Altdorf{{ ' · frost before the air shows it' if "+f("sensor.altdorf_temperature")+" > 0 }}",
+   rule="On when the Altdorf station measures 0 °C or less 5 cm above the grass: icy paths and windscreens, and plants to cover. On clear nights it freezes there hours before the 2 m temperature drops below zero.",
+   data=[(GROUND,"Ground (5 cm)"),("sensor.altdorf_temperature","Air (2 m)")],hist=[GROUND,"sensor.altdorf_temperature"]),
+ dict(key="snow_in_altdorf",group="Weather now",name="Snow in Altdorf",icon="mdi:snowflake",color="light-blue",
+   tmpl="{{ "+f(SNOW_DEPTH)+" > 0 }}",
+   content="{{ "+f(SNOW_DEPTH)+"|round(0)|int }}",
+   secondary="{{ "+f(SNOW_DEPTH)+"|round(0)|int }} cm of snow on the ground in Altdorf",
+   rule="On while the Altdorf station measures snow on the ground; the row shows the depth in cm.",
+   data=[(SNOW_DEPTH,"Snow depth"),("sensor.andermatt_snow_depth","Andermatt")],hist=[SNOW_DEPTH]),
  dict(key="weather_warning",group="Weather now",name="Weather warning",icon="mdi:alert-octagram",color="amber",color_from=WARN_HOME,
    tmpl="{{ states('"+WARN_HOME+"') in ['yellow','orange','red'] }}",
    secondary=warn_lines([WARN_HOME]),
@@ -354,6 +396,11 @@ ALERTS=[
    secondary=SNOWLINE+"Snow down to {{ ns.low }} m according to MeteoSwiss's warnings (Andermatt lies at 1440 m)",
    rule="On when a MeteoSwiss warning for Altdorf, Andermatt or Oberalppass puts the snowfall limit at 1500 m or lower.",
    data=[(WARN_HOME,"Altdorf warnings"),(WARN_MOUNTAINS[0],"Andermatt warnings"),(WARN_MOUNTAINS[1],"Oberalppass warnings")],hist=[]),
+ dict(key="snow_line_andermatt",group="Mountains",name="Snow line at Andermatt",icon="mdi:snowflake-melt",color="cyan",
+   tmpl="{{ states('"+ANDERMATT_LOW_FREEZING+"') not in ['unknown','unavailable'] and "+f(ANDERMATT_LOW_FREEZING,9999)+" <= 1600 }}",
+   secondary="Freezing level down to {{ "+f(ANDERMATT_LOW_FREEZING)+"|round(-1)|int }} m{{ ' ' ~ (state_attr('"+ANDERMATT_LOW_FREEZING+"','at')|as_datetime|as_local).strftime('%a %H:%M') if state_attr('"+ANDERMATT_LOW_FREEZING+"','at') }} (Andermatt lies at 1440 m)",
+   rule="On when MeteoSwiss's forecast brings the freezing level at Andermatt down to 1600 m or lower within the next 48 hours. 'Snow line coming down' reads the warnings instead; this one reads the forecast.",
+   data=[(ANDERMATT_LOW_FREEZING,"Lowest in 48 h"),("sensor.andermatt_freezing_level","Now")],hist=["sensor.andermatt_freezing_level"]),
  dict(key="fresh_snow_measured",tmpl="{{ [states('sensor.slf_imis_gos3_zwja_new_snow_1d')|float(0), states('sensor.slf_imis_tuj2_mr82_new_snow_1d')|float(0)]|max >= 5 }}",group="Mountains",name="Fresh snow",icon="mdi:snowflake",color="blue",
    secondary="+{{ ["+f('sensor.slf_imis_gos3_zwja_new_snow_1d')+","+f('sensor.slf_imis_tuj2_mr82_new_snow_1d')+"]|max|round(0) }} cm in 24 h · Gütsch {{ "+f('sensor.slf_imis_gos3_zwja_snow_height')+"|round(0) }} cm, Culmatsch {{ "+f('sensor.slf_imis_tuj2_mr82_snow_height')+"|round(0) }} cm total",
    rule="On when Gütsch or Culmatsch measure at least 5 cm of new snow in 24 hours.",
@@ -395,6 +442,11 @@ ALERTS=[
    rule="On when the kitchen is above 24 °C, it's at least 2 °C cooler outside, and it isn't raining at home (radar).",
    data=[("sensor.ruuvi_outside_temperature","Outside"),("sensor.ruuvi_kitchen_temperature","Kitchen"),(RADAR_RAIN,"Rain rate (radar)")],
    hist=["sensor.ruuvi_outside_temperature","sensor.ruuvi_kitchen_temperature"]),
+ dict(key="laundry_day",group="Home",name="Laundry day",icon="mdi:tshirt-crew",color="yellow",
+   tmpl="{{ 6 <= now().hour < 11 and "+f("sensor.altdorf_ur_sunshine_today")+" >= 5 and "+f("sensor.altdorf_ur_precipitation_today",9)+" < 0.5 and not "+RAINING+" }}",
+   secondary="{{ "+f("sensor.altdorf_ur_sunshine_today")+"|round(1) }} h of sun and {{ "+f("sensor.altdorf_ur_precipitation_today")+"|round(1) }} mm of rain forecast for Altdorf today · hang it outside",
+   rule="On from 06:00 to 11:00 when Altdorf's forecast for the day has at least 5 hours of sun and less than 0.5 mm of rain, and it isn't raining now (radar).",
+   data=[("sensor.altdorf_ur_sunshine_today","Sun today"),("sensor.altdorf_ur_precipitation_today","Rain today"),("sensor.altdorf_ur_highest_temperature_today","High today")],hist=[]),
  # --- calendar & modes
  dict(key="pollen_high",group="Home",name="Pollen high",icon="mdi:flower-pollen",color="lime",
    tmpl=POLLEN_HIGH+"{{ ns.hi | count > 0 }}",
