@@ -10,7 +10,8 @@ My Home Assistant setup: the bits that live in files rather than in the HA UI.
 | [`automations/`](automations/) | Home Assistant automations kept in version control. |
 | [`dashboards/weather/`](dashboards/weather/) | The Weather dashboard: MeteoSwiss (the forked integration) for Altdorf, Andermatt, Schlieren and four mountains, with warnings, SLF, Bergfex, IMIS and webcams. `locations.py` is the source of truth, `sync.py` pushes it. Has its own [README](dashboards/weather/README.md). |
 | [`dashboards/trains/`](dashboards/trains/) | The Trains debug dashboard for Frigate's train detection on a full-resolution crop of the tracks: live and debug picture, detection state, tuning switches, Frigate's health and 24-hour history. `sync.py` pushes it and enables the diagnostics it needs. Has its own [README](dashboards/trains/README.md). |
-| [`dashboards/mobile-alerts/`](dashboards/mobile-alerts/) | The alert pills on the Mobile dashboard: one template helper per alert, a row of icons that never wraps, and an Alerts sub-page. `pills.py` is the source of truth, `sync.py` pushes it. Has its own [README](dashboards/mobile-alerts/README.md). |
+| [`dashboards/mobile-alerts/`](dashboards/mobile-alerts/) | The alert pills on the Mobile dashboard: a row of icons that never wraps, and an Alerts sub-page. `pills.py` is the source of truth, `sync.py` loads it into the integration below. Has its own [README](dashboards/mobile-alerts/README.md). |
+| [`custom_components/alert_pills/`](custom_components/alert_pills/) | The **Alert Pills** integration that evaluates the pills, with options (switch pills or groups off, card only, row size) you can change from the phone. Installed through HACS from this repo ([`hacs.json`](hacs.json)). |
 | [`ha-scene-tracker.yaml`](ha-scene-tracker.yaml) | The `input_select.active_scene` helper plus one automation per scene. Both Stream Decks read this to highlight the active scene. |
 
 ## Tests
@@ -39,7 +40,7 @@ python3 -m venv .venv-test && .venv-test/bin/pip install -r requirements-test.tx
 | [`test_kitchen_timer_helpers.py`](tests/test_kitchen_timer_helpers.py) | Compiles and runs the kitchen timer's C++ helpers on the host: parsing Home Assistant's `finishes_at` timestamp (timezone sign, fractional seconds) and `remaining` duration. |
 | [`test_trains_dashboard.py`](tests/test_trains_dashboard.py) | The Trains dashboard: plain JSON, only Frigate entities, and every diagnostic the sync enables is on the page. |
 | [`test_weather_dashboard.py`](tests/test_weather_dashboard.py) | The Weather dashboard: every details button, tapped tile and back arrow lands on a view that exists, every place has a page, the comparison graphs cover every location, and templates parse. |
-| [`test_mobile_alerts.py`](tests/test_mobile_alerts.py) | The alert pills: the row never grows past one line for any number of active pills, a rebuild touches only the row and the Alerts page (and is idempotent), templates compile, and pill keys survive HA's slugify so each helper gets the entity id the row looks for. |
+| [`test_mobile_alerts.py`](tests/test_mobile_alerts.py) | The alert pills: the row never grows past one line for any number of active pills or row size, a rebuild touches only the row and the Alerts page (and is idempotent, and replaces the pre-integration row), templates compile, the definitions match what the integration accepts, and the integration installs through HACS. |
 | [`test_kitchen_co2_status_led.py`](tests/test_kitchen_co2_status_led.py) | The kitchen CO2 status LED automation: renders its own colour-level template across the ppm range (including the 50 ppm falling deadband) and checks the `numeric_state` triggers sit exactly where that template changes level. |
 | [`test_ha_yaml.py`](tests/test_ha_yaml.py) | Automations, and the scene-tracker seam: a scene a deck highlights must be an option `input_select.active_scene` can actually hold. |
 | [`test_repo_hygiene.py`](tests/test_repo_hygiene.py) | No tokens, `.env` files or generated icons in git (asked of git itself, not of `.gitignore`), and the LaunchAgent/Taskfile pointing at files that exist. |
@@ -50,6 +51,18 @@ logic, and everything here has interesting *seams*. A wrong value in one of
 these files does not crash — one key silently stops working, a dial goes blank
 at the bottom of its range, an automation never fires. The suite is aimed at
 that class of quiet failure, and each test says which one it is guarding.
+
+### The alert_pills integration
+
+[`tests_alert_pills/`](tests_alert_pills/) runs the integration inside Home
+Assistant's own test harness: entity ids, the count and the row, dismissing
+(and a dismissal surviving a reload), every option, and all of `pills.py`
+loading. It needs a newer Python than the Pi's and pins its own pytest, so it
+has its own venv:
+
+```bash
+task -d streamdeck test:alert-pills
+```
 
 ### ESPHome validation
 

@@ -2,6 +2,7 @@
 # Two of them: esphome needs pydantic v2, the Stream Deck app pins <2.
 .venv-test/
 .venv-esphome/
+.venv-alert-pills/
 .pytest_cache/
 __pycache__/
 *.pyc

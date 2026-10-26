@@ -1,0 +1,34 @@
+load:
+  fields:
+    pills:
+      required: true
+      selector:
+        object:
+    groups:
+      selector:
+        object:
+    dry_run:
+      default: false
+      selector:
+        boolean:
+dismiss:
+  fields:
+    key:
+      required: true
+      example: fohn_altdorf
+      selector:
+        text:
+restore:
+  fields:
+    key:
+      required: true
+      example: fohn_altdorf
+      selector:
+        text:
+toggle_dismiss:
+  fields:
+    key:
+      required: true
+      example: fohn_altdorf
+      selector:
+        text:

@@ -113,6 +113,25 @@ tasks:
     cmds:
       - .venv-esphome/bin/python -m pytest -m esphome tests/test_esphome_configs.py {{.CLI_ARGS}}
 
+  # The alert_pills integration runs its tests inside a real Home Assistant,
+  # which needs a newer Python than the Pi's floor and pins its own pytest:
+  # its own venv, built with uv (HA's own installer) from PyPI.
+  test:alert-pills:venv:
+    desc: Create the separate venv the alert_pills integration tests run in
+    dir: ..
+    status:
+      - test -x .venv-alert-pills/bin/pytest
+    cmds:
+      - uv venv --quiet --python 3.14 .venv-alert-pills
+      - uv pip install --quiet --no-config --default-index https://pypi.org/simple --python .venv-alert-pills/bin/python pytest-homeassistant-custom-component
+
+  test:alert-pills:
+    desc: Run the alert_pills integration inside Home Assistant's test harness
+    deps: [test:alert-pills:venv]
+    dir: ..
+    cmds:
+      - .venv-alert-pills/bin/python -m pytest -o asyncio_mode=auto tests_alert_pills {{.CLI_ARGS}}
+
   # ── plus (Raspberry Pi, Docker) ───────────────────────────────────────────
   plus:env:
     desc: Create decks/plus/.env from the template

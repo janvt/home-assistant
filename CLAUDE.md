@@ -11,7 +11,8 @@ own README with the full context.
 | `kitchen-timer/` | DIY 7-segment kitchen timer: ESPHome config, custom `mux7seg` component, HA-owned timer | `kitchen-timer/README.md` (architecture, hardware, decision log) |
 | `dashboards/weather/` | The Weather dashboard, built end to end from `locations.py` and pushed by `sync.py` (shares `dashboards/ha_client.py` and `.env` with the pills) | `dashboards/weather/README.md` |
 | `dashboards/trains/` | The Trains debug dashboard for Frigate on the train tracks, built by `build.py` and pushed by `sync.py` | `dashboards/trains/README.md` |
-| `dashboards/mobile-alerts/` | Mobile dashboard alert pills: template helpers plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
+| `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
+| `custom_components/alert_pills/` | The Alert Pills integration (HACS installs it from this repo, from `main`); its HA-harness tests are `tests_alert_pills/` | `dashboards/mobile-alerts/README.md` |
 | `automations/` | HA automations kept in version control | |
 | `ha-scene-tracker.yaml` | `input_select.active_scene` + one automation per scene | |
 
@@ -20,6 +21,7 @@ own README with the full context.
 ```bash
 task -d streamdeck test            # whole suite (creates .venv-test/)
 task -d streamdeck test:esphome    # ESPHome's own validator, separate venv
+task -d streamdeck test:alert-pills  # the integration in HA's test harness, separate venv
 ```
 
 Nothing needs hardware. The suite targets **seams, not functions**: a wrong
