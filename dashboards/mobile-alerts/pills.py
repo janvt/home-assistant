@@ -22,13 +22,22 @@ sync puts them back.
 f=lambda e,d=0:f"states('{e}')|float({d})"
 def since(e,sec):
     return f"(now() - states.{e}.last_changed).total_seconds() > {sec}"
-PHONES=["sensor.iphone_battery_level","sensor.jans_ipad_battery_level","sensor.sm_f741b_battery_level","sensor.silvs_iphone_battery_level"]
-LOWBAT=("{% set skip = "+str(PHONES)+" %}"
+# Entities and devices with this HA label are left out of the low battery,
+# device offline and guest down pills. Add or remove it on the phone, in the
+# entity's or the device's settings. sync.py creates the label the first time,
+# with IGNORED_AT_FIRST in it (the phones, which drain and charge every day);
+# after that it's yours: the sync never touches who has it.
+IGNORE_LABEL="no_alert_pills"
+IGNORE_LABEL_NAME="No alert pills"
+IGNORED_AT_FIRST=["sensor.iphone_battery_level","sensor.jans_ipad_battery_level","sensor.sm_f741b_battery_level","sensor.silvs_iphone_battery_level"]
+SKIP=("{% set skip = label_entities('"+IGNORE_LABEL+"') + (label_devices('"+IGNORE_LABEL+"') | map('device_entities') | sum(start=[])) %}")
+LOWBAT=(SKIP+
         "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
         " | rejectattr('entity_id','in',skip) | rejectattr('state','in',['unknown','unavailable']) | selectattr('state','is_number')"
         " | map(attribute='state') | map('float') | select('lt',20) | list %}"
-        "{% set crit = states.binary_sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery') | selectattr('state','eq','on') | list %}")
-LOWBAT_LIST=("{% set skip = "+str(PHONES)+" %}"
+        "{% set crit = states.binary_sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
+        " | rejectattr('entity_id','in',skip) | selectattr('state','eq','on') | list %}")
+LOWBAT_LIST=(SKIP+
         "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
         " | rejectattr('entity_id','in',skip) | selectattr('state','is_number') | list %}"
         "{% for s in low if s.state|float < 20 %}{{ s.name }} {{ s.state|round(0) }} %{{ ', ' if not loop.last }}{% else %}All above 20 %{% endfor %}")
@@ -58,7 +67,7 @@ OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),("bin
          ("sensor.aqara_fridge_temp_temperature","Fridge thermometer"),("binary_sensor.aquara_smoke_acn03","Smoke detector"),
          ("sensor.ultimatesensor_scd41_co2","ultimatesensor"),("light.home_gym_dig_quad","Home gym WLED"),
          ("lock.nuki_schmatzknauf_lock_2","Nuki lock"),("sensor.schmatzrouter_state","Router")]
-DOWN=("{% set ns = namespace(d=[]) %}{% for e, n in "+str([list(x) for x in OFFLINE])+" %}"
+DOWN=(SKIP+"{% set ns = namespace(d=[]) %}{% for e, n in "+str([list(x) for x in OFFLINE])+" if e not in skip %}"
       "{% if states(e) in ['unavailable','unknown'] or (e.endswith(('_status','_connected')) and is_state(e,'off')) %}{% set ns.d = ns.d + [n] %}{% endif %}{% endfor %}")
 CLIMATES=["climate.smart_thermostat_mts200b_main_channel","climate.meross_bedroom_mts200b_main_channel","climate.meross_guest_bedroom_mts200b_main_channel_2"]
 HEATING="(expand("+str(CLIMATES)+") | selectattr('attributes.hvac_action','defined') | selectattr('attributes.hvac_action','eq','heating') | list)"
@@ -168,7 +177,7 @@ PROX="sensor.1_node_prox"
 # sensor.5_storage_<name>_usage.
 GUESTS="states.sensor | selectattr('entity_id','match','sensor\\\\.(3_ct|4_vm)_.+_status$') | list"
 GUEST_NAME="| regex_replace('^[0-9]+\\\\. (CT|VM): ','') | regex_replace(' Status$','') | replace('-(',' (')"
-DOWN_GUESTS=("{% set ns = namespace(d=[]) %}{% for g in "+GUESTS+" %}"
+DOWN_GUESTS=(SKIP+"{% set ns = namespace(d=[]) %}{% for g in "+GUESTS+" if g.entity_id not in skip %}"
              "{% if g.attributes.expected_state == 'running' and g.state|lower != 'running' and g.state not in ['unknown','unavailable'] %}"
              "{% set ns.d = ns.d + [(g.name "+GUEST_NAME+") ~ ': ' ~ g.state] %}{% endif %}{% endfor %}")
 STORAGES="states.sensor | selectattr('entity_id','match','sensor\\\\.5_storage_.+_usage$') | list"
@@ -265,13 +274,13 @@ ALERTS=[
    tmpl=DOWN+"{{ ns.d | count > 0 }}",
    secondary=DOWN+"{{ ns.d | join(', ') }} offline",
    summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
-   rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected.",
+   rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=OFFLINE[:6],hist=[]),
  dict(key="guest_down",group="Proxmox",name="Guest down",icon="mdi:server-remove",color="red",
    tmpl=DOWN_GUESTS+"{{ ns.d | count > 0 }}",
    secondary=DOWN_GUESTS+"{{ ns.d | join(', ') }}",
    summary=GUEST_TABLE,
-   rule="On when a VM or container that is set to start at boot isn't running. Guests you stopped on purpose (not started at boot) don't count. New guests are picked up automatically.",
+   rule="On when a VM or container that is set to start at boot isn't running. Guests you stopped on purpose (not started at boot) don't count. New guests are picked up automatically. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=[("sensor.4_vm_haos_100_status","Home Assistant VM")],hist=[]),
  dict(key="meteoswiss_paused",group="Maintenance",name="MeteoSwiss paused",icon="mdi:download-off",color="red",
    tmpl="{{ "+METEO_PAUSED+" | count > 0 }}",
@@ -599,7 +608,7 @@ ALERTS=[
    tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
    secondary=LOWBAT_LIST,
    summary=LOWBAT_LIST,
-   rule="On when any battery (phones excluded) is below 20 %, or a device reports its battery as critical.",
+   rule="On when any battery is below 20 %, or a device reports its battery as critical. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=[("sensor.aqara_fridge_temp_battery","Fridge thermometer"),("sensor.lumi_lumi_vibration_aq1_battery","Vibration sensor"),
          ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.nuki_schmatzknauf_battery_2","Nuki lock")],hist=[]),
  dict(key="updates_waiting",group="Maintenance",name="Updates waiting",icon="mdi:package-up",color="grey",

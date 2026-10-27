@@ -293,3 +293,31 @@ def test_every_service_is_described() -> None:
     assert services == set(strings["services"])
     assert services == {v for k, v in const.items() if k.startswith("SERVICE_")}
     assert (INTEGRATION / "translations" / "en.json").read_text() == (INTEGRATION / "strings.json").read_text()
+
+
+# ── the "No alert pills" label ──────────────────────────────────────────────
+IGNORING = ["low_batteries", "device_offline", "guest_down"]
+
+
+def test_ignore_label_id_is_what_ha_makes_of_its_name() -> None:
+    """HA derives a label's id from its name; if they differ, the sync creates
+    a label the templates never look up and nothing is ever left out."""
+    assert build.IGNORE_LABEL == re.sub(r"[^a-z0-9]+", "_", build.IGNORE_LABEL_NAME.lower()).strip("_")
+
+
+@pytest.mark.parametrize("key", IGNORING)
+def test_pill_leaves_out_labelled_entities_and_devices(key: str) -> None:
+    pill = next(p for p in build.ALERTS if p["key"] == key)
+    for field in ("tmpl", "secondary"):
+        text = pill[field]
+        assert f"label_entities('{build.IGNORE_LABEL}')" in text and f"label_devices('{build.IGNORE_LABEL}')" in text, field
+        assert "skip" in text.split("%}", 1)[1], f"{field} sets skip but never uses it"
+    assert "No alert pills" in pill["rule"], "the Alerts page should say how to leave something out"
+
+
+def test_no_entity_list_hard_coded_next_to_the_label() -> None:
+    """The phones used to be a fixed skip list; with the label, a second list
+    would mean two places to look when a battery isn't counted."""
+    for key in IGNORING:
+        pill = next(p for p in build.ALERTS if p["key"] == key)
+        assert "set skip = [" not in pill["tmpl"], key

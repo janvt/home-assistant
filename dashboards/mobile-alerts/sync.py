@@ -12,6 +12,10 @@ config flow, an existing template helper is updated through its options flow
 when its template differs. Before the dashboard is saved, the config HA had is
 written to `backups/` (git-ignored).
 
+The "No alert pills" label (`IGNORE_LABEL` in pills.py) is created on the first
+`--apply`, with the phones in it. After that the sync leaves it alone: who has
+it is set in HA.
+
 The pills used to be template helpers with an `input_datetime` and a script for
 dismissing; the first `--apply` removes those so the integration's entities get
 the same entity ids.
@@ -110,6 +114,28 @@ def load_pills(ha: HA, apply: bool) -> list[str]:
     return changes
 
 
+def ensure_ignore_label(ha: HA, registry: list[dict[str, Any]], apply: bool) -> list[str]:
+    """Create the "No alert pills" label once, with the phones in it.
+
+    Only when the label is missing: after that, who has it is set in HA (on
+    the phone), and a sync must not undo that."""
+    if any(label["label_id"] == build.IGNORE_LABEL for label in ha.call({"type": "config/label_registry/list"})):
+        return []
+    changes = [f"create label {build.IGNORE_LABEL_NAME!r}"]
+    labels = {e["entity_id"]: e.get("labels", []) for e in registry}
+    tagged = [e for e in build.IGNORED_AT_FIRST if e in labels]
+    changes += [f"label {e} {build.IGNORE_LABEL_NAME!r}" for e in tagged]
+    if apply:
+        made = ha.call({"type": "config/label_registry/create", "name": build.IGNORE_LABEL_NAME,
+                        "icon": "mdi:bell-off-outline"})
+        if made["label_id"] != build.IGNORE_LABEL:
+            sys.exit(f"HA named the label {made['label_id']!r}, the pills look for {build.IGNORE_LABEL!r}")
+        for e in tagged:
+            ha.call({"type": "config/entity_registry/update", "entity_id": e,
+                     "labels": [*labels[e], build.IGNORE_LABEL]})
+    return changes
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="change Home Assistant (default: dry run)")
@@ -119,6 +145,7 @@ def main() -> None:
     has_entry = ensure_entry(ha, args.apply)
     registry_list = ha.call({"type": "config/entity_registry/list"})
     changes = remove_old_helpers(ha, registry_list, args.apply)
+    changes += ensure_ignore_label(ha, registry_list, args.apply)
     if has_entry:
         changes += load_pills(ha, args.apply)
     else:

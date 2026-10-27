@@ -29,6 +29,9 @@ NUMBERS: list[dict[str, Any]] = _pills.get("NUMBERS", [])
 STATISTICS: list[dict[str, Any]] = _pills.get("STATISTICS", [])
 TEMPLATES: list[dict[str, Any]] = _pills.get("TEMPLATES", [])
 HISTORY_STATS: list[dict[str, Any]] = _pills.get("HISTORY_STATS", [])
+IGNORE_LABEL: str = _pills["IGNORE_LABEL"]
+IGNORE_LABEL_NAME: str = _pills["IGNORE_LABEL_NAME"]
+IGNORED_AT_FIRST: list[str] = _pills["IGNORED_AT_FIRST"]
 
 # The integration's names, read from its own file so the two can't drift.
 INTEGRATION = HERE.parents[1] / "custom_components" / "alert_pills"
