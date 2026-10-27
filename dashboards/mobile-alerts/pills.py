@@ -233,6 +233,19 @@ def vpn_pill(key,name,icon,color,lo,hi,rule):
                 content="{{ "+VPN_USED+"|round(0)|int }}%",secondary=VPN_LINE,summary=VPN_LINE,rule=rule,
                 data=[(VPN+"free_allowance_used","Free allowance used"),(VPN+"egress_month_to_date","Egress this month")]+VPN_PEERS,
                 hist=[VPN+"free_allowance_used"],link=VPN_LINK)
+# The Anker 757 as the home lab's UPS. It has no data interface, so mains is
+# inferred: binary_sensor.mains_power goes off when the Home Lab plug (in front
+# of the 757) and the fridge plug are both gone for a minute. The charge is a
+# time-based estimate from when the outage started, and
+# automation.home_lab_ups_mains_power_alerts runs script.home_lab_graceful_shutdown
+# (containers, Synology, then Proxmox) when it drops below 50 %.
+MAINS="binary_sensor.mains_power"
+UPS_PCT="sensor.anker_757_battery_estimate"
+UPS_LOAD="input_number.anker_757_load_on_battery"
+UPS_CAP="input_number.anker_757_usable_capacity"
+OUTAGE_START="input_datetime.mains_outage_started"
+SHUTDOWN="script.home_lab_graceful_shutdown"
+UPS_HOURS="(("+f(UPS_PCT)+" - 50) / 100 * "+f(UPS_CAP,1040)+" / "+f(UPS_LOAD,75)+")"
 # Pills you clear by acting (closing a door, checking the fridge) rather than
 # by acknowledging them. These can't be dismissed on the Alerts page.
 CRITICAL={"smoke_or_co","front_door_open","unlocked_nobody_home","fridge_open","fridge_not_cooling","heating_while_away"}
@@ -253,6 +266,23 @@ ALERTS=[
    secondary="Lock is {{ states('lock.nuki_schmatzknauf_lock_2') }} and everyone is away",
    rule="On when the Nuki lock isn't locked while nobody is home.",
    data=[("lock.nuki_schmatzknauf_lock_2","Lock"),("person.jan","Jan"),("person.silvia","Silvia"),("sensor.nuki_schmatzknauf_battery_2","Lock battery")],hist=[]),
+ # --- home lab power
+ dict(key="home_lab_shutting_down",group="Proxmox",name="Home lab shutting down",icon="mdi:power",color="red",
+   tmpl="{{ is_state('"+SHUTDOWN+"','on') }}",
+   secondary="Containers, then the Synology, then Proxmox: Home Assistant goes offline with it",
+   rule="On while the UPS shutdown script runs: it stops the containers that use the NFS share, waits 2 minutes, shuts down the Synology, waits 3 minutes, then shuts down the Proxmox host.",
+   data=[(SHUTDOWN,"Shutdown script"),(UPS_PCT,"757 estimate"),(MAINS,"Mains")],hist=[]),
+ dict(key="on_battery",group="Proxmox",name="Home lab on battery",icon="mdi:transmission-tower-off",color="orange",
+   tmpl="{{ is_state('"+MAINS+"','off') }}",
+   content="{{ "+f(UPS_PCT)+"|int }}%",
+   secondary="Mains off since {{ (state_attr('"+OUTAGE_START+"','timestamp')|timestamp_local)[11:16] if state_attr('"+OUTAGE_START+"','timestamp') }}"
+             " · 757 ~{{ "+f(UPS_PCT)+"|int }} % (estimate) · shutdown in ~{{ [0, "+UPS_HOURS+"]|max|round(1) }} h",
+   rule="On while mains power is off: the Home Lab plug (in front of the Anker 757) and the fridge plug have both been offline for a minute. "
+        "The 757 has no data interface, so its charge is estimated from the time since the outage started, the load and the usable capacity set here. "
+        "Below 50 % the home lab shuts down gracefully.",
+   data=[(MAINS,"Mains"),(UPS_PCT,"757 estimate"),(OUTAGE_START,"Outage started"),(UPS_LOAD,"Load on battery"),(UPS_CAP,"Usable capacity"),
+         ("binary_sensor.hallway_smart_plug_home_lab_status","Home Lab plug online"),("binary_sensor.athom_smart_plug_fridge_status","Fridge plug online")],
+   hist=[MAINS,"sensor.hallway_smart_plug_home_lab_power"]),
  # --- kitchen
  dict(key="heating_while_away",group="Home",name="Heating while away",icon="mdi:radiator",color="deep-orange",
    tmpl="{{ "+HEATING+" | count > 0 and states.person | selectattr('state','eq','home') | list | count == 0 }}",
