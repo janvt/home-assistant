@@ -296,7 +296,7 @@ def test_every_service_is_described() -> None:
 
 
 # ── the "No alert pills" label ──────────────────────────────────────────────
-IGNORING = ["low_batteries", "device_offline", "guest_down"]
+IGNORING = ["low_batteries", "device_offline", "guest_down", "updates_waiting"]
 
 
 def test_ignore_label_id_is_what_ha_makes_of_its_name() -> None:

@@ -23,7 +23,7 @@ f=lambda e,d=0:f"states('{e}')|float({d})"
 def since(e,sec):
     return f"(now() - states.{e}.last_changed).total_seconds() > {sec}"
 # Entities and devices with this HA label are left out of the low battery,
-# device offline and guest down pills. Add or remove it on the phone, in the
+# device offline, guest down and updates waiting pills. Add or remove it on the phone, in the
 # entity's or the device's settings. sync.py creates the label the first time,
 # with IGNORED_AT_FIRST in it (the phones, which drain and charge every day);
 # after that it's yours: the sync never touches who has it.
@@ -41,7 +41,7 @@ LOWBAT_LIST=(SKIP+
         "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
         " | rejectattr('entity_id','in',skip) | selectattr('state','is_number') | list %}"
         "{% for s in low if s.state|float < 20 %}{{ s.name }} {{ s.state|round(0) }} %{{ ', ' if not loop.last }}{% else %}All above 20 %{% endfor %}")
-UPDATES="states.update | selectattr('state','eq','on') | list"
+UPDATES=(SKIP+"{% set ups = states.update | selectattr('state','eq','on') | rejectattr('entity_id','in',skip) | list %}")
 TOMORROW="(now() + timedelta(days=1)).date()|string"
 WASTE="calendar.waste_collection_schedule_zaku_entsorgung"
 WASTE_DAY="(state_attr('"+WASTE+"','start_time') or '')[:10]"
@@ -619,10 +619,10 @@ ALERTS=[
    data=[("sensor.aqara_fridge_temp_battery","Fridge thermometer"),("sensor.lumi_lumi_vibration_aq1_battery","Vibration sensor"),
          ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.nuki_schmatzknauf_battery_2","Nuki lock")],hist=[]),
  dict(key="updates_waiting",group="Maintenance",name="Updates waiting",icon="mdi:package-up",color="grey",
-   tmpl="{{ "+UPDATES+" | count > 0 }}",
-   secondary="{{ "+UPDATES+" | count }} available: {{ "+UPDATES+" | map(attribute='name') | join(', ') }}",
-   summary="{{ "+UPDATES+" | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
-   rule="On when any update entity has an update available.",
+   tmpl=UPDATES+"{{ ups | count > 0 }}",
+   secondary=UPDATES+"{{ ups | count }} available: {{ ups | map(attribute='name') | join(', ') }}",
+   summary=UPDATES+"{{ ups | map(attribute='name') | join(', ') or 'Everything is up to date.' }}",
+   rule="On when any update entity has an update available. Anything labelled \"No alert pills\" (the update or its device) is left out.",
    data=[],hist=[]),
  dict(key="record_warm",group="Climate",name="Record warm",icon="mdi:thermometer-chevron-up",color="red",
    tmpl="{{ "+HIGH+" is number and "+HIGH+" >= states('"+RECORD+"')|float(99) }}",
