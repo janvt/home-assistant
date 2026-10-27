@@ -196,6 +196,24 @@ MONTH_TEXT=("{{ state_attr('"+CLIM+"_month_vs_normal','days') }} days: {{ '%+.1f
 HIGH="state_attr('"+CLIM+"_high_vs_normal','high')"
 LOW="state_attr('"+CLIM+"_low_vs_normal','low')"
 RECORD="sensor.altdorf_record_high_for_the_date"
+# The WireGuard VPN on AWS, pushed in by the wg-vpn Terraform stack's
+# EventBridge webhook (automation "WG VPN: receive AWS EventBridge"). The free
+# allowance is AWS's 100 GB of free egress a month; the bill is the whole AWS
+# account's month to date.
+VPN="input_number.wg_vpn_"
+VPN_USED=f(VPN+"free_allowance_used")
+VPN_BILL=VPN+"aws_bill_month_to_date"
+VPN_PEERS=[(VPN+"mac_egress_month_to_date","Mac"),(VPN+"denise_egress_month_to_date","Denise"),(VPN+"phone_egress_month_to_date","Phone")]
+VPN_LINE=("{{ "+f(VPN+"egress_month_to_date")+"|round(1) }} GB out this month, {{ "+VPN_USED+"|round(0)|int }} % of the free 100 GB · "
+          +", ".join(n+" {{ "+f(e)+"|round(1) }} GB" for e,n in VPN_PEERS))
+def vpn_pill(key,name,icon,color,lo,hi,rule):
+    """One step of the free allowance. Only one step is on at a time, so each
+    new step shows up again even when the one before was dismissed."""
+    cond=VPN_USED+" >= "+str(lo)+(" and "+VPN_USED+" < "+str(hi) if hi else "")
+    return dict(key=key,group="VPN",name=name,icon=icon,color=color,tmpl="{{ "+cond+" }}",
+                content="{{ "+VPN_USED+"|round(0)|int }}%",secondary=VPN_LINE,summary=VPN_LINE,rule=rule,
+                data=[(VPN+"free_allowance_used","Free allowance used"),(VPN+"egress_month_to_date","Egress this month")]+VPN_PEERS,
+                hist=[VPN+"free_allowance_used"])
 # Pills you clear by acting (closing a door, checking the fridge) rather than
 # by acknowledging them. These can't be dismissed on the Alerts page.
 CRITICAL={"smoke_or_co","front_door_open","unlocked_nobody_home","fridge_open","fridge_not_cooling","heating_while_away"}
@@ -560,6 +578,20 @@ ALERTS=[
    secondary="{{ states('"+PROX+"_node_updates') }} package updates on prox",
    rule="On when the Proxmox node has package updates waiting.",
    data=[(PROX+"_node_updates","Updates")],hist=[]),
+ # --- vpn
+ dict(key="vpn_bill_over_10",group="VPN",name="AWS bill over $10",icon="mdi:cash-alert",color="red",
+   tmpl="{{ "+f(VPN_BILL)+" >= 10 }}",
+   content="${{ "+f(VPN_BILL)+"|int }}",
+   secondary="AWS bill ${{ '%.2f'|format("+f(VPN_BILL)+") }} this month · VPN egress beyond the free tier ${{ '%.2f'|format("+f(VPN+"cost_month_to_date")+") }}",
+   summary="AWS bill ${{ '%.2f'|format("+f(VPN_BILL)+") }} this month",
+   rule="On when the AWS account's bill for this month reaches $10. It comes from AWS's billing metrics with the VPN's usage snapshots, and starts again from zero on the first of the month.",
+   data=[(VPN_BILL,"AWS bill"),(VPN+"cost_month_to_date","VPN egress cost"),("input_select.wg_vpn_instance_state","Instance")],hist=[VPN_BILL]),
+ vpn_pill("vpn_allowance_used_up","Free VPN data used up","mdi:gauge-full","red",100,None,
+          "On once the VPN has sent 100 % of AWS's free 100 GB of egress this month. Everything beyond it is billed."),
+ vpn_pill("vpn_allowance_80","80 % of free VPN data used","mdi:gauge","orange",80,100,
+          "On from 80 % to 100 % of AWS's free 100 GB of VPN egress this month."),
+ vpn_pill("vpn_allowance_50","Half the free VPN data used","mdi:gauge-low","yellow",50,80,
+          "On from 50 % to 80 % of AWS's free 100 GB of VPN egress this month."),
  dict(key="low_batteries",group="Maintenance",name="Low batteries",icon="mdi:battery-alert-variant-outline",color="orange",
    tmpl=LOWBAT+"{{ low|count + crit|count > 0 }}",
    secondary=LOWBAT_LIST,
@@ -634,4 +666,4 @@ ALERTS=[
    hist=[TRAIN_PASSING,TELE_PASSING]),
  month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
-GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","VPN","Maintenance"]
