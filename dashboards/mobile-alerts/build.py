@@ -123,6 +123,13 @@ def _tile(entity_id: str, name: str) -> dict[str, Any]:
 BACK = f"/{DASHBOARD}/0"
 
 
+def _open(pill: dict[str, Any]) -> dict[str, Any]:
+    """Tapping a pill's card: its own dashboard when it has one, else more-info."""
+    if pill.get("link"):
+        return {"action": "navigate", "navigation_path": pill["link"]}
+    return {"action": "more-info"}
+
+
 def back_chips(*extra: dict[str, Any]) -> dict[str, Any]:
     """Mushroom's back chip, the way every other page of this dashboard starts."""
     return {"type": "custom:mushroom-chips-card", "chips": [{"type": "back"}, *extra]}
@@ -144,7 +151,7 @@ def subview() -> dict[str, Any]:
             # The integration renders the colour, `color_from` included.
             "icon_color": "{{ state_attr('" + entity(p) + "', 'color') }}",
             "multiline_secondary": True, "fill_container": True, "grid_options": {"columns": 12},
-            "tap_action": {"action": "more-info"},
+            "tap_action": _open(p),
             "visibility": [{"condition": "state", "entity": entity(p), "state": "on"}],
         }
         if dismissable(p):
@@ -164,6 +171,9 @@ def subview() -> dict[str, Any]:
                           "badges": [{"type": "entity", "entity": entity(p), "show_state": True,
                                       "show_icon": False, "color": p["color"]}]})  # badges take no template
             cards.append({"type": "markdown", "content": f"<small>{p['rule']}</small>"})
+            if p.get("link"):
+                cards.append({"type": "button", "name": "Details", "icon": "mdi:open-in-app", "show_state": False,
+                              "tap_action": _open(p), "grid_options": {"columns": 12, "rows": 1}})
             cards += [_tile(e, n) for e, n in p["data"]]
             if p.get("summary"):
                 cards.append({"type": "markdown", "content": p["summary"]})

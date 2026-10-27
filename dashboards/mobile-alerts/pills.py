@@ -13,7 +13,9 @@ yellow/orange/red state overrides `color` in the row and on the Alerts page.
 `content` (optional) is a template shown next to the icon in the row, e.g. a count.
 
 `secondary`, `rule`, `data`, `hist` and the optional `summary` (a line that
-always shows in the pill's section, on or off) only feed the Alerts sub-page. Thresholds live
+always shows in the pill's section, on or off) only feed the Alerts sub-page.
+`link` (optional) is a dashboard path the pill's card opens there instead of
+the entity's more-info. Thresholds live
 in `tmpl`; change them here and run `sync.py`, not in the HA UI, or the next
 sync puts them back.
 """
@@ -201,6 +203,7 @@ RECORD="sensor.altdorf_record_high_for_the_date"
 # allowance is AWS's 100 GB of free egress a month; the bill is the whole AWS
 # account's month to date.
 VPN="input_number.wg_vpn_"
+VPN_LINK="/dashboard-vpn/usage"  # dashboards/vpn/build.py LINK
 VPN_USED=f(VPN+"free_allowance_used")
 VPN_BILL=VPN+"aws_bill_month_to_date"
 VPN_PEERS=[(VPN+"mac_egress_month_to_date","Mac"),(VPN+"denise_egress_month_to_date","Denise"),(VPN+"phone_egress_month_to_date","Phone")]
@@ -213,7 +216,7 @@ def vpn_pill(key,name,icon,color,lo,hi,rule):
     return dict(key=key,group="VPN",name=name,icon=icon,color=color,tmpl="{{ "+cond+" }}",
                 content="{{ "+VPN_USED+"|round(0)|int }}%",secondary=VPN_LINE,summary=VPN_LINE,rule=rule,
                 data=[(VPN+"free_allowance_used","Free allowance used"),(VPN+"egress_month_to_date","Egress this month")]+VPN_PEERS,
-                hist=[VPN+"free_allowance_used"])
+                hist=[VPN+"free_allowance_used"],link=VPN_LINK)
 # Pills you clear by acting (closing a door, checking the fridge) rather than
 # by acknowledging them. These can't be dismissed on the Alerts page.
 CRITICAL={"smoke_or_co","front_door_open","unlocked_nobody_home","fridge_open","fridge_not_cooling","heating_while_away"}
@@ -585,7 +588,7 @@ ALERTS=[
    secondary="AWS bill ${{ '%.2f'|format("+f(VPN_BILL)+") }} this month · VPN egress beyond the free tier ${{ '%.2f'|format("+f(VPN+"cost_month_to_date")+") }}",
    summary="AWS bill ${{ '%.2f'|format("+f(VPN_BILL)+") }} this month",
    rule="On when the AWS account's bill for this month reaches $10. It comes from AWS's billing metrics with the VPN's usage snapshots, and starts again from zero on the first of the month.",
-   data=[(VPN_BILL,"AWS bill"),(VPN+"cost_month_to_date","VPN egress cost"),("input_select.wg_vpn_instance_state","Instance")],hist=[VPN_BILL]),
+   data=[(VPN_BILL,"AWS bill"),(VPN+"cost_month_to_date","VPN egress cost"),("input_select.wg_vpn_instance_state","Instance")],hist=[VPN_BILL],link=VPN_LINK),
  vpn_pill("vpn_allowance_used_up","Free VPN data used up","mdi:gauge-full","red",100,None,
           "On once the VPN has sent 100 % of AWS's free 100 GB of egress this month. Everything beyond it is billed."),
  vpn_pill("vpn_allowance_80","80 % of free VPN data used","mdi:gauge","orange",80,100,

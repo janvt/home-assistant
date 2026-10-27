@@ -11,6 +11,7 @@ own README with the full context.
 | `kitchen-timer/` | DIY 7-segment kitchen timer: ESPHome config, custom `mux7seg` component, HA-owned timer | `kitchen-timer/README.md` (architecture, hardware, decision log) |
 | `dashboards/weather/` | The Weather dashboard, built end to end from `locations.py` and pushed by `sync.py` (shares `dashboards/ha_client.py` and `.env` with the pills) | `dashboards/weather/README.md` |
 | `dashboards/trains/` | The Trains debug dashboard for Frigate on the train tracks, built by `build.py` and pushed by `sync.py` | `dashboards/trains/README.md` |
+| `dashboards/vpn/` | The VPN usage dashboard (not in the sidebar; the VPN alert pills link to it), built by `build.py` and pushed by `sync.py` | `dashboards/vpn/README.md` |
 | `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
 | `custom_components/alert_pills/` | The Alert Pills integration (HACS installs it from this repo, from `main`); its HA-harness tests are `tests_alert_pills/` | `dashboards/mobile-alerts/README.md` |
 | `automations/` | HA automations kept in version control | |
