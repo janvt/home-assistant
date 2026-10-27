@@ -45,7 +45,14 @@ UPDATES="states.update | selectattr('state','eq','on') | list"
 TOMORROW="(now() + timedelta(days=1)).date()|string"
 WASTE="calendar.waste_collection_schedule_zaku_entsorgung"
 WASTE_DAY="(state_attr('"+WASTE+"','start_time') or '')[:10]"
-FLIGHTS="(state_attr('sensor.flightradar24_current_in_area','flights') or []) | selectattr('distance','defined') | selectattr('distance','lt',3) | sort(attribute='distance') | list"
+# A plane counts as overhead when it's at least 45° up in the sky (ground
+# distance under its altitude) or within 3 km, whichever reaches further, up to
+# the integration's 10 km radius. FR24's `distance` is along the ground. A flat
+# 3 km let a cruising jet cross in one 20 s update or slip between two, so only
+# slow, low planes showed up; a jet at 10 km now stays on for over a minute.
+FLIGHTS=("{% set ns = namespace(f=[]) %}{% for f in state_attr('sensor.flightradar24_current_in_area','flights') or [] %}"
+         "{% if f.distance is number and f.distance < [3, [(f.altitude|float(0)) * 0.0003048, 10]|min]|max %}"
+         "{% set ns.f = ns.f + [f] %}{% endif %}{% endfor %}{% set fl = ns.f | sort(attribute='distance') %}")
 TRAIN="sensor.altdorf_zurich"
 def hhmm(e): return "(states('"+e+"')|as_datetime|as_local).strftime('%H:%M') if states('"+e+"') not in ['unknown','unavailable']"
 NEXT_TRAINS=("{{ "+hhmm(TRAIN+"_departure")+" else '–' }} ({{ states('"+TRAIN+"_line') }}, platform {{ states('"+TRAIN+"_platform') }}"
@@ -535,9 +542,9 @@ ALERTS=[
    rule="On when Altdorf has measured 10 mm of rain or more over the last 24 hours (a Statistics helper sums the 10-minute rain).",
    data=[(RAIN_24H,"Rain 24 h"),("sensor.altdorf_10_minute_rain","Rain 10 min")],hist=[RAIN_24H]),
  dict(key="plane_overhead",group="Home",name="Plane overhead",icon="mdi:airplane",color="light-blue",
-   tmpl="{{ "+FLIGHTS+" | count > 0 }}",
-   secondary="{% set fl = "+FLIGHTS+" %}{% if fl %}{% set f = fl[0] %}{{ f.callsign or f.aircraft_registration }} · {{ f.aircraft_model }} at {{ (f.altitude|float(0) * 0.3048)|round(-2)|int }} m, {{ f.distance|round(1) }} km away · {{ f.airport_origin_city or '?' }} → {{ f.airport_destination_city or '?' }}{% else %}Nothing within 3 km{% endif %}",
-   rule="On while FlightRadar24 sees an aircraft within 3 km of home.",
+   tmpl=FLIGHTS+"{{ fl | count > 0 }}",
+   secondary=FLIGHTS+"{% if fl %}{% set f = fl[0] %}{{ f.callsign or f.aircraft_registration }} · {{ f.aircraft_model }} at {{ (f.altitude|float(0) * 0.3048)|round(-2)|int }} m, {{ f.distance|round(1) }} km away · {{ f.airport_origin_city or '?' }} → {{ f.airport_destination_city or '?' }}{% else %}Nothing overhead{% endif %}",
+   rule="On while FlightRadar24 sees an aircraft overhead: at least 45° up in the sky (closer along the ground than it is high), or within 3 km. FlightRadar24 updates every 20 s and looks 10 km out.",
    data=[("sensor.flightradar24_current_in_area","Aircraft in area"),("sensor.flightradar24_entered_area","Entered area")],hist=["sensor.flightradar24_current_in_area"]),
  # --- maintenance
  dict(key="storage_full",group="Proxmox",name="Storage filling up",icon="mdi:harddisk",color="orange",
