@@ -185,7 +185,8 @@ def history_section() -> dict[str, Any]:
 def calendar_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 3, "cards": [
         heading("Closures to come", "mdi:calendar-alert"),
-        {"type": "calendar", "initial_view": "listWeek", "grid_options": {"columns": "full"},
+        # A week's list needs the height: at the default, it shows a day or two.
+        {"type": "calendar", "initial_view": "listWeek", "grid_options": {"columns": "full", "rows": 10},
          "entities": list(CALENDARS)},
     ]}
 
