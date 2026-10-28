@@ -33,10 +33,11 @@ within about 40 km of home: Klausen, Ibergeregg, Susten, Pragel, Oberalp,
 Gotthard, Lukmanier and Furka.
 
 - **Passes nearby:** a Mushroom card per pass, its icon and color by status:
-  green open, amber open with restrictions, orange partly open, red closed,
-  light blue closed for the winter, grey unknown. The second line has the
-  status, temperature and since when; a badge shows snow chains or truck
-  limits. Needs Mushroom (HACS).
+  a green check for open, an amber snowflake for open with restrictions (mostly
+  snow on the road), an orange half circle for partly open, a red slashed
+  circle for closed (for the winter too), grey for unknown. The second line
+  has the status, temperature and since when; a badge shows snow chains or
+  truck limits. Needs Mushroom (HACS).
 - **Conditions:** the site's own words for the status, with snow chains and
   truck limits, when it last changed, and the temperature and weather.
 - **Notices:** night closures, weight limits and the like, pass by pass.

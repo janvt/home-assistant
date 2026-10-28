@@ -182,7 +182,7 @@ def test_pass_card_by_status() -> None:
 def test_pass_card_changed_today_and_chains() -> None:
     card = render_card({"sensor.klausenpass_status": "restricted", "sensor.klausenpass_status_since": "2026-10-28",
                         "binary_sensor.klausenpass_snow_chains_required": "on"})
-    assert card["icon"] == "mdi:alert" and card["color"] == "amber"
+    assert card["icon"] == "mdi:snowflake" and card["color"] == "amber"
     assert card["secondary"].endswith(" · since 08:30")
     assert card["badge_icon"] == "mdi:link-variant"
 
