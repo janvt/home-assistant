@@ -20,7 +20,7 @@ spec = importlib.util.spec_from_file_location("infrastructure_build", HERE / "bu
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
 CONFIG = build.build()
-USED = set(re.findall(r"\b(?:sensor|binary_sensor|camera|update)\.[a-z0-9_]+", json.dumps(CONFIG)))
+USED = set(re.findall(r"\b(?:sensor|binary_sensor|camera|update|calendar)\.[a-z0-9_]+", json.dumps(CONFIG)))
 
 
 def test_build_is_plain_json() -> None:
