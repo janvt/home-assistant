@@ -28,16 +28,32 @@ northbound; a table of every station now (vehicles, speed, lorries, each
 way); and, per hour over 7 days, the traffic at Göschenen and on the
 Axenstrasse, the lorries at Göschenen and the travel times.
 
-Everything comes from the Gotthard integration
+The **Passes** view (`/dashboard-infrastructure/passes`) has the alpine passes
+within about 40 km of home: Klausen, Ibergeregg, Susten, Pragel, Oberalp,
+Gotthard, Lukmanier and Furka.
+
+- **Passes nearby:** each pass's status (open, open with restrictions, partly
+  open, closed, closed for the winter).
+- **Conditions:** the site's own words for the status, with snow chains and
+  truck limits, when it last changed, and the temperature and weather.
+- **Notices:** night closures, weight limits and the like, pass by pass.
+- **History:** which passes were open over 7 days, and their temperatures over
+  48 hours.
+
+The Gotthard, Roads and Traffic views come from the Gotthard integration
 ([janvt/homeassistant-gotthard](https://github.com/janvt/homeassistant-gotthard),
 installed through HACS), which reads FEDRO's traffic messages from
-opentransportdata.swiss.
+opentransportdata.swiss. The Passes view comes from the Alpine Passes
+integration
+([janvt/homeassistant-alpine-passes](https://github.com/janvt/homeassistant-alpine-passes),
+private for now, copied over SSH), which reads alpen-paesse.ch of IG
+Alpenpässe. Its entry must have the same passes as `PASSES` in `build.py`: the
+sync refuses to save a dashboard naming an entity HA doesn't have.
 
 | File | What |
 |------|------|
-| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the integration makes. |
-| [`passes.json`](passes.json) | The **Passes** view (IG Alpenpässe), made in the HA UI and kept here as it was made. |
-| [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. Refuses to drop a view made in the UI that `build.py` doesn't make. |
+| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes. |
+| [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. Refuses to drop a view HA has that `build.py` doesn't make (`--drop-views` overrides). |
 
 ```bash
 .venv-test/bin/python dashboards/infrastructure/sync.py            # dry run
@@ -46,5 +62,5 @@ opentransportdata.swiss.
 
 It uses the same `dashboards/.env` as the other dashboards. **The script owns
 this dashboard:** a card added in the HA UI is gone after the next `--apply`.
-A whole view added in the UI stops the sync instead: copy it from the backup
-it took into a JSON file next to `passes.json`, and load it in `build()`.
+A whole view HA has that `build.py` doesn't make stops the sync instead, so a
+view made in the UI, or synced from another branch, isn't lost.
