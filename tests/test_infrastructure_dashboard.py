@@ -6,6 +6,7 @@ templates that parse, since a broken one only shows as an error card.
 """
 from __future__ import annotations
 
+import datetime
 import importlib.util
 import json
 import re
@@ -119,6 +120,8 @@ def strict_env(states: dict[str, str], attributes: dict[tuple[str, str], object]
     env.globals["is_state"] = lambda entity, state: states.get(entity) == state
     env.globals["is_number"] = lambda value: value.lstrip("-").replace(".", "", 1).isdigit()
     env.globals["state_attr"] = lambda entity, attribute: attributes.get((entity, attribute))
+    env.globals["state_translated"] = lambda entity: {"open": "Open"}.get(states.get(entity), "Unknown")
+    env.globals["now"] = lambda: datetime.datetime(2026, 10, 28, 15, 0)
     return env
 
 
@@ -145,3 +148,50 @@ def test_notices_list_pass_by_pass() -> None:
         "**Gotthardpass**, Hospental - Airolo\n- Nachtsperre.\n- Tremola: 3.5 t.\n\n"
         "**Furkapass**\n- Wintersperre.\n\n")
     assert strict_env({}, {}).from_string(build.notices_list()).render() == "No notices."
+
+
+def pass_cards() -> list[dict]:
+    view = next(v for v in CONFIG["views"] if v["path"] == "passes")
+    return [card for section in view["sections"] for card in section["cards"]
+            if card["type"] == "custom:mushroom-template-card"]
+
+
+def test_a_card_per_pass() -> None:
+    assert [card["entity"] for card in pass_cards()] == [f"sensor.{slug}_status" for slug in build.PASSES]
+
+
+def render_card(states: dict[str, str]) -> dict[str, str]:
+    """The Klausen card's templates, rendered strictly as HA does."""
+    env = strict_env(states, {})
+    env.filters["timestamp_custom"] = lambda value, fmt: {"%H:%M": "08:30", "%d.%m.": "26.10.",
+                                                          "%Y-%m-%d": value}[fmt]
+    card = pass_cards()[0]
+    return {key: env.from_string(card[key]).render()
+            for key in ("icon", "color", "secondary", "badge_icon")}
+
+
+def test_pass_card_by_status() -> None:
+    """Icon and color follow the status; the second line has it in words, the
+    temperature, and the date it changed (not today)."""
+    card = render_card({"sensor.klausenpass_status": "open", "sensor.klausenpass_temperature": "-0.4",
+                        "sensor.klausenpass_status_since": "2026-10-26"})
+    assert card == {"icon": "mdi:check-circle", "color": "green",
+                    "secondary": "Open · 0 °C · since 26.10.", "badge_icon": ""}
+
+
+def test_pass_card_changed_today_and_chains() -> None:
+    card = render_card({"sensor.klausenpass_status": "restricted", "sensor.klausenpass_status_since": "2026-10-28",
+                        "binary_sensor.klausenpass_snow_chains_required": "on"})
+    assert card["icon"] == "mdi:alert" and card["color"] == "amber"
+    assert card["secondary"].endswith(" · since 08:30")
+    assert card["badge_icon"] == "mdi:link-variant"
+
+
+def test_pass_card_unknown() -> None:
+    """The integration lost the pass, or HA just started: grey, a question mark."""
+    card = render_card({})
+    assert card == {"icon": "mdi:help-circle", "color": "grey", "secondary": "Unknown", "badge_icon": ""}
+
+
+def test_every_status_has_a_look() -> None:
+    assert set(build.PASS_LOOK) == {"open", "restricted", "partially_open", "closed", "winter_closure"}
