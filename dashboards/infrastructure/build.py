@@ -323,9 +323,11 @@ def notices_list() -> str:
 
 
 # How each status looks on the pass cards: (icon, Mushroom color).
-PASS_LOOK = {"open": ("mdi:check-circle", "green"), "restricted": ("mdi:alert", "amber"),
-             "partially_open": ("mdi:circle-half-full", "orange"), "closed": ("mdi:close-octagon", "red"),
-             "winter_closure": ("mdi:snowflake", "light-blue")}
+# Restrictions are mostly snow on the road; a closure for the winter looks
+# like any other (the second line says which).
+PASS_LOOK = {"open": ("mdi:check-circle", "green"), "restricted": ("mdi:snowflake", "amber"),
+             "partially_open": ("mdi:circle-half-full", "orange"), "closed": ("mdi:cancel", "red"),
+             "winter_closure": ("mdi:cancel", "red")}
 UNKNOWN_LOOK = ("mdi:help-circle", "grey")
 
 
