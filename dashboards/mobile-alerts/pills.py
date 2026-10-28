@@ -245,6 +245,16 @@ GOTTHARD_LINK="/dashboard-infrastructure/gotthard"
 GOTTHARD_DELAY={"north":"sensor.gotthard_delay_before_the_north_portal","south":"sensor.gotthard_delay_before_the_south_portal"}
 GOTTHARD_QUEUE={"north":"sensor.gotthard_queue_before_the_north_portal","south":"sensor.gotthard_queue_before_the_south_portal"}
 GOTTHARD_JAM_LIMIT="input_number.gotthard_jam_limit"
+# From the traffic counters, opt in in the integration: speeds below 40 km/h
+# at the stations before a portal, and vehicles counted on the Axenstrasse.
+# Without the counters these entities don't exist and the pills ignore them.
+QUEUE_FORMING={"south":"binary_sensor.gotthard_queue_forming_before_the_north_portal",
+               "north":"binary_sensor.gotthard_queue_forming_before_the_south_portal"}
+AXEN_TRAFFIC="binary_sensor.national_roads_axenstrasse_traffic"
+TRAFFIC_LINK="/dashboard-infrastructure/traffic"
+def speed(key,direction): return f"sensor.{key}_{direction}bound_speed"
+APPROACH_SPEEDS=("Southbound: Wassen {{ "+f(speed("a2_wassen","south"))+"|round(0)|int }}, Göschenen {{ "+f(speed("a2_goschenen","south"))+"|round(0)|int }} km/h"
+                 " · northbound: Quinto {{ "+f(speed("a2_quinto","north"))+"|round(0)|int }} km/h")
 GOTTHARD_WORST="["+f(GOTTHARD_DELAY["north"])+", "+f(GOTTHARD_DELAY["south"])+"]|max"
 def closed_line(e):
     """What closes it, without the message's "Freigegeben:", and until when."""
@@ -448,10 +458,18 @@ ALERTS=[
    rule="On while the Gotthard road tunnel is closed in either direction, from FEDRO's traffic messages: a night closure, a special transport, a broken-down car. A lane or a ramp closed doesn't count.",
    data=[(GOTTHARD_TUNNEL,"Tunnel"),("sensor.gotthard_next_tunnel_closure","Next closure")],hist=[GOTTHARD_TUNNEL],link=GOTTHARD_LINK),
  dict(key="axenstrasse_closed",group="Travel",name="Axenstrasse closed",icon="mdi:boom-gate",color="orange",
-   tmpl="{{ is_state('"+AXENSTRASSE+"','off') }}",
+   tmpl="{{ is_state('"+AXENSTRASSE+"','off') and not is_state('"+AXEN_TRAFFIC+"','on') }}",
    secondary=closed_line(AXENSTRASSE),
-   rule="On while the Axenstrasse (the A4 between Brunnen and Flüelen) is closed, from FEDRO's traffic messages: rockfall, works, a night closure. A lane or a ramp closed doesn't count.",
-   data=[(AXENSTRASSE,"Axenstrasse"),("sensor.national_roads_next_axenstrasse_closure","Next closure")],hist=[AXENSTRASSE],link=ROADS_LINK),
+   rule="On while the Axenstrasse (the A4 between Brunnen and Flüelen) is closed, from FEDRO's traffic messages: rockfall, works, a night closure. A lane or a ramp closed doesn't count. Not while vehicles are counted at Sisikon: then the message is stale.",
+   data=[(AXENSTRASSE,"Axenstrasse"),(AXEN_TRAFFIC,"Traffic counted at Sisikon"),("sensor.national_roads_next_axenstrasse_closure","Next closure")],hist=[AXENSTRASSE,AXEN_TRAFFIC],link=ROADS_LINK),
+ dict(key="gotthard_queue_forming",group="Travel",name="Gotthard queue forming",icon="mdi:car-clock",color="amber",
+   tmpl="{{ is_state('"+QUEUE_FORMING["south"]+"','on') or is_state('"+QUEUE_FORMING["north"]+"','on') }}",
+   content="{{ '↓' if is_state('"+QUEUE_FORMING["south"]+"','on') }}{{ '↑' if is_state('"+QUEUE_FORMING["north"]+"','on') }}",
+   secondary=APPROACH_SPEEDS,summary=APPROACH_SPEEDS,
+   rule="On when the traffic counted before a Gotthard portal slows below 40 km/h (Wassen or Göschenen southbound, Quinto northbound), often before FEDRO reports a queue. Averaged over 10 minutes. Needs the integration's traffic counters.",
+   data=[(QUEUE_FORMING["south"],"Southbound, before Göschenen"),(QUEUE_FORMING["north"],"Northbound, before Airolo"),
+         (speed("a2_wassen","south"),"Wassen southbound"),(speed("a2_goschenen","south"),"Göschenen southbound"),(speed("a2_quinto","north"),"Quinto northbound")],
+   hist=list(QUEUE_FORMING.values()),link=TRAFFIC_LINK),
  dict(key="gotthard_jam",group="Travel",name="Gotthard jam",icon="mdi:car-multiple",color="deep-orange",
    tmpl="{{ "+GOTTHARD_WORST+" >= "+f(GOTTHARD_JAM_LIMIT,30)+" }}",
    content="{{ ("+GOTTHARD_WORST+")|int }}′",

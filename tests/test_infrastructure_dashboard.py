@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sys
 
 import pytest
 
@@ -40,6 +41,29 @@ def test_every_pass_entity_is_shown() -> None:
 def test_only_the_gotthard_and_pass_entities() -> None:
     known = set(build.ENTITIES) | set(build.PASS_ENTITIES)
     assert USED <= known, sorted(USED - known)
+
+
+def _sync():
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent))
+    try:
+        spec = importlib.util.spec_from_file_location("infrastructure_sync", HERE / "sync.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(HERE))
+        sys.path.remove(str(HERE.parent))
+
+
+def test_sync_sees_a_view_it_would_drop() -> None:
+    """A view HA has that build.py doesn't make is gone after a save: the
+    Passes view was, once, when it was synced from another branch."""
+    websockets = pytest.importorskip("websockets")  # noqa: F841 ha_client needs it
+    sync = _sync()
+    old = {"views": [*CONFIG["views"], {"title": "Mine", "path": "mine", "cards": []}]}
+    assert sync.dropped_views(old, CONFIG) == ["mine"]
+    assert sync.dropped_views(CONFIG, CONFIG) == []
 
 
 def test_templates_parse() -> None:
