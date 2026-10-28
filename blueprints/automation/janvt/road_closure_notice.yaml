@@ -1,0 +1,199 @@
+# Road closure notices for one person, from the Gotthard integration
+# (github.com/janvt/homeassistant-gotthard). Make one automation per person
+# from it: Settings → Automations → Create → From blueprint.
+#
+# The integration's entities say what closes a road in their attributes:
+#   binary_sensor (Axenstrasse, Tunnel)  closures: [{text, until, direction}]  now
+#   sensor A2/A4 closures …               current, planned: [{text, start, end, direction}]
+#   sensor Next … closure                 closures: [{text, start, end, direction}]  to come
+# A notice is a closure that wasn't in the list before. One closure can be on
+# several of them (the Axenstrasse is on the A4 too, both ways), so only the
+# first road in the list that has it sends it.
+blueprint:
+  name: Road closure notice
+  description: >-
+    Notifies a phone when a road closes, with what closes it and until when,
+    and when it opens again. Optionally only on some days and hours (a
+    commute), and an evening reminder of the closures announced for the next
+    24 hours. Roads are the Gotthard integration's: the Axenstrasse, the
+    Gotthard tunnel, the A2 and A4 by direction, and their next closures.
+  domain: automation
+  source_url: https://github.com/janvt/home-assistant/blob/main/blueprints/automation/janvt/road_closure_notice.yaml
+  input:
+    roads:
+      name: Roads
+      description: >-
+        The Axenstrasse or the Gotthard tunnel (open/closed), an A2 or A4
+        direction (its closures), or a "Next … closure" (only for the evening
+        reminder). The first in the list that has a closure sends it.
+      selector:
+        entity:
+          multiple: true
+          filter:
+            - integration: gotthard
+              domain: [binary_sensor, sensor]
+    phone:
+      name: Phone
+      description: The Home Assistant app that gets the notices.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    reopened:
+      name: When it opens again
+      description: For the Axenstrasse and the tunnel, a notice when they open again.
+      default: true
+      selector:
+        boolean:
+    days:
+      name: Days
+      description: Closure notices only on these days.
+      default: [mon, tue, wed, thu, fri, sat, sun]
+      selector:
+        select:
+          multiple: true
+          options:
+            - {label: Monday, value: mon}
+            - {label: Tuesday, value: tue}
+            - {label: Wednesday, value: wed}
+            - {label: Thursday, value: thu}
+            - {label: Friday, value: fri}
+            - {label: Saturday, value: sat}
+            - {label: Sunday, value: sun}
+    after:
+      name: From
+      description: Closure notices only from this time. The same as "Until" means all day.
+      default: "00:00:00"
+      selector:
+        time:
+    before:
+      name: Until
+      description: Closure notices only until this time; past midnight is fine (22:00 to 06:00).
+      default: "00:00:00"
+      selector:
+        time:
+    reminder:
+      name: Evening reminder
+      description: At the reminder time, the closures announced for the next 24 hours, if any.
+      default: false
+      selector:
+        boolean:
+    reminder_time:
+      name: Reminder time
+      default: "20:00:00"
+      selector:
+        time:
+
+mode: queued
+max: 20
+
+variables:
+  roads: !input roads
+  reopened: !input reopened
+  days: !input days
+  after: !input after
+  before: !input before
+  reminder: !input reminder
+
+triggers:
+  # Without to: or from:, a change of the attributes fires too: a second
+  # closure while the road is already closed.
+  - trigger: state
+    entity_id: !input roads
+    id: change
+  - trigger: time
+    at: !input reminder_time
+    id: reminder
+
+conditions:
+  - condition: template
+    value_template: >-
+      {% if trigger.id == 'reminder' %}{{ reminder }}
+      {% else %}
+        {% set f, t = trigger.from_state, trigger.to_state %}
+        {% set clock = now().strftime('%H:%M:%S') %}
+        {{ f is not none and t is not none
+           and f.state not in ['unknown', 'unavailable'] and t.state not in ['unknown', 'unavailable']
+           and now().strftime('%a') | lower in days
+           and (after == before or (after <= clock < before if after < before else clock >= after or clock < before)) }}
+      {% endif %}
+
+actions:
+  - choose:
+      - conditions: "{{ trigger.id == 'change' }}"
+        sequence:
+          - variables:
+              name: "{{ trigger.to_state.name | regex_replace('^National roads ', '') }}"
+              key: "{{ 'closures' if trigger.entity_id.startswith('binary_sensor.') else 'current' }}"
+              # The closures now that weren't before, and that no road before
+              # this one in the list has.
+              fresh: >-
+                {% set before_texts = (trigger.from_state.attributes.get(key) or []) | map(attribute='text') | list %}
+                {% set earlier = roads[:roads.index(trigger.entity_id)] if trigger.entity_id in roads else [] %}
+                {% set ns = namespace(out=[]) %}
+                {% for c in trigger.to_state.attributes.get(key) or [] if c.text not in before_texts %}
+                  {% set seen = namespace(found=false) %}
+                  {% for e in earlier %}
+                    {% set k = 'closures' if e.startswith('binary_sensor.') else 'current' %}
+                    {% if c.text in (state_attr(e, k) or []) | map(attribute='text') | list %}
+                      {% set seen.found = true %}
+                    {% endif %}
+                  {% endfor %}
+                  {% if not seen.found %}{% set ns.out = ns.out + [c] %}{% endif %}
+                {% endfor %}
+                {{ ns.out }}
+          - repeat:
+              for_each: "{{ fresh }}"
+              sequence:
+                - device_id: !input phone
+                  domain: mobile_app
+                  type: notify
+                  title: "Closed: {{ name }}"
+                  message: >-
+                    {% set end = repeat.item.get('until') or repeat.item.get('end') %}
+                    {{ repeat.item.text | regex_replace('^[^:]+: ', '') }}{{
+                      ' · until ' ~ (as_timestamp(end) | timestamp_custom('%a %H:%M')) if end }}
+                  data:
+                    tag: "road-{{ (repeat.item.text | slugify)[:60] }}"
+                    group: road-closures
+          - if:
+              - condition: template
+                value_template: >-
+                  {{ reopened and trigger.entity_id.startswith('binary_sensor.')
+                     and trigger.from_state.state == 'off' and trigger.to_state.state == 'on' }}
+            then:
+              - device_id: !input phone
+                domain: mobile_app
+                type: notify
+                title: "Open again: {{ name }}"
+                message: "{{ name }} is open again."
+                data:
+                  group: road-closures
+      - conditions: "{{ trigger.id == 'reminder' }}"
+        sequence:
+          - variables:
+              # Announced closures starting in the next 24 hours, each once.
+              soon: >-
+                {% set ns = namespace(out=[], seen=[]) %}
+                {% for e in roads if e.startswith('sensor.') %}
+                  {% for c in (state_attr(e, 'planned') or []) + (state_attr(e, 'closures') or []) %}
+                    {% if c.get('start') and as_timestamp(c.start) < as_timestamp(now()) + 86400 and c.text not in ns.seen %}
+                      {% set ns.seen = ns.seen + [c.text] %}
+                      {% set ns.out = ns.out + [c] %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {{ ns.out | sort(attribute='start') }}
+          - if: "{{ soon | count > 0 }}"
+            then:
+              - device_id: !input phone
+                domain: mobile_app
+                type: notify
+                title: "Road closures in the next 24 hours"
+                message: >-
+                  {% for c in soon %}{{ as_timestamp(c.start) | timestamp_custom('%a %H:%M') }}{{
+                    '–' ~ (as_timestamp(c.end) | timestamp_custom('%H:%M')) if c.get('end') }}: {{
+                    c.text | regex_replace('^[^:]+: ', '') | truncate(140) }}
+                  {% endfor %}
+                data:
+                  group: road-closures

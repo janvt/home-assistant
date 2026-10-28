@@ -16,6 +16,7 @@ own README with the full context.
 | `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
 | `custom_components/alert_pills/` | The Alert Pills integration (HACS installs it from this repo, from `main`); its HA-harness tests are `tests_alert_pills/` | `dashboards/mobile-alerts/README.md` |
 | `automations/` | HA automations kept in version control | |
+| `blueprints/automation/janvt/` | The Road closure notice blueprint: per-person automations are made from it in the HA UI, not kept here | its header comment |
 | `ha-scene-tracker.yaml` | `input_select.active_scene` + one automation per scene | |
 
 ## Testing
