@@ -19,14 +19,31 @@ The **Roads** view (`/dashboard-infrastructure/roads`) has the Axenstrasse
 of the A2 and the A4 each way: how many now, and the next five announced. Its
 entities are the integration's **National roads** device.
 
-Everything comes from the Gotthard integration
+The **Passes** view (`/dashboard-infrastructure/passes`) has the alpine passes
+within about 40 km of home: Klausen, Ibergeregg, Susten, Pragel, Oberalp,
+Gotthard, Lukmanier and Furka.
+
+- **Passes nearby:** each pass's status (open, open with restrictions, partly
+  open, closed, closed for the winter).
+- **Conditions:** the site's own words for the status, with snow chains and
+  truck limits, when it last changed, and the temperature and weather.
+- **Notices:** night closures, weight limits and the like, pass by pass.
+- **History:** which passes were open over 7 days, and their temperatures over
+  48 hours.
+
+The Gotthard and Roads views come from the Gotthard integration
 ([janvt/homeassistant-gotthard](https://github.com/janvt/homeassistant-gotthard),
 installed through HACS), which reads FEDRO's traffic messages from
-opentransportdata.swiss.
+opentransportdata.swiss. The Passes view comes from the Alpine Passes
+integration
+([janvt/homeassistant-alpine-passes](https://github.com/janvt/homeassistant-alpine-passes),
+private for now, copied over SSH), which reads alpen-paesse.ch of IG
+Alpenpässe. Its entry must have the same passes as `PASSES` in `build.py`: the
+sync refuses to save a dashboard naming an entity HA doesn't have.
 
 | File | What |
 |------|------|
-| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the integration makes. |
+| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes. |
 | [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. |
 
 ```bash

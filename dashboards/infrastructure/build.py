@@ -1,6 +1,7 @@
 """The Infrastructure dashboard (`dashboard-infrastructure`): the roads and
 tunnels around us. The Gotthard view has the road tunnel; the Roads view the
-Axenstrasse and the closures of the A2 and A4, each way.
+Axenstrasse and the closures of the A2 and A4, each way; the Passes view the
+alpine passes nearby.
 
 `build()` returns the whole config, owned by the script like the Trains one: a
 card added in the UI is gone after the next sync.
@@ -10,6 +11,10 @@ Everything on the Gotthard view comes from the Gotthard integration
 tunnel's queues, closures and messages, and the two portal webcams. The north
 portal's queue is southbound before Göschenen, the south portal's northbound
 before Airolo.
+
+The Passes view comes from the Alpine Passes integration
+(github.com/janvt/homeassistant-alpine-passes), which reads alpen-paesse.ch of
+IG Alpenpässe.
 """
 from __future__ import annotations
 
@@ -41,6 +46,20 @@ ROADS = {  # road: [(sensor, direction), …], northbound first
 # Every entity the integration makes, all of them on the page.
 ENTITIES = [TUNNEL, *QUEUE.values(), *DELAY.values(), CLOSURE, MESSAGES, *WEBCAM.values(), UPDATE,
             AXENSTRASSE, AXEN_CLOSURE, *(sensor for directions in ROADS.values() for sensor, _ in directions)]
+
+# The passes within about 40 km of home, nearest first, as the Alpine Passes
+# integration names them (its entry has the same passes).
+PASSES = {"klausenpass": "Klausenpass", "ibergereggpass": "Ibergereggpass", "sustenpass": "Sustenpass",
+          "pragelpass": "Pragelpass", "oberalppass": "Oberalppass", "gotthardpass": "Gotthardpass",
+          "lukmanierpass": "Lukmanierpass", "furkapass": "Furkapass"}
+PASS_ENTITY = {"status": "sensor.{}_status", "since": "sensor.{}_status_since",
+               "temperature": "sensor.{}_temperature", "weather": "sensor.{}_weather",
+               "open": "binary_sensor.{}_open", "chains": "binary_sensor.{}_snow_chains_required",
+               "trucks": "binary_sensor.{}_truck_restrictions"}
+# Every entity of the passes, all of them on the page.
+PASS_ENTITIES = [entity.format(slug) for slug in PASSES for entity in PASS_ENTITY.values()]
+WEATHER = {"clear": "clear", "clouds": "cloudy", "atmosphere": "misty", "drizzle": "drizzle",
+           "rain": "rain", "snow": "snow", "thunderstorm": "thunderstorms"}
 
 PORTALS = {"north": ("North portal, southbound", "Göschenen"),
            "south": ("South portal, northbound", "Airolo")}
@@ -161,10 +180,82 @@ def roads_history_section() -> dict[str, Any]:
     ]}
 
 
+def pass_entity(slug: str, kind: str) -> str:
+    return PASS_ENTITY[kind].format(slug)
+
+
+def conditions_table() -> str:
+    """A row per pass: the site's own words for its status (with snow chains
+    and truck limits), when that last changed, the temperature and weather."""
+    rows = ["| Pass | Status | Since | °C | Weather |", "|---|---|---|---|---|"]
+    for slug, name in PASSES.items():
+        e = {kind: pass_entity(slug, kind) for kind in PASS_ENTITY}
+        rows.append(
+            f"| {name} "
+            f"| {{{{ state_attr('{e['status']}', 'status') or states('{e['status']}') }}}}"
+            f"{{{{ ' · snow chains' if is_state('{e['chains']}', 'on') }}}}"
+            f"{{{{ ' · truck limits' if is_state('{e['trucks']}', 'on') }}}} "
+            f"| {{% set t = as_timestamp(states('{e['since']}'), None) %}}"
+            f"{{{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }}}} "
+            f"| {{{{ states('{e['temperature']}') | float | round | int if is_number(states('{e['temperature']}')) "
+            f"else '–' }}}} "
+            f"| {{{{ {WEATHER!r}.get(states('{e['weather']}'), '–') }}}} |")
+    return "\n".join(rows)
+
+
+def notices_list() -> str:
+    """Each pass's notices (night closures, weight limits, ...), one per line
+    on the site; passes without any are left out."""
+    template = "{% set ns = namespace(any=false) %}"
+    for slug, name in PASSES.items():
+        status = pass_entity(slug, "status")
+        template += (f"{{% set n = state_attr('{status}', 'notes') %}}{{% if n %}}{{% set ns.any = true %}}"
+                     f"**{name}**{{{{ ', ' ~ state_attr('{status}', 'route') if state_attr('{status}', 'route') }}}}\n"
+                     "{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}")
+    return template + "{% if not ns.any %}No notices.{% endif %}"
+
+
+def passes_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Passes nearby", "mdi:image-filter-hdr"),
+        *(tile(pass_entity(slug, "status"), name) for slug, name in PASSES.items()),
+    ]}
+
+
+def conditions_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Conditions", "mdi:thermometer"),
+        {"type": "markdown", "content": conditions_table(), "grid_options": {"columns": "full"}},
+        {"type": "markdown", "content":
+            "<small>Data: IG Alpenpässe (alpen-paesse.ch), every 30 minutes. \"Since\" is when the site "
+            "last changed the pass's status.</small>",
+         "grid_options": {"columns": "full"}},
+    ]}
+
+
+def notices_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Notices", "mdi:message-alert"),
+        {"type": "markdown", "content": notices_list(), "grid_options": {"columns": "full"}},
+    ]}
+
+
+def passes_history_section() -> dict[str, Any]:
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("History", "mdi:chart-timeline-variant"),
+        dict(hist({pass_entity(slug, "open"): name for slug, name in PASSES.items()},
+                  "Open, last 7 days", hours=168), grid_options={"columns": 12}),
+        dict(hist({pass_entity(slug, "temperature"): name for slug, name in PASSES.items()},
+                  "Temperature, last 48 hours (°C)", hours=48), grid_options={"columns": 12}),
+    ]}
+
+
 def build() -> dict[str, Any]:
     return {"views": [
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
          "sections": [now_section(), webcam_section(), messages_section(), history_section()]},
         {"title": "Roads", "path": "roads", "icon": "mdi:highway", "type": "sections", "max_columns": 3,
          "sections": [axenstrasse_section(), road_section("A2"), road_section("A4"), roads_history_section()]},
+        {"title": "Passes", "path": "passes", "icon": "mdi:image-filter-hdr", "type": "sections", "max_columns": 3,
+         "sections": [passes_section(), conditions_section(), notices_section(), passes_history_section()]},
     ]}
