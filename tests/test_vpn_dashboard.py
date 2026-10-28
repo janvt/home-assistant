@@ -34,9 +34,15 @@ def test_every_vpn_pill_links_to_the_dashboard() -> None:
 
 
 def test_every_pill_link_goes_to_a_known_dashboard() -> None:
-    """A typo in `link` sends the card to a page that doesn't exist."""
+    """A typo in `link` sends the card to a page that doesn't exist. Known:
+    the VPN's link, and every view of the Infrastructure dashboard."""
+    spec = importlib.util.spec_from_file_location(
+        "infrastructure_build", ROOT / "dashboards" / "infrastructure" / "build.py")
+    infrastructure = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(infrastructure)
+    views = {f"/{infrastructure.DASHBOARD}/{v['path']}" for v in infrastructure.build()["views"]}
     links = {p["link"] for p in PILLS if p.get("link")}
-    assert links <= {build.LINK}, links
+    assert links <= {build.LINK} | views, links
 
 
 def test_only_the_webhooks_entities() -> None:

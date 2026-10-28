@@ -123,7 +123,9 @@ ANDERMATT_LOW_FREEZING="sensor.andermatt_lowest_freezing_level_next_48_hours"
 NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, max=700, step=10, initial=150,
               unit_of_measurement="m³/s", icon="mdi:dog-side", mode="box"),
          dict(entity=METEO_LIMIT, name="MeteoSwiss monthly data limit", min=100, max=50000, step=100, initial=3000,
-              unit_of_measurement="MB", icon="mdi:download-network", mode="box")]
+              unit_of_measurement="MB", icon="mdi:download-network", mode="box"),
+         dict(entity="input_number.gotthard_jam_limit", name="Gotthard jam limit", min=5, max=180, step=5, initial=30,
+              unit_of_measurement="min", icon="mdi:car-multiple", mode="box")]
 # Frigate's train detection on the full-resolution crop of the track. A train
 # can flicker in and out of the zone, so "passing" holds on for 30 s and the
 # count only sees one train.
@@ -233,6 +235,27 @@ def vpn_pill(key,name,icon,color,lo,hi,rule):
                 content="{{ "+VPN_USED+"|round(0)|int }}%",secondary=VPN_LINE,summary=VPN_LINE,rule=rule,
                 data=[(VPN+"free_allowance_used","Free allowance used"),(VPN+"egress_month_to_date","Egress this month")]+VPN_PEERS,
                 hist=[VPN+"free_allowance_used"],link=VPN_LINK)
+# The Gotthard integration (github.com/janvt/homeassistant-gotthard): FEDRO's
+# traffic messages for the tunnel's queues and closures, and the Axenstrasse.
+# The open/closed sensors list what closes them in `closures`.
+GOTTHARD_TUNNEL="binary_sensor.gotthard_tunnel"
+AXENSTRASSE="binary_sensor.national_roads_axenstrasse"
+ROADS_LINK="/dashboard-infrastructure/roads"  # dashboards/infrastructure/build.py
+GOTTHARD_LINK="/dashboard-infrastructure/gotthard"
+GOTTHARD_DELAY={"north":"sensor.gotthard_delay_before_the_north_portal","south":"sensor.gotthard_delay_before_the_south_portal"}
+GOTTHARD_QUEUE={"north":"sensor.gotthard_queue_before_the_north_portal","south":"sensor.gotthard_queue_before_the_south_portal"}
+GOTTHARD_JAM_LIMIT="input_number.gotthard_jam_limit"
+GOTTHARD_WORST="["+f(GOTTHARD_DELAY["north"])+", "+f(GOTTHARD_DELAY["south"])+"]|max"
+def closed_line(e):
+    """What closes it, without the message's "Freigegeben:", and until when."""
+    return ("{% set c = state_attr('"+e+"','closures') or [] %}"
+            "{% if c %}{{ c[0].text | regex_replace('^[^:]+: ', '') | truncate(160) }}"
+            "{{ ' · until ' ~ (as_timestamp(c[0].get('until')) | timestamp_custom('%a %H:%M')) if c[0].get('until') }}"
+            "{{ ' (+' ~ (c|count - 1) ~ ' more)' if c|count > 1 }}{% else %}Open{% endif %}")
+GOTTHARD_QUEUES=" · ".join(f"{side} before {town}: "
+                           "{{ '%.1f km, '|format("+f(GOTTHARD_QUEUE[p])+") if "+f(GOTTHARD_QUEUE[p])+" > 0 }}"
+                           "{{ "+f(GOTTHARD_DELAY[p])+"|int }} min"
+                           for p,side,town in (("north","Southbound","Göschenen"),("south","Northbound","Airolo")))
 # The Anker 757 as the home lab's UPS. It has no data interface, so mains is
 # inferred: binary_sensor.mains_power goes off when the Home Lab plug (in front
 # of the 757) and the fridge plug are both gone for a minute. The charge is a
@@ -419,6 +442,24 @@ ALERTS=[
    secondary="{{ states('"+BRUNNEN+"') }} m at Brunnen, {{ ((states('"+BRUNNEN+"')|float(0) - 433.57) * 100)|round(0)|int }} cm above its long-term mean",
    rule="On when Lake Lucerne at Brunnen reaches 434.0 m, about 40 cm above its long-term mean of 433.57 m. FOEN publishes no danger levels for this station, so the threshold is a judgement call.",
    data=[(BRUNNEN,"Level at Brunnen")],hist=[BRUNNEN]),
+ dict(key="gotthard_tunnel_closed",group="Travel",name="Gotthard tunnel closed",icon="mdi:boom-gate",color="red",
+   tmpl="{{ is_state('"+GOTTHARD_TUNNEL+"','off') }}",
+   secondary=closed_line(GOTTHARD_TUNNEL),
+   rule="On while the Gotthard road tunnel is closed in either direction, from FEDRO's traffic messages: a night closure, a special transport, a broken-down car. A lane or a ramp closed doesn't count.",
+   data=[(GOTTHARD_TUNNEL,"Tunnel"),("sensor.gotthard_next_tunnel_closure","Next closure")],hist=[GOTTHARD_TUNNEL],link=GOTTHARD_LINK),
+ dict(key="axenstrasse_closed",group="Travel",name="Axenstrasse closed",icon="mdi:boom-gate",color="orange",
+   tmpl="{{ is_state('"+AXENSTRASSE+"','off') }}",
+   secondary=closed_line(AXENSTRASSE),
+   rule="On while the Axenstrasse (the A4 between Brunnen and Flüelen) is closed, from FEDRO's traffic messages: rockfall, works, a night closure. A lane or a ramp closed doesn't count.",
+   data=[(AXENSTRASSE,"Axenstrasse"),("sensor.national_roads_next_axenstrasse_closure","Next closure")],hist=[AXENSTRASSE],link=ROADS_LINK),
+ dict(key="gotthard_jam",group="Travel",name="Gotthard jam",icon="mdi:car-multiple",color="deep-orange",
+   tmpl="{{ "+GOTTHARD_WORST+" >= "+f(GOTTHARD_JAM_LIMIT,30)+" }}",
+   content="{{ ("+GOTTHARD_WORST+")|int }}′",
+   secondary=GOTTHARD_QUEUES,summary=GOTTHARD_QUEUES,
+   rule="On when the queue before either portal of the Gotthard road tunnel costs at least the time set here, as FEDRO reports it. The row shows the longer of the two.",
+   data=[(GOTTHARD_DELAY["north"],"Delay southbound (Göschenen)"),(GOTTHARD_QUEUE["north"],"Queue southbound"),
+         (GOTTHARD_DELAY["south"],"Delay northbound (Airolo)"),(GOTTHARD_QUEUE["south"],"Queue northbound"),(GOTTHARD_JAM_LIMIT,"Limit")],
+   hist=list(GOTTHARD_DELAY.values()),link=GOTTHARD_LINK),
  dict(key="train_delayed",group="Travel",name="Train delayed",icon="mdi:train-variant",color="deep-orange",
    tmpl="{{ is_state('"+WORKDAY_UR+"','on') and states('"+TRAIN+"_delay')|int(0) >= 5 }}",
    secondary=NEXT_TRAINS,
