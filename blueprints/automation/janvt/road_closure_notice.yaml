@@ -15,7 +15,7 @@ blueprint:
     Notifies a phone when a road closes, with what closes it and until when,
     and when it opens again. Optionally only on some days and hours (a
     commute), and an evening reminder of the closures announced for the next
-    24 hours. Roads are the Gotthard integration's: the Axenstrasse, the
+    24 hours. Roads are the Gotthard integration's: the Axenstrasse (A4), the
     Gotthard tunnel, the A2 and A4 by direction, and their next closures.
   domain: automation
   source_url: https://github.com/janvt/home-assistant/blob/main/blueprints/automation/janvt/road_closure_notice.yaml
@@ -23,7 +23,7 @@ blueprint:
     roads:
       name: Roads
       description: >-
-        The Axenstrasse or the Gotthard tunnel (open/closed), an A2 or A4
+        The Axenstrasse (A4) or the Gotthard tunnel (open/closed), an A2 or A4
         direction (its closures), or a "Next … closure" (only for the evening
         reminder). The first in the list that has a closure sends it.
       selector:
@@ -41,7 +41,7 @@ blueprint:
             - integration: mobile_app
     reopened:
       name: When it opens again
-      description: For the Axenstrasse and the tunnel, a notice when they open again.
+      description: For the Axenstrasse (A4) and the tunnel, a notice when they open again.
       default: true
       selector:
         boolean:
