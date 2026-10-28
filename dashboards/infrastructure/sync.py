@@ -5,6 +5,8 @@
 
 The old config goes to backups/ first. Like the other syncs, it refuses to
 save a dashboard naming an entity HA doesn't have (`--allow-missing` overrides).
+It also refuses to drop a view made in the HA UI, which build.py doesn't make
+(`--drop-views` overrides): put it in build.py first, as passes.json is.
 """
 from __future__ import annotations
 
@@ -23,10 +25,19 @@ from ha_client import HA, load_env, save_dashboard, states  # noqa: E402
 ENTITY = re.compile(r"\b(?:sensor|binary_sensor|camera|update)\.[a-z0-9_]+")
 
 
+def dropped_views(old: dict, new: dict) -> list[str]:
+    """The views HA has that the new config doesn't: made in the UI, and lost
+    on saving."""
+    keep = {view.get("path") for view in new.get("views", [])}
+    return [view.get("path") or view.get("title", "?") for view in old.get("views", [])
+            if view.get("path") not in keep]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--apply", action="store_true", help="change Home Assistant (default: dry run)")
     parser.add_argument("--allow-missing", action="store_true", help="save even if entities are missing")
+    parser.add_argument("--drop-views", action="store_true", help="save even if it drops views made in the UI")
     args = parser.parse_args()
     ha = HA(load_env())
 
@@ -49,6 +60,10 @@ def main() -> None:
         old = ha.call({"type": "lovelace/config", "url_path": build.DASHBOARD, "force": True})
     except RuntimeError:  # created a moment ago, never saved
         old = {}
+    if dropped := dropped_views(old, new):
+        print("views in Home Assistant that build.py doesn't make (made in the UI?):\n  " + "\n  ".join(dropped))
+        if args.apply and not args.drop_views:
+            sys.exit("not saved: add them to build.py first, or pass --drop-views")
     if new == old:
         print(f"{build.DASHBOARD} already matches build.py")
     elif args.apply:

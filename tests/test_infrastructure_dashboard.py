@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sys
 
 import pytest
 
@@ -32,7 +33,37 @@ def test_every_gotthard_entity_is_shown() -> None:
 
 
 def test_only_the_gotthard_entities() -> None:
-    assert USED <= set(build.ENTITIES), sorted(USED - set(build.ENTITIES))
+    """The integration's, and the passes' (IG Alpenpässe), on their own view."""
+    passes = set(re.findall(r"\b(?:sensor|binary_sensor|camera|update)\.[a-z0-9_]+",
+                            json.dumps(build.passes_view())))
+    assert USED - passes <= set(build.ENTITIES), sorted(USED - passes - set(build.ENTITIES))
+
+
+def test_the_passes_view_made_in_the_ui_is_kept() -> None:
+    """It was made in the HA UI, and a sync without it once dropped it."""
+    assert "passes" in [view["path"] for view in CONFIG["views"]]
+
+
+def _sync():
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent))
+    try:
+        spec = importlib.util.spec_from_file_location("infrastructure_sync", HERE / "sync.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.path.remove(str(HERE))
+        sys.path.remove(str(HERE.parent))
+
+
+def test_sync_sees_a_view_it_would_drop() -> None:
+    """A view added in the UI is gone after a save of build.py's config."""
+    websockets = pytest.importorskip("websockets")  # noqa: F841 ha_client needs it
+    sync = _sync()
+    old = {"views": [*CONFIG["views"], {"title": "Mine", "path": "mine", "cards": []}]}
+    assert sync.dropped_views(old, CONFIG) == ["mine"]
+    assert sync.dropped_views(CONFIG, CONFIG) == []
 
 
 def test_templates_parse() -> None:

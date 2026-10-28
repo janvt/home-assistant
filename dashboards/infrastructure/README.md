@@ -36,7 +36,8 @@ opentransportdata.swiss.
 | File | What |
 |------|------|
 | [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the integration makes. |
-| [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. |
+| [`passes.json`](passes.json) | The **Passes** view (IG Alpenpässe), made in the HA UI and kept here as it was made. |
+| [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. Refuses to drop a view made in the UI that `build.py` doesn't make. |
 
 ```bash
 .venv-test/bin/python dashboards/infrastructure/sync.py            # dry run
@@ -45,3 +46,5 @@ opentransportdata.swiss.
 
 It uses the same `dashboards/.env` as the other dashboards. **The script owns
 this dashboard:** a card added in the HA UI is gone after the next `--apply`.
+A whole view added in the UI stops the sync instead: copy it from the backup
+it took into a JSON file next to `passes.json`, and load it in `build()`.

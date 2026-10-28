@@ -1,0 +1,231 @@
+{
+ "title": "Passes",
+ "path": "passes",
+ "icon": "mdi:image-filter-hdr",
+ "type": "sections",
+ "max_columns": 3,
+ "sections": [
+  {
+   "type": "grid",
+   "cards": [
+    {
+     "type": "heading",
+     "heading": "Passes nearby",
+     "heading_style": "title",
+     "icon": "mdi:image-filter-hdr"
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.klausenpass_status",
+     "name": "Klausenpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.ibergereggpass_status",
+     "name": "Ibergereggpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.sustenpass_status",
+     "name": "Sustenpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.pragelpass_status",
+     "name": "Pragelpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.oberalppass_status",
+     "name": "Oberalppass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.gotthardpass_status",
+     "name": "Gotthardpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.lukmanierpass_status",
+     "name": "Lukmanierpass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    },
+    {
+     "type": "tile",
+     "entity": "sensor.furkapass_status",
+     "name": "Furkapass",
+     "vertical": true,
+     "grid_options": {
+      "columns": 6
+     }
+    }
+   ]
+  },
+  {
+   "type": "grid",
+   "cards": [
+    {
+     "type": "heading",
+     "heading": "Conditions",
+     "heading_style": "title",
+     "icon": "mdi:thermometer"
+    },
+    {
+     "type": "markdown",
+     "content": "| Pass | Status | Since | °C | Weather |\n|---|---|---|---|---|\n| Klausenpass | {{ state_attr('sensor.klausenpass_status', 'status') or states('sensor.klausenpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.klausenpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.klausenpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.klausenpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.klausenpass_temperature') | float | round | int if is_number(states('sensor.klausenpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.klausenpass_weather'), '–') }} |\n| Ibergereggpass | {{ state_attr('sensor.ibergereggpass_status', 'status') or states('sensor.ibergereggpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.ibergereggpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.ibergereggpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.ibergereggpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.ibergereggpass_temperature') | float | round | int if is_number(states('sensor.ibergereggpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.ibergereggpass_weather'), '–') }} |\n| Sustenpass | {{ state_attr('sensor.sustenpass_status', 'status') or states('sensor.sustenpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.sustenpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.sustenpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.sustenpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.sustenpass_temperature') | float | round | int if is_number(states('sensor.sustenpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.sustenpass_weather'), '–') }} |\n| Pragelpass | {{ state_attr('sensor.pragelpass_status', 'status') or states('sensor.pragelpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.pragelpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.pragelpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.pragelpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.pragelpass_temperature') | float | round | int if is_number(states('sensor.pragelpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.pragelpass_weather'), '–') }} |\n| Oberalppass | {{ state_attr('sensor.oberalppass_status', 'status') or states('sensor.oberalppass_status') }}{{ ' · snow chains' if is_state('binary_sensor.oberalppass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.oberalppass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.oberalppass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.oberalppass_temperature') | float | round | int if is_number(states('sensor.oberalppass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.oberalppass_weather'), '–') }} |\n| Gotthardpass | {{ state_attr('sensor.gotthardpass_status', 'status') or states('sensor.gotthardpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.gotthardpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.gotthardpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.gotthardpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.gotthardpass_temperature') | float | round | int if is_number(states('sensor.gotthardpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.gotthardpass_weather'), '–') }} |\n| Lukmanierpass | {{ state_attr('sensor.lukmanierpass_status', 'status') or states('sensor.lukmanierpass_status') }}{{ ' · snow chains' if is_state('binary_sensor.lukmanierpass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.lukmanierpass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.lukmanierpass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.lukmanierpass_temperature') | float | round | int if is_number(states('sensor.lukmanierpass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.lukmanierpass_weather'), '–') }} |\n| Furkapass | {{ state_attr('sensor.furkapass_status', 'status') or states('sensor.furkapass_status') }}{{ ' · snow chains' if is_state('binary_sensor.furkapass_snow_chains_required', 'on') }}{{ ' · truck limits' if is_state('binary_sensor.furkapass_truck_restrictions', 'on') }} | {% set t = as_timestamp(states('sensor.furkapass_status_since'), None) %}{{ t | timestamp_custom('%d.%m. %H:%M') if t else '–' }} | {{ states('sensor.furkapass_temperature') | float | round | int if is_number(states('sensor.furkapass_temperature')) else '–' }} | {{ {'clear': 'clear', 'clouds': 'cloudy', 'atmosphere': 'misty', 'drizzle': 'drizzle', 'rain': 'rain', 'snow': 'snow', 'thunderstorm': 'thunderstorms'}.get(states('sensor.furkapass_weather'), '–') }} |",
+     "grid_options": {
+      "columns": "full"
+     }
+    },
+    {
+     "type": "markdown",
+     "content": "<small>Data: IG Alpenpässe (alpen-paesse.ch), every 30 minutes. \"Since\" is when the site last changed the pass's status.</small>",
+     "grid_options": {
+      "columns": "full"
+     }
+    }
+   ]
+  },
+  {
+   "type": "grid",
+   "cards": [
+    {
+     "type": "heading",
+     "heading": "Notices",
+     "heading_style": "title",
+     "icon": "mdi:message-alert"
+    },
+    {
+     "type": "markdown",
+     "content": "{% set ns = namespace(any=false) %}{% set n = state_attr('sensor.klausenpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Klausenpass**{{ ', ' ~ state_attr('sensor.klausenpass_status', 'route') if state_attr('sensor.klausenpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.ibergereggpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Ibergereggpass**{{ ', ' ~ state_attr('sensor.ibergereggpass_status', 'route') if state_attr('sensor.ibergereggpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.sustenpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Sustenpass**{{ ', ' ~ state_attr('sensor.sustenpass_status', 'route') if state_attr('sensor.sustenpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.pragelpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Pragelpass**{{ ', ' ~ state_attr('sensor.pragelpass_status', 'route') if state_attr('sensor.pragelpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.oberalppass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Oberalppass**{{ ', ' ~ state_attr('sensor.oberalppass_status', 'route') if state_attr('sensor.oberalppass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.gotthardpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Gotthardpass**{{ ', ' ~ state_attr('sensor.gotthardpass_status', 'route') if state_attr('sensor.gotthardpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.lukmanierpass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Lukmanierpass**{{ ', ' ~ state_attr('sensor.lukmanierpass_status', 'route') if state_attr('sensor.lukmanierpass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% set n = state_attr('sensor.furkapass_status', 'notes') %}{% if n %}{% set ns.any = true %}**Furkapass**{{ ', ' ~ state_attr('sensor.furkapass_status', 'route') if state_attr('sensor.furkapass_status', 'route') }}\n{% for line in n.split('\\n') %}- {{ line }}\n{% endfor %}\n{% endif %}{% if not ns.any %}No notices.{% endif %}",
+     "grid_options": {
+      "columns": "full"
+     }
+    }
+   ]
+  },
+  {
+   "type": "grid",
+   "column_span": 3,
+   "cards": [
+    {
+     "type": "heading",
+     "heading": "History",
+     "heading_style": "title",
+     "icon": "mdi:chart-timeline-variant"
+    },
+    {
+     "type": "history-graph",
+     "title": "Open, last 7 days",
+     "hours_to_show": 168,
+     "entities": [
+      {
+       "entity": "binary_sensor.klausenpass_open",
+       "name": "Klausenpass"
+      },
+      {
+       "entity": "binary_sensor.ibergereggpass_open",
+       "name": "Ibergereggpass"
+      },
+      {
+       "entity": "binary_sensor.sustenpass_open",
+       "name": "Sustenpass"
+      },
+      {
+       "entity": "binary_sensor.pragelpass_open",
+       "name": "Pragelpass"
+      },
+      {
+       "entity": "binary_sensor.oberalppass_open",
+       "name": "Oberalppass"
+      },
+      {
+       "entity": "binary_sensor.gotthardpass_open",
+       "name": "Gotthardpass"
+      },
+      {
+       "entity": "binary_sensor.lukmanierpass_open",
+       "name": "Lukmanierpass"
+      },
+      {
+       "entity": "binary_sensor.furkapass_open",
+       "name": "Furkapass"
+      }
+     ],
+     "grid_options": {
+      "columns": 12
+     }
+    },
+    {
+     "type": "history-graph",
+     "title": "Temperature, last 48 hours (°C)",
+     "hours_to_show": 48,
+     "entities": [
+      {
+       "entity": "sensor.klausenpass_temperature",
+       "name": "Klausenpass"
+      },
+      {
+       "entity": "sensor.ibergereggpass_temperature",
+       "name": "Ibergereggpass"
+      },
+      {
+       "entity": "sensor.sustenpass_temperature",
+       "name": "Sustenpass"
+      },
+      {
+       "entity": "sensor.pragelpass_temperature",
+       "name": "Pragelpass"
+      },
+      {
+       "entity": "sensor.oberalppass_temperature",
+       "name": "Oberalppass"
+      },
+      {
+       "entity": "sensor.gotthardpass_temperature",
+       "name": "Gotthardpass"
+      },
+      {
+       "entity": "sensor.lukmanierpass_temperature",
+       "name": "Lukmanierpass"
+      },
+      {
+       "entity": "sensor.furkapass_temperature",
+       "name": "Furkapass"
+      }
+     ],
+     "grid_options": {
+      "columns": 12
+     }
+    }
+   ]
+  }
+ ]
+}

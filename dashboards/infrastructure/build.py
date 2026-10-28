@@ -13,6 +13,8 @@ before Airolo.
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 DASHBOARD = "dashboard-infrastructure"
@@ -255,12 +257,20 @@ def traffic_history_section() -> dict[str, Any]:
     ]}
 
 
+def passes_view() -> dict[str, Any]:
+    """The alpine passes (IG Alpenpässe), made in the HA UI and kept as it was
+    made there: edit passes.json, or make it in the UI again and copy it from
+    the backup the next sync takes."""
+    return json.loads((Path(__file__).resolve().parent / "passes.json").read_text(encoding="utf-8"))
+
+
 def build() -> dict[str, Any]:
     return {"views": [
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
          "sections": [now_section(), webcam_section(), messages_section(), history_section()]},
         {"title": "Roads", "path": "roads", "icon": "mdi:highway", "type": "sections", "max_columns": 3,
          "sections": [axenstrasse_section(), road_section("A2"), road_section("A4"), roads_history_section()]},
+        passes_view(),
         {"title": "Traffic", "path": "traffic", "icon": "mdi:car-multiple", "type": "sections", "max_columns": 3,
          "sections": [traffic_gotthard_section(), traffic_map_section(), traffic_table_section(),
                       traffic_history_section()]},
