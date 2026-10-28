@@ -109,18 +109,6 @@ CLOSURE_LIST = ("{% for c in state_attr('" + CLOSURE + "', 'closures') or [] %}"
                 "{% else %}No closures of the tunnel announced.{% endfor %}")
 
 
-def closure_list(entity: str, attribute: str, empty: str, limit: int = 10) -> str:
-    """A closures attribute as a list: when, then the message without its
-    "Freigegeben:" (and, for a road's, the road and direction it repeats)."""
-    return ("{% for c in (state_attr('" + entity + "', '" + attribute + "') or [])[:" + str(limit) + "] %}"
-            # HA's templates are strict: a key a closure lacks is an error, so .get().
-            "{% set start, end = c.get('start'), c.get('end') or c.get('until') %}"
-            "- **{{ as_timestamp(start) | timestamp_custom('%a %d.%m. %H:%M') if start else 'now' }}"
-            "{{ ' to ' ~ as_timestamp(end) | timestamp_custom('%d.%m. %H:%M') if end }}**: "
-            "{{ c.text | regex_replace('^\\\\w+: ', '') }}\n"
-            "{% else %}" + empty + "{% endfor %}")
-
-
 def heading(text: str, icon: str, style: str = "title") -> dict[str, Any]:
     return {"type": "heading", "heading": text, "heading_style": style, "icon": icon}
 
@@ -199,23 +187,17 @@ def axenstrasse_section() -> dict[str, Any]:
         {"type": "markdown", "grid_options": {"columns": "full"}, "content":
             "{{ '<small>The traffic messages say closed, but vehicles are counted at Sisikon: probably a stale '"
             "'message.</small>' if is_state('" + AXENSTRASSE + "', 'off') and is_state('" + AXEN_TRAFFIC + "', 'on') }}"},
-        heading("Closed now", "mdi:road-variant", "subtitle"),
-        {"type": "markdown", "content": closure_list(AXENSTRASSE, "closures", "Open."),
-         "grid_options": {"columns": "full"}},
-        heading("Closures announced", "mdi:calendar-alert", "subtitle"),
-        {"type": "markdown", "content": closure_list(AXEN_CLOSURE, "closures", "None announced."),
-         "grid_options": {"columns": "full"}},
     ]}
 
 
 def road_section(road: str) -> dict[str, Any]:
-    cards: list[dict[str, Any]] = [heading(f"{road} closures", "mdi:highway")]
-    for sensor, direction in ROADS[road]:
-        cards += [heading(direction.capitalize(), "mdi:arrow-decision", "subtitle"),
-                  tile(sensor, "Closed now", 12, vertical=False),
-                  {"type": "markdown", "grid_options": {"columns": "full"}, "content":
-                      closure_list(sensor, "current", "") + closure_list(sensor, "planned", "Nothing announced.", 5)}]
-    return {"type": "grid", "cards": cards}
+    """How many closures each way now. What they are, and those to come, are
+    in the calendar above: lists here repeated it, and each other, as a
+    closure both ways is on both directions."""
+    return {"type": "grid", "cards": [
+        heading(f"{road} closures now", "mdi:highway"),
+        *(tile(sensor, direction.capitalize(), 6) for sensor, direction in ROADS[road]),
+    ]}
 
 
 def roads_history_section() -> dict[str, Any]:
