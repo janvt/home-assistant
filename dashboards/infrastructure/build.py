@@ -309,10 +309,51 @@ def notices_list() -> str:
     return template + "{% if not ns.any %}No notices.{% endif %}"
 
 
+# How each status looks on the pass cards: (icon, Mushroom color).
+PASS_LOOK = {"open": ("mdi:check-circle", "green"), "restricted": ("mdi:alert", "amber"),
+             "partially_open": ("mdi:circle-half-full", "orange"), "closed": ("mdi:close-octagon", "red"),
+             "winter_closure": ("mdi:snowflake", "light-blue")}
+UNKNOWN_LOOK = ("mdi:help-circle", "grey")
+
+
+def by_status(status: str, index: int) -> str:
+    """The icon (0) or color (1) for a status sensor's state, as a template."""
+    looks = {state: look[index] for state, look in PASS_LOOK.items()}
+    return f"{{{{ {looks!r}.get(states('{status}'), '{UNKNOWN_LOOK[index]}') }}}}"
+
+
+def pass_secondary(slug: str) -> str:
+    """The status in words, the temperature, and since when: the time if it
+    changed today, else the date."""
+    status, temperature, since = (pass_entity(slug, kind) for kind in ("status", "temperature", "since"))
+    return (f"{{% set t = states('{temperature}') %}}{{% set s = as_timestamp(states('{since}'), None) %}}"
+            f"{{{{ state_translated('{status}') }}}}"
+            "{{ ' · ' ~ (t | float | round | int) ~ ' °C' if is_number(t) }}"
+            "{{ ' · since ' ~ (s | timestamp_custom('%H:%M') if s | timestamp_custom('%Y-%m-%d') == "
+            "now().strftime('%Y-%m-%d') else s | timestamp_custom('%d.%m.')) if s }}")
+
+
+def pass_badge(slug: str) -> str:
+    """Snow chains or truck limits, as a badge on the icon."""
+    chains, trucks = pass_entity(slug, "chains"), pass_entity(slug, "trucks")
+    return (f"{{{{ 'mdi:link-variant' if is_state('{chains}', 'on') else "
+            f"'mdi:truck-remove' if is_state('{trucks}', 'on') else '' }}}}")
+
+
+def pass_card(slug: str, name: str) -> dict[str, Any]:
+    """A Mushroom template card: the status's icon and color, and a second
+    line with the status, temperature and since when."""
+    status = pass_entity(slug, "status")
+    return {"type": "custom:mushroom-template-card", "entity": status, "primary": name,
+            "secondary": pass_secondary(slug), "icon": by_status(status, 0), "color": by_status(status, 1),
+            "badge_icon": pass_badge(slug), "badge_color": "amber",
+            "tap_action": {"action": "more-info"}, "grid_options": {"columns": 6}}
+
+
 def passes_section() -> dict[str, Any]:
     return {"type": "grid", "cards": [
         heading("Passes nearby", "mdi:image-filter-hdr"),
-        *(tile(pass_entity(slug, "status"), name) for slug, name in PASSES.items()),
+        *(pass_card(slug, name) for slug, name in PASSES.items()),
     ]}
 
 
