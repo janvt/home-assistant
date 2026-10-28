@@ -17,8 +17,9 @@ tunnel:
 The **Roads** view (`/dashboard-infrastructure/roads`) opens with the closures
 to come, from the integration's calendars (a week as a list; restrictions
 too if they're turned on in its options). Then it has the Axenstrasse
-(open or closed, what closes it, and the closures announced) and the closures
-of the A2 and the A4 each way: how many now, and the next five announced. Its
+(open or closed, traffic counted, and the next closure) and how many closures
+the A2 and the A4 have each way now. What they are is in the calendar only:
+lists of them here repeated it. Its
 entities are the integration's **National roads** device.
 
 The **Traffic** view (`/dashboard-infrastructure/traffic`) needs the

@@ -77,26 +77,6 @@ def test_templates_parse() -> None:
         jinja2.Environment().parse(template)
 
 
-def test_closure_lists_render_both_kinds_of_closure() -> None:
-    """A road's closures have a start and an end, the open/closed sensor's an
-    "until": the list must show both, and "now" for a closure without a start.
-    Strict, as HA renders it: reading a key a closure lacks is an error there."""
-    jinja2 = pytest.importorskip("jinja2")
-    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
-    env.filters["regex_replace"] = lambda value, find, replace: re.sub(find, replace, value)
-    env.filters["timestamp_custom"] = lambda value, fmt: f"<{value}>"
-    env.globals["as_timestamp"] = lambda value: value
-    closures = {"closures": [{"text": "Freigegeben: A4 Altdorf <-> Brunnen Sachlage: Strecke gesperrt",
-                              "until": "T1"}],
-                "planned": [{"text": "Freigegeben: A2 x", "start": "T0", "end": "T1"}]}
-    env.globals["state_attr"] = lambda entity, attribute: closures.get(attribute)
-    now = env.from_string(build.closure_list("x", "closures", "Open.")).render()
-    assert now == "- **now to <T1>**: A4 Altdorf <-> Brunnen Sachlage: Strecke gesperrt\n"
-    planned = env.from_string(build.closure_list("x", "planned", "None.")).render()
-    assert planned == "- **<T0> to <T1>**: A2 x\n"
-    assert env.from_string(build.closure_list("x", "current", "Open.")).render() == "Open."
-
-
 def test_message_prefix_is_stripped() -> None:
     """The regex reaches HA's regex_replace as `^\\w+: `: one backslash too few
     and every message keeps its "Freigegeben:"."""
@@ -195,3 +175,13 @@ def test_pass_card_unknown() -> None:
 
 def test_every_status_has_a_look() -> None:
     assert set(build.PASS_LOOK) == {"open", "restricted", "partially_open", "closed", "winter_closure"}
+
+
+def test_the_roads_view_lists_no_closures_the_calendar_has() -> None:
+    """Lists of each road's closures repeated the calendar, and each other: a
+    closure both ways was under both directions, and the Axenstrasse's under
+    the A4's too."""
+    roads = next(view for view in CONFIG["views"] if view["path"] == "roads")
+    text = json.dumps(roads)
+    assert "'planned'" not in text and "'current'" not in text
+    assert roads["sections"][0]["cards"][1]["type"] == "calendar"
