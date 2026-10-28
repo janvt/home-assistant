@@ -61,8 +61,10 @@ def closure_list(entity: str, attribute: str, empty: str, limit: int = 10) -> st
     """A closures attribute as a list: when, then the message without its
     "Freigegeben:" (and, for a road's, the road and direction it repeats)."""
     return ("{% for c in (state_attr('" + entity + "', '" + attribute + "') or [])[:" + str(limit) + "] %}"
-            "- **{{ as_timestamp(c.start) | timestamp_custom('%a %d.%m. %H:%M') if c.start else 'now' }}"
-            "{{ ' to ' ~ as_timestamp(c.end or c.until) | timestamp_custom('%d.%m. %H:%M') if c.end or c.until }}**: "
+            # HA's templates are strict: a key a closure lacks is an error, so .get().
+            "{% set start, end = c.get('start'), c.get('end') or c.get('until') %}"
+            "- **{{ as_timestamp(start) | timestamp_custom('%a %d.%m. %H:%M') if start else 'now' }}"
+            "{{ ' to ' ~ as_timestamp(end) | timestamp_custom('%d.%m. %H:%M') if end }}**: "
             "{{ c.text | regex_replace('^\\\\w+: ', '') }}\n"
             "{% else %}" + empty + "{% endfor %}")
 

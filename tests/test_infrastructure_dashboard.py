@@ -47,9 +47,10 @@ def test_templates_parse() -> None:
 
 def test_closure_lists_render_both_kinds_of_closure() -> None:
     """A road's closures have a start and an end, the open/closed sensor's an
-    "until": the list must show both, and "now" for a closure without a start."""
+    "until": the list must show both, and "now" for a closure without a start.
+    Strict, as HA renders it: reading a key a closure lacks is an error there."""
     jinja2 = pytest.importorskip("jinja2")
-    env = jinja2.Environment()
+    env = jinja2.Environment(undefined=jinja2.StrictUndefined)
     env.filters["regex_replace"] = lambda value, find, replace: re.sub(find, replace, value)
     env.filters["timestamp_custom"] = lambda value, fmt: f"<{value}>"
     env.globals["as_timestamp"] = lambda value: value
