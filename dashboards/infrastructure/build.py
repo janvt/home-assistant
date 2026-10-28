@@ -38,9 +38,37 @@ ROADS = {  # road: [(sensor, direction), …], northbound first
     "A4": [("sensor.national_roads_a4_closures_northbound_to_schaffhausen", "towards Schaffhausen"),
            ("sensor.national_roads_a4_closures_southbound_to_altdorf", "towards Altdorf")],
 }
+# The traffic counters (opt in in the integration's options): a device per
+# station, from north to south, with traffic, lorries and speed each way.
+STATIONS = [("a2_stans", "Stans"), ("a2_buochs", "Buochs"), ("a2_seedorf", "Seedorf"), ("a2_altdorf", "Altdorf"),
+            ("a2_amsteg", "Amsteg"), ("a2_gurtnellen", "Gurtnellen"), ("a2_wassen", "Wassen"),
+            ("a2_goschenen", "Göschenen"), ("a2_quinto", "Quinto"), ("a4_goldau", "Goldau"), ("a4_schwyz", "Schwyz"),
+            ("a4_sisikon_axenstrasse", "Sisikon (Axenstrasse)")]
+DIRECTIONS = {"south": "southbound", "north": "northbound"}
+KINDS = ("traffic", "lorries", "speed")
+
+
+def station(key: str, direction: str, kind: str) -> str:
+    return f"sensor.{key}_{DIRECTIONS[direction]}_{kind}"
+
+
+FORMING = {"south": "binary_sensor.gotthard_queue_forming_before_the_north_portal",  # southbound queue
+           "north": "binary_sensor.gotthard_queue_forming_before_the_south_portal"}
+AXEN_TRAFFIC = "binary_sensor.national_roads_axenstrasse_traffic"
+TRAVEL = {"altdorf_goschenen": "Altdorf → Göschenen", "goschenen_altdorf": "Göschenen → Altdorf",
+          "altdorf_stans": "Altdorf → Stans", "stans_altdorf": "Stans → Altdorf"}
+
+
+def travel(route: str) -> str:
+    return f"sensor.national_roads_travel_time_{route}"
+
+
+COUNTED = [*(station(k, d, kind) for k, _ in STATIONS for d in DIRECTIONS for kind in KINDS),
+           *FORMING.values(), AXEN_TRAFFIC, *map(travel, TRAVEL)]
 # Every entity the integration makes, all of them on the page.
 ENTITIES = [TUNNEL, *QUEUE.values(), *DELAY.values(), CLOSURE, MESSAGES, *WEBCAM.values(), UPDATE,
-            AXENSTRASSE, AXEN_CLOSURE, *(sensor for directions in ROADS.values() for sensor, _ in directions)]
+            AXENSTRASSE, AXEN_CLOSURE, *(sensor for directions in ROADS.values() for sensor, _ in directions),
+            *COUNTED]
 
 PORTALS = {"north": ("North portal, southbound", "Göschenen"),
            "south": ("South portal, northbound", "Airolo")}
@@ -133,7 +161,11 @@ def history_section() -> dict[str, Any]:
 def axenstrasse_section() -> dict[str, Any]:
     return {"type": "grid", "cards": [
         heading("Axenstrasse", "mdi:road-variant"),
-        tile(AXENSTRASSE, "Axenstrasse"), tile(AXEN_CLOSURE, "Next closure"),
+        tile(AXENSTRASSE, "Axenstrasse", 4), tile(AXEN_TRAFFIC, "Traffic counted", 4),
+        tile(AXEN_CLOSURE, "Next closure", 4),
+        {"type": "markdown", "grid_options": {"columns": "full"}, "content":
+            "{{ '<small>The traffic messages say closed, but vehicles are counted at Sisikon: probably a stale '"
+            "'message.</small>' if is_state('" + AXENSTRASSE + "', 'off') and is_state('" + AXEN_TRAFFIC + "', 'on') }}"},
         heading("Closed now", "mdi:road-variant", "subtitle"),
         {"type": "markdown", "content": closure_list(AXENSTRASSE, "closures", "Open."),
          "grid_options": {"columns": "full"}},
@@ -161,10 +193,73 @@ def roads_history_section() -> dict[str, Any]:
     ]}
 
 
+def station_table() -> str:
+    """Every station now: vehicles and speed each way, and lorries."""
+    def cell(key: str, direction: str, kind: str, digits: int = 0) -> str:
+        e = station(key, direction, kind)
+        return ("{{ states('" + e + "') | float(0) | round(" + str(digits) + ") | int "
+                "if states('" + e + "') | is_number else '–' }}")
+    head = "| Station | ↓ veh/h | ↓ km/h | ↓ lorries | ↑ veh/h | ↑ km/h | ↑ lorries |\n|:--|--:|--:|--:|--:|--:|--:|\n"
+    rows = "".join(f"| {name} | " + " | ".join(cell(key, d, kind) for d in DIRECTIONS for kind in KINDS) + " |\n"
+                   for key, name in STATIONS)
+    return head + rows + "\n<small>↓ southbound, ↑ northbound; averaged over the last 10 minutes.</small>"
+
+
+def traffic_gotthard_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Gotthard approach", "mdi:tunnel"),
+        tile(FORMING["south"], "Queue forming, southbound", 6), tile(FORMING["north"], "Queue forming, northbound", 6),
+        *(tile(travel(route), name, 6) for route, name in TRAVEL.items()),
+        heading("Speed before the portals", "mdi:speedometer", "subtitle"),
+        dict(hist({station(k, "south", "speed"): n for k, n in STATIONS[4:8]}, "Southbound (km/h)"),
+             grid_options={"columns": "full"}),
+        dict(hist({station("a2_quinto", "north", "speed"): "Quinto", station("a2_goschenen", "north", "speed"): "Göschenen"},
+                  "Northbound (km/h)"), grid_options={"columns": "full"}),
+    ]}
+
+
+def traffic_map_section() -> dict[str, Any]:
+    def speed_map(direction: str) -> dict[str, Any]:
+        return {"type": "map", "title": f"{DIRECTIONS[direction].capitalize()} speed", "default_zoom": 9,
+                "hours_to_show": 0, "theme_mode": "auto", "grid_options": {"columns": "full", "rows": 6},
+                "entities": [{"entity": station(k, direction, "speed"), "label_mode": "state"} for k, _ in STATIONS]}
+    return {"type": "grid", "cards": [heading("Map", "mdi:map"), speed_map("south"), speed_map("north")]}
+
+
+def traffic_table_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Every station now", "mdi:table"),
+        {"type": "markdown", "content": station_table(), "grid_options": {"columns": "full"}},
+        tile(AXEN_TRAFFIC, "Axenstrasse traffic", 12, vertical=False),
+    ]}
+
+
+def traffic_history_section() -> dict[str, Any]:
+    def per_hour(entities: dict[str, str], title: str) -> dict[str, Any]:
+        return {"type": "statistics-graph", "title": title, "stat_types": ["mean"], "period": "hour", "days_to_show": 7,
+                "chart_type": "line", "entities": [{"entity": e, "name": n} for e, n in entities.items()],
+                "grid_options": {"columns": 6}}
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("Per hour, last 7 days", "mdi:chart-bell-curve"),
+        per_hour({station("a2_goschenen", "south", "traffic"): "Southbound",
+                  station("a2_goschenen", "north", "traffic"): "Northbound"}, "Göschenen, vehicles per hour"),
+        per_hour({station("a4_sisikon_axenstrasse", "south", "traffic"): "Southbound",
+                  station("a4_sisikon_axenstrasse", "north", "traffic"): "Northbound"}, "Axenstrasse, vehicles per hour"),
+        per_hour({station("a2_goschenen", "south", "lorries"): "Southbound",
+                  station("a2_goschenen", "north", "lorries"): "Northbound"}, "Göschenen, lorries per hour"),
+        per_hour({travel(r): n for r, n in TRAVEL.items()}, "Travel times (min)"),
+        dict(hist({station(k, "south", "traffic"): n for k, n in STATIONS[:9]}, "A2 southbound, last 24 hours (veh/h)"),
+             grid_options={"columns": 12}),
+    ]}
+
+
 def build() -> dict[str, Any]:
     return {"views": [
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
          "sections": [now_section(), webcam_section(), messages_section(), history_section()]},
         {"title": "Roads", "path": "roads", "icon": "mdi:highway", "type": "sections", "max_columns": 3,
          "sections": [axenstrasse_section(), road_section("A2"), road_section("A4"), roads_history_section()]},
+        {"title": "Traffic", "path": "traffic", "icon": "mdi:car-multiple", "type": "sections", "max_columns": 3,
+         "sections": [traffic_gotthard_section(), traffic_map_section(), traffic_table_section(),
+                      traffic_history_section()]},
     ]}
