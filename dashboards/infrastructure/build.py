@@ -68,12 +68,17 @@ def travel(route: str) -> str:
     return f"sensor.national_roads_travel_time_{route}"
 
 
+# The closures (restrictions too, if turned on in the integration's options)
+# as calendars.
+CALENDARS = {"calendar.gotthard_tunnel_closures": "Gotthard tunnel", "calendar.national_roads_axenstrasse": "Axenstrasse",
+             "calendar.national_roads_gotthard_pass": "Gotthard Pass", "calendar.national_roads_a2": "A2",
+             "calendar.national_roads_a4": "A4"}
 COUNTED = [*(station(k, d, kind) for k, _ in STATIONS for d in DIRECTIONS for kind in KINDS),
            *FORMING.values(), AXEN_TRAFFIC, *map(travel, TRAVEL)]
 # Every entity the integration makes, all of them on the page.
 ENTITIES = [TUNNEL, *QUEUE.values(), *DELAY.values(), CLOSURE, MESSAGES, *WEBCAM.values(), UPDATE,
             AXENSTRASSE, AXEN_CLOSURE, *(sensor for directions in ROADS.values() for sensor, _ in directions),
-            *COUNTED]
+            *COUNTED, *CALENDARS]
 
 # The passes within about 40 km of home, nearest first, as the Alpine Passes
 # integration names them (its entry has the same passes).
@@ -174,6 +179,14 @@ def history_section() -> dict[str, Any]:
         {"type": "statistics-graph", "title": "Longest delay per day (30 days)", "stat_types": ["max"],
          "entities": [{"entity": DELAY[p], "name": n} for p, n in names.items()],
          "period": "day", "days_to_show": 30, "chart_type": "bar", "grid_options": {"columns": 12}},
+    ]}
+
+
+def calendar_section() -> dict[str, Any]:
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("Closures to come", "mdi:calendar-alert"),
+        {"type": "calendar", "initial_view": "listWeek", "grid_options": {"columns": "full"},
+         "entities": list(CALENDARS)},
     ]}
 
 
@@ -349,7 +362,7 @@ def build() -> dict[str, Any]:
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
          "sections": [now_section(), webcam_section(), messages_section(), history_section()]},
         {"title": "Roads", "path": "roads", "icon": "mdi:highway", "type": "sections", "max_columns": 3,
-         "sections": [axenstrasse_section(), road_section("A2"), road_section("A4"), roads_history_section()]},
+         "sections": [calendar_section(), axenstrasse_section(), road_section("A2"), road_section("A4"), roads_history_section()]},
         {"title": "Passes", "path": "passes", "icon": "mdi:image-filter-hdr", "type": "sections", "max_columns": 3,
          "sections": [passes_section(), conditions_section(), notices_section(), passes_history_section()]},
         {"title": "Traffic", "path": "traffic", "icon": "mdi:car-multiple", "type": "sections", "max_columns": 3,

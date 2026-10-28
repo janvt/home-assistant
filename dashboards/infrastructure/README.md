@@ -14,7 +14,9 @@ tunnel:
 - **History:** queues and delays over 24 hours, the tunnel over 7 days, and the
   longest delay per day over 30 days.
 
-The **Roads** view (`/dashboard-infrastructure/roads`) has the Axenstrasse
+The **Roads** view (`/dashboard-infrastructure/roads`) opens with the closures
+to come, from the integration's calendars (a week as a list; restrictions
+too if they're turned on in its options). Then it has the Axenstrasse
 (open or closed, what closes it, and the closures announced) and the closures
 of the A2 and the A4 each way: how many now, and the next five announced. Its
 entities are the integration's **National roads** device.
