@@ -199,7 +199,9 @@ def station_table() -> str:
         e = station(key, direction, kind)
         return ("{{ states('" + e + "') | float(0) | round(" + str(digits) + ") | int "
                 "if states('" + e + "') | is_number else '–' }}")
-    head = "| Station | ↓ veh/h | ↓ km/h | ↓ lorries | ↑ veh/h | ↑ km/h | ↑ lorries |\n|:--|--:|--:|--:|--:|--:|--:|\n"
+    # The columns in KINDS order: traffic, lorries, speed.
+    head = ("| Station | " + " | ".join(f"{arrow} {unit}" for arrow in "↓↑" for unit in ("veh/h", "lorries", "km/h"))
+            + " |\n|:--|--:|--:|--:|--:|--:|--:|\n")
     rows = "".join(f"| {name} | " + " | ".join(cell(key, d, kind) for d in DIRECTIONS for kind in KINDS) + " |\n"
                    for key, name in STATIONS)
     return head + rows + "\n<small>↓ southbound, ↑ northbound; averaged over the last 10 minutes.</small>"
