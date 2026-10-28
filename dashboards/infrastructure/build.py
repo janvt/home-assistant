@@ -70,7 +70,7 @@ def travel(route: str) -> str:
 
 # The closures (restrictions too, if turned on in the integration's options)
 # as calendars.
-CALENDARS = {"calendar.gotthard_tunnel_closures": "Gotthard tunnel", "calendar.national_roads_axenstrasse": "Axenstrasse",
+CALENDARS = {"calendar.gotthard_tunnel_closures": "Gotthard tunnel", "calendar.national_roads_axenstrasse": "Axenstrasse (A4)",
              "calendar.national_roads_gotthard_pass": "Gotthard Pass", "calendar.national_roads_a2": "A2",
              "calendar.national_roads_a4": "A4"}
 COUNTED = [*(station(k, d, kind) for k, _ in STATIONS for d in DIRECTIONS for kind in KINDS),
@@ -137,7 +137,7 @@ def hist(entities: dict[str, str], title: str, hours: int = 24) -> dict[str, Any
 
 def now_section() -> dict[str, Any]:
     cards = [heading("Gotthard road tunnel", "mdi:tunnel"), tile(TUNNEL, "Tunnel", 4),
-             tile(CLOSURE, "Next closure", 4), tile(AXENSTRASSE, "Axenstrasse", 4)]
+             tile(CLOSURE, "Next closure", 4), tile(AXENSTRASSE, "Axenstrasse (A4)", 4)]
     for portal, (name, town) in PORTALS.items():
         cards += [heading(f"{name} ({town})", "mdi:car-multiple", "subtitle"),
                   tile(QUEUE[portal], "Queue"), tile(DELAY[portal], "Delay")]
@@ -185,15 +185,16 @@ def history_section() -> dict[str, Any]:
 def calendar_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 3, "cards": [
         heading("Closures to come", "mdi:calendar-alert"),
-        {"type": "calendar", "initial_view": "listWeek", "grid_options": {"columns": "full"},
+        # A week's list needs the height: at the default, it shows a day or two.
+        {"type": "calendar", "initial_view": "listWeek", "grid_options": {"columns": "full", "rows": 10},
          "entities": list(CALENDARS)},
     ]}
 
 
 def axenstrasse_section() -> dict[str, Any]:
     return {"type": "grid", "cards": [
-        heading("Axenstrasse", "mdi:road-variant"),
-        tile(AXENSTRASSE, "Axenstrasse", 4), tile(AXEN_TRAFFIC, "Traffic counted", 4),
+        heading("Axenstrasse (A4)", "mdi:road-variant"),
+        tile(AXENSTRASSE, "Axenstrasse (A4)", 4), tile(AXEN_TRAFFIC, "Traffic counted", 4),
         tile(AXEN_CLOSURE, "Next closure", 4),
         {"type": "markdown", "grid_options": {"columns": "full"}, "content":
             "{{ '<small>The traffic messages say closed, but vehicles are counted at Sisikon: probably a stale '"
@@ -220,7 +221,7 @@ def road_section(road: str) -> dict[str, Any]:
 def roads_history_section() -> dict[str, Any]:
     return {"type": "grid", "column_span": 3, "cards": [
         heading("History", "mdi:chart-timeline-variant"),
-        dict(hist({AXENSTRASSE: "Axenstrasse", TUNNEL: "Gotthard tunnel"}, "Open, last 7 days", hours=168),
+        dict(hist({AXENSTRASSE: "Axenstrasse (A4)", TUNNEL: "Gotthard tunnel"}, "Open, last 7 days", hours=168),
              grid_options={"columns": 12}),
     ]}
 
@@ -264,7 +265,7 @@ def traffic_table_section() -> dict[str, Any]:
     return {"type": "grid", "cards": [
         heading("Every station now", "mdi:table"),
         {"type": "markdown", "content": station_table(), "grid_options": {"columns": "full"}},
-        tile(AXEN_TRAFFIC, "Axenstrasse traffic", 12, vertical=False),
+        tile(AXEN_TRAFFIC, "Axenstrasse (A4) traffic", 12, vertical=False),
     ]}
 
 
@@ -278,7 +279,7 @@ def traffic_history_section() -> dict[str, Any]:
         per_hour({station("a2_goschenen", "south", "traffic"): "Southbound",
                   station("a2_goschenen", "north", "traffic"): "Northbound"}, "Göschenen, vehicles per hour"),
         per_hour({station("a4_sisikon_axenstrasse", "south", "traffic"): "Southbound",
-                  station("a4_sisikon_axenstrasse", "north", "traffic"): "Northbound"}, "Axenstrasse, vehicles per hour"),
+                  station("a4_sisikon_axenstrasse", "north", "traffic"): "Northbound"}, "Axenstrasse (A4), vehicles per hour"),
         per_hour({station("a2_goschenen", "south", "lorries"): "Southbound",
                   station("a2_goschenen", "north", "lorries"): "Northbound"}, "Göschenen, lorries per hour"),
         per_hour({travel(r): n for r, n in TRAVEL.items()}, "Travel times (min)"),
