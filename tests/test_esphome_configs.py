@@ -1,4 +1,4 @@
-"""The ESPHome device configs: `m5stack/` and `kitchen-timer/`.
+"""The ESPHome device configs: `m5stack/`, `kitchen-timer/` and `guest-eink/`.
 
 These are 1300-line single-file configs full of inline C++ lambdas, and the
 feedback loop on them is brutal: a typo is found by the compiler minutes into a
@@ -44,6 +44,7 @@ KNOWN_SECRETS = {
     "m5stack_core_basic__encryption", "m5stack_core_basic__ap_password",
     "wifi_shrek_ssid", "wifi_shrek_password",
     "kitchentimerencryption",
+    "guest_eink_encryption", "guest_eink_ap_password",
 }
 
 # Fields that must never hold a literal value.
@@ -119,7 +120,7 @@ def _walk(node, path=()):  # noqa: ANN001, ANN202
 
 
 def test_there_are_configs_to_check() -> None:
-    assert CONFIGS, "no ESPHome device YAML found under m5stack/ or kitchen-timer/"
+    assert CONFIGS, "no ESPHome device YAML found under m5stack/, kitchen-timer/ or guest-eink/"
 
 
 def test_parses_without_duplicate_keys(config: Path) -> None:
@@ -230,20 +231,16 @@ def test_esphome_validates_the_config(config: Path, tmp_path: Path) -> None:
     if components.is_dir():
         shutil.copytree(components, work / "components",
                         ignore=shutil.ignore_patterns("__pycache__"))
-    # 32 bytes, base64 — the api encryption schema checks the length.
-    (work / "secrets.yaml").write_text(
-        'wifi_ssid: "ci-ssid"\n'
-        'wifi_password: "ci-password"\n'
-        'wifi_shrek_ssid: "ci-shrek"\n'
-        'wifi_shrek_password: "ci-shrek-password"\n'
-        'm5fallbackpassword: "ci-fallback"\n'
-        'm5stack_core_basic__ap_password: "ci-fallback"\n'
-        + "".join(
-            f'{name}: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="\n'
-            for name in sorted(KNOWN_SECRETS)
-            if name.endswith("encryption")
-        ),
-    )
+    # One stub per KNOWN_SECRETS name, generated rather than listed, so a new
+    # secret can't pass the static checks and then fail here as "not defined".
+    # Encryption keys are 32 bytes, base64 (the api schema checks the length);
+    # everything else gets a value long enough for the 8-character minimum
+    # that Wi-Fi and fallback-AP passwords have.
+    (work / "secrets.yaml").write_text("".join(
+        f'{name}: "MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA="\n'
+        if name.endswith("encryption") else f'{name}: "ci-{name}"\n'
+        for name in sorted(KNOWN_SECRETS)
+    ))
     # Retried once on a network-shaped failure. This step reaches out for an
     # external component (a GitHub clone) and one SVG per `mdi:` image, and a
     # single dropped fetch was observed turning a valid config into a failure.
