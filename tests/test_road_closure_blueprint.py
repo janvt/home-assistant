@@ -185,6 +185,15 @@ def test_notice_message_renders_both_shapes() -> None:
     assert out.endswith("Strecke gesperrt")
 
 
+def test_notice_tag_fits_ios() -> None:
+    """iOS refuses a tag over 64 characters (APNs' collapse id): the push
+    fails and the phone gets nothing, which is how a 65-character tag
+    silenced every closure notice."""
+    tag = CHANGE[1]["repeat"]["sequence"][0]["data"]["tag"]
+    out = env({}).from_string(tag).render(repeat=SimpleNamespace(item={"text": CLOSURE * 3}))
+    assert len(out) <= 64, (len(out), out)
+
+
 def test_evening_reminder_lists_the_next_24_hours_once() -> None:
     reminder = BLUEPRINT["actions"][0]["choose"][1]["sequence"]
     soon = reminder[0]["variables"]["soon"]

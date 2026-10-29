@@ -154,7 +154,10 @@ actions:
                     {{ repeat.item.text | regex_replace('^[^:]+: ', '') }}{{
                       ' · until ' ~ (as_timestamp(end) | timestamp_custom('%a %H:%M')) if end }}
                   data:
-                    tag: "road-{{ (repeat.item.text | slugify)[:60] }}"
+                    # iOS drops a notice whose tag is over 64 characters
+                    # (APNs' collapse id), with only "Error sending
+                    # notification" in HA's log.
+                    tag: "road-{{ (repeat.item.text | slugify)[:59] }}"
                     group: road-closures
           - if:
               - condition: template
