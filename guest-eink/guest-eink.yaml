@@ -1,0 +1,531 @@
+# Guest room e-ink display
+# Waveshare 7.5" (B) V3 black/white/red panel ("V3" sticker, ribbon FPC-C001 21.08.30)
+# on the Waveshare ESP32 e-Paper driver board.
+# Driver board switch 1 = B (0.47 ohm), switch 2 = ON for USB flashing.
+# Ribbon: seated the other way round from the first attempt (that was the "no sign of life" cause).
+#
+# One page: greeting + guest name, current weather + 2-day forecast (lower left),
+# guest Wi-Fi QR code with network name and password (right).
+# Guest name empty -> idle card.
+# Language select (English / Deutsch / Français / Italiano) switches every fixed string,
+# weather labels and weekday names (tables in i18n.h). Lines that run too wide
+# for their column drop to the next smaller font.
+# Greeting, guest name, Wi-Fi name and Wi-Fi password are text entities on this device:
+# editable on its HA device page, settable from automations with text.set_value, kept across
+# reboots. An empty Greeting uses the language's default greeting.
+# QR size: fixed 10 px modules sized for QR version 3, so Wi-Fi name + password together
+# should stay under ~35 characters.
+#
+# Driver: epaper_spi Waveshare-7.5in-bV2-BWR (also drives the V3 panel). Do NOT switch to
+# waveshare_epaper 7.50in-bV3-bwr: its single 96 KB buffer allocation fails on the classic
+# ESP32 heap and crashed on boot (OTA rollback, 29 Oct 2026). epaper_spi splits the buffer.
+# Every update on this 3-colour panel is a full refresh (~19 s measured, no partial mode for BWR).
+#
+# Deployed in the ESPHome dashboard as /config/esphome/guest-eink.yaml with the two headers
+# in /config/esphome/guest-eink/, so the live copy prefixes `includes:` with `guest-eink/`.
+# See README.md in this directory.
+
+substitutions:
+  name: guest-eink
+  friendly_name: Guest Room Display
+  weather_entity: weather.altdorf_ur
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - weather_helpers.h
+    - i18n.h
+  on_boot:
+    - priority: -100
+      then:
+        - script.execute: update_qr
+        - delay: 20s
+        # Normally the forecast fetch after the API connects has already drawn the panel
+        - if:
+            condition:
+              lambda: 'return id(refreshes) == 0;'
+            then:
+              - script.execute: do_refresh
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+api:
+  encryption:
+    key: !secret guest_eink_encryption
+  on_client_connected:
+    - script.execute: fetch_forecast
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Guest Display Fallback"
+    password: !secret guest_eink_ap_password
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+# ---------------------------------------------------------------- display ---
+
+spi:
+  clk_pin: GPIO13
+  mosi_pin: GPIO14
+
+display:
+  - platform: epaper_spi
+    id: epd
+    model: Waveshare-7.5in-bV2-BWR
+    cs_pin: GPIO15
+    dc_pin: GPIO27
+    reset_pin: GPIO26
+    # UC8179 pulls BUSY low while working.
+    busy_pin:
+      number: GPIO25
+      inverted: true
+      allow_other_uses: true
+    update_interval: never
+    pages:
+      - id: p_welcome
+        lambda: |-
+          const auto RED = Color(255, 0, 0);
+          const auto BLACK = Color::BLACK;
+
+          auto li = id(language).active_index();
+          const int L = li.has_value() ? (int) li.value() : 0;
+
+          // First font from the list whose rendering of s fits max_w (else the smallest)
+          auto fit = [&](const char *s, std::vector<font::Font *> fl, int max_w) -> font::Font * {
+            for (auto *f : fl) {
+              int x1, y1, w, h;
+              it.get_text_bounds(0, 0, s, f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+              if (w <= max_w) return f;
+            }
+            return fl.back();
+          };
+          char buf[96];
+
+          std::string name = id(guest_name).state;
+          if (ha_empty(name)) {
+            // Idle card: nobody staying
+            const char *idle = tr(L, T_IDLE);
+            it.print(400, 196, fit(idle, {id(f_head), id(f_label)}, 720), BLACK, TextAlign::TOP_CENTER, idle);
+            it.filled_rectangle(370, 266, 60, 4, RED);
+            return;
+          }
+
+          // ---- Greeting + name (top left, 380 px column)
+          std::string g = id(greeting).state;
+          const char *greet = g.empty() ? tr(L, T_GREETING) : g.c_str();
+          it.print(40, 44, fit(greet, {id(f_text), id(f_small)}, 380), BLACK, TextAlign::TOP_LEFT, greet);
+          it.print(36, 82, fit(name.c_str(), {id(f_name_l), id(f_name_m), id(f_name_s)}, 380), BLACK,
+                   TextAlign::TOP_LEFT, name.c_str());
+          it.filled_rectangle(40, 182, 64, 5, RED);
+
+          // ---- Weather corner (lower left, x 40..410)
+          std::string cond = id(wx_cond).state;
+          it.print(36, 232, id(i_cur), BLACK, TextAlign::TOP_LEFT, wx_icon(cond));
+          if (id(wx_temp).has_state() && !std::isnan(id(wx_temp).state))
+            it.printf(110, 230, id(f_temp_m), BLACK, TextAlign::TOP_LEFT, "%.0f°", id(wx_temp).state);
+          const char *cl = wx_label_tr(L, cond);
+          it.print(206, 238, fit(cl, {id(f_label), id(f_small), id(f_tiny)}, 204), BLACK, TextAlign::TOP_LEFT, cl);
+          if (id(wx_wind).has_state() && !std::isnan(id(wx_wind).state)) {
+            snprintf(buf, sizeof(buf), "%s %.0f km/h", tr(L, T_WIND), id(wx_wind).state);
+            it.print(206, 274, fit(buf, {id(f_small), id(f_tiny)}, 204), BLACK, TextAlign::TOP_LEFT, buf);
+          }
+          it.filled_rectangle(40, 322, 370, 1, BLACK);
+
+          // Tomorrow + the day after
+          auto now = id(ha_time).now();
+          for (size_t i = 0; i < id(fc_cond).size() && i < 2; i++) {
+            int x0 = 40 + i * 190;
+            const char *day = " ";
+            if (i == 0) day = tr(L, T_TOMORROW);
+            else if (now.is_valid())
+              day = weekday_name(L, ESPTime::from_epoch_local(now.timestamp + 2 * 86400).day_of_week);
+            it.print(x0, 338, fit(day, {id(f_label), id(f_small)}, 180), BLACK, TextAlign::TOP_LEFT, day);
+            it.print(x0 - 2, 378, id(i_fc), BLACK, TextAlign::TOP_LEFT, wx_icon(id(fc_cond)[i]));
+            it.printf(x0 + 60, 380, id(f_small), BLACK, TextAlign::TOP_LEFT, "%.0f° / %.0f°",
+                      id(fc_hi)[i], id(fc_lo)[i]);
+            float pop = id(fc_pop)[i];
+            if (pop >= 20) snprintf(buf, sizeof(buf), "%s %.0f%%", tr(L, T_RAIN), pop);
+            else snprintf(buf, sizeof(buf), "%s", tr(L, T_DRY));
+            it.print(x0 + 60, 408, fit(buf, {id(f_small), id(f_tiny)}, 128), pop >= 20 ? RED : BLACK,
+                     TextAlign::TOP_LEFT, buf);
+          }
+
+          // ---- Wi-Fi (right column, x 460..760). QR version 3 = 29 modules x 10 px = 290 px
+          std::string pw = id(wifi_password).state;
+          if (pw.empty()) {
+            it.rectangle(460, 40, 290, 290, BLACK);
+            it.print(605, 170, id(f_small), BLACK, TextAlign::TOP_CENTER, tr(L, T_PW_MISSING_1));
+            it.print(605, 198, id(f_small), BLACK, TextAlign::TOP_CENTER, tr(L, T_PW_MISSING_2));
+          } else {
+            it.qr_code(460, 40, id(wifi_qr), BLACK, 10);
+          }
+          const char *ssid = id(wifi_ssid).state.c_str();
+          it.print(460, 350, id(i_s), BLACK, TextAlign::TOP_LEFT, "\U000F05A9");
+          it.print(502, 352, fit(ssid, {id(f_label), id(f_small)}, 258), BLACK, TextAlign::TOP_LEFT, ssid);
+          const char *scan = tr(L, T_SCAN);
+          it.print(460, 394, fit(scan, {id(f_small), id(f_tiny)}, 300), BLACK, TextAlign::TOP_LEFT, scan);
+          if (!pw.empty()) {
+            snprintf(buf, sizeof(buf), "%s  %s", tr(L, T_PASSWORD), pw.c_str());
+            it.print(460, 422, fit(buf, {id(f_small), id(f_tiny)}, 300), BLACK, TextAlign::TOP_LEFT, buf);
+          }
+
+      - id: p_align
+        lambda: |-
+          it.fill(Color::BLACK);
+          it.rectangle(0, 0, it.get_width(), it.get_height(), Color::WHITE);
+
+qr_code:
+  - id: wifi_qr
+    value: "WIFI:T:WPA;S:;P:;;"
+    ecc: LOW
+
+# ------------------------------------------------------------------ fonts ---
+# Note: a `glyphs:` list alone REPLACES the default character set, so every text
+# font names its glyphset explicitly and `glyphs:` only adds extras on top.
+# All text fonts carry GF_Latin_Core for the German / French / Italian strings.
+
+font:
+  - file: "gfonts://Fraunces@600"
+    id: f_name_l
+    size: 76
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Fraunces@600"
+    id: f_name_m
+    size: 58
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Fraunces@600"
+    id: f_name_s
+    size: 42
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Inter@400"
+    id: f_text
+    size: 28
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Inter@400"
+    id: f_small
+    size: 22
+    glyphsets: [GF_Latin_Core]
+    glyphs: "°·"
+  - file: "gfonts://Inter@400"
+    id: f_tiny
+    size: 18
+    glyphsets: [GF_Latin_Core]
+    glyphs: "°·"
+  - file: "gfonts://Inter@600"
+    id: f_label
+    size: 28
+    glyphsets: [GF_Latin_Core]
+    glyphs: "°·"
+  - file: "gfonts://Inter@600"
+    id: f_head
+    size: 44
+    glyphsets: [GF_Latin_Core]
+  - file: "gfonts://Inter@300"
+    id: f_temp_m
+    size: 56
+    glyphs: "0123456789.-°"
+  # Material Design Icons
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: i_cur
+    size: 64
+    glyphs: &wx_glyphs
+      - "\U000F0599"  # sunny
+      - "\U000F0594"  # clear-night
+      - "\U000F0595"  # partlycloudy
+      - "\U000F0590"  # cloudy
+      - "\U000F0591"  # fog
+      - "\U000F0592"  # hail
+      - "\U000F0593"  # lightning
+      - "\U000F067E"  # lightning-rainy
+      - "\U000F0596"  # pouring
+      - "\U000F0597"  # rainy
+      - "\U000F0598"  # snowy
+      - "\U000F067F"  # snowy-rainy
+      - "\U000F059D"  # windy
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: i_fc
+    size: 52
+    glyphs: *wx_glyphs
+  - file:
+      type: web
+      url: "https://github.com/Templarian/MaterialDesign-Webfont/raw/master/fonts/materialdesignicons-webfont.ttf"
+    id: i_s
+    size: 36
+    glyphs:
+      - "\U000F05A9"  # wifi
+
+# ------------------------------------------------------- Home Assistant in ---
+
+binary_sensor:
+  # Diagnostic: raw electrical level of the panel's BUSY line
+  - platform: gpio
+    name: "Panel busy pin"
+    pin:
+      number: GPIO25
+      allow_other_uses: true
+    entity_category: diagnostic
+
+text_sensor:
+  - platform: homeassistant
+    id: wx_cond
+    entity_id: ${weather_entity}
+
+sensor:
+  - platform: homeassistant
+    id: wx_temp
+    entity_id: ${weather_entity}
+    attribute: temperature
+  - platform: homeassistant
+    id: wx_wind
+    entity_id: ${weather_entity}
+    attribute: wind_speed
+
+  # ----------------------------------------------- measurements out to HA ---
+  - platform: template
+    id: refresh_duration
+    name: "Last refresh duration"
+    unit_of_measurement: s
+    device_class: duration
+    state_class: measurement
+    accuracy_decimals: 1
+    entity_category: diagnostic
+  - platform: template
+    id: refresh_count
+    name: "Refresh count"
+    state_class: total_increasing
+    accuracy_decimals: 0
+    entity_category: diagnostic
+  - platform: wifi_signal
+    name: "Wi-Fi signal"
+    update_interval: 120s
+    entity_category: diagnostic
+
+# -------------------------------------------------------------- forecast ---
+
+globals:
+  - id: fc_cond
+    type: std::vector<std::string>
+  - id: fc_hi
+    type: std::vector<float>
+  - id: fc_lo
+    type: std::vector<float>
+  - id: fc_pop
+    type: std::vector<float>
+  - id: refresh_started
+    type: uint32_t
+    initial_value: "0"
+  - id: refreshes
+    type: uint32_t
+    initial_value: "0"
+
+interval:
+  # Weather every 30 min; the fetch redraws the panel when a guest is shown
+  - interval: 30min
+    then:
+      - script.execute: fetch_forecast
+
+# ------------------------------------------------------- controls in HA ---
+
+select:
+  - platform: template
+    id: language
+    name: "Language"
+    icon: mdi:translate
+    options: ["English", "Deutsch", "Français", "Italiano"]
+    initial_option: "English"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: queue_refresh
+
+text:
+  - platform: template
+    id: greeting
+    name: "Greeting"
+    icon: mdi:hand-wave
+    mode: text
+    max_length: 30
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    on_value:
+      - script.execute: queue_refresh
+  - platform: template
+    id: guest_name
+    name: "Guest name"
+    icon: mdi:account
+    mode: text
+    max_length: 40
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    on_value:
+      - script.execute: queue_refresh
+  - platform: template
+    id: wifi_ssid
+    name: "Wi-Fi name"
+    icon: mdi:wifi
+    mode: text
+    max_length: 32
+    optimistic: true
+    restore_value: true
+    initial_value: "Bikepackers"
+    on_value:
+      - script.execute: update_qr
+      - script.execute: queue_refresh
+  - platform: template
+    id: wifi_password
+    name: "Wi-Fi password"
+    icon: mdi:form-textbox-password
+    mode: text
+    max_length: 63
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    on_value:
+      - script.execute: update_qr
+      - script.execute: queue_refresh
+
+switch:
+  - platform: template
+    id: align_mode
+    name: "Alignment test pattern"
+    icon: mdi:border-all
+    optimistic: true
+    entity_category: config
+    turn_on_action:
+      - display.page.show: p_align
+      - script.execute: do_refresh
+    turn_off_action:
+      - display.page.show: p_welcome
+      - script.execute: do_refresh
+
+button:
+  - platform: template
+    name: "Refresh now"
+    icon: mdi:refresh
+    on_press:
+      - script.execute: do_refresh
+  - platform: template
+    name: "Fetch forecast"
+    icon: mdi:weather-partly-cloudy
+    entity_category: diagnostic
+    on_press:
+      - script.execute: fetch_forecast
+  - platform: restart
+    name: "Restart"
+
+# ---------------------------------------------------------------- scripts ---
+
+script:
+  - id: update_qr
+    then:
+      - lambda: |-
+          id(wifi_qr).set_value("WIFI:T:WPA;S:" + wifi_escape(id(wifi_ssid).state) +
+                                ";P:" + wifi_escape(id(wifi_password).state) + ";;");
+
+  # Coalesce bursts of updates (e.g. typing name and password back to back)
+  - id: queue_refresh
+    mode: restart
+    then:
+      - delay: 3s
+      - if:
+          condition:
+            not:
+              switch.is_on: align_mode
+          then:
+            - script.execute: do_refresh
+
+  # One full panel refresh, timed from update start until the panel is idle again
+  - id: do_refresh
+    mode: queued
+    max_runs: 2
+    then:
+      - wait_until:
+          condition:
+            not:
+              epaper_spi.is_updating: epd
+          timeout: 120s
+      - lambda: 'id(refresh_started) = millis();'
+      - component.update: epd
+      - delay: 100ms
+      - wait_until:
+          condition:
+            not:
+              epaper_spi.is_updating: epd
+          timeout: 120s
+      - lambda: |-
+          float secs = (millis() - id(refresh_started)) / 1000.0f;
+          id(refreshes)++;
+          id(refresh_duration).publish_state(secs);
+          id(refresh_count).publish_state(id(refreshes));
+          ESP_LOGI("refresh", "Panel refresh #%u took %.1f s", (unsigned) id(refreshes), secs);
+
+  # Daily forecast via weather.get_forecasts; keeps tomorrow and the day after
+  - id: fetch_forecast
+    mode: single
+    then:
+      - homeassistant.action:
+          action: weather.get_forecasts
+          data:
+            entity_id: ${weather_entity}
+            type: daily
+          capture_response: true
+          on_success:
+            - lambda: |-
+                JsonArrayConst fc = response["response"]["${weather_entity}"]["forecast"];
+                id(fc_cond).clear(); id(fc_hi).clear(); id(fc_lo).clear(); id(fc_pop).clear();
+                for (size_t i = 1; i < fc.size() && i < 3; i++) {
+                  JsonObjectConst d = fc[i];
+                  id(fc_cond).push_back(std::string(d["condition"] | ""));
+                  id(fc_hi).push_back(d["temperature"] | NAN);
+                  id(fc_lo).push_back(d["templow"] | NAN);
+                  id(fc_pop).push_back(d["precipitation_probability"] | 0.0f);
+                }
+                ESP_LOGI("forecast", "Got %u forecast days", (unsigned) id(fc_cond).size());
+            # The idle card shows no weather, so only redraw when a guest is shown
+            - if:
+                condition:
+                  lambda: 'return !ha_empty(id(guest_name).state);'
+                then:
+                  - script.execute: queue_refresh
+          on_error:
+            - logger.log:
+                level: WARN
+                format: "weather.get_forecasts failed"
+
+# ------------------------------------------------------- wood touch pads ---
+# Enable once the copper pads are on the face plate. First run with setup_mode: true,
+# read idle vs touched raw values in the logs, then set thresholds roughly halfway.
+# Free touch pins on this board: GPIO32, GPIO33, GPIO4.
+#
+# esp32_touch:
+#   setup_mode: true
+#
+# binary_sensor:
+#   - platform: esp32_touch
+#     id: pad_left
+#     pin: GPIO32
+#     threshold: 400
+#     filters: [delayed_on: 50ms]
+#     on_press:
+#       - script.execute: do_refresh

@@ -38,6 +38,7 @@ STREAMDECK = ROOT / "streamdeck"
 DECKS_DIR = STREAMDECK / "decks"
 M5STACK = ROOT / "m5stack"
 KITCHEN_TIMER = ROOT / "kitchen-timer"
+GUEST_EINK = ROOT / "guest-eink"
 
 
 def esphome_configs() -> list[Path]:
@@ -47,7 +48,7 @@ def esphome_configs() -> list[Path]:
     not a device config, so it is excluded by name rather than left for the
     glob to pick up on a workstation checkout.
     """
-    found = [*M5STACK.glob("*/*.yaml"), *KITCHEN_TIMER.glob("*.yaml")]
+    found = [*M5STACK.glob("*/*.yaml"), *KITCHEN_TIMER.glob("*.yaml"), *GUEST_EINK.glob("*.yaml")]
     return sorted(p for p in found if p.name != "secrets.yaml")
 
 DECKS = ("plus", "plus-xl")

@@ -1,4 +1,4 @@
-"""The ESPHome device configs: `m5stack/` and `kitchen-timer/`.
+"""The ESPHome device configs: `m5stack/`, `kitchen-timer/` and `guest-eink/`.
 
 These are 1300-line single-file configs full of inline C++ lambdas, and the
 feedback loop on them is brutal: a typo is found by the compiler minutes into a
@@ -44,6 +44,7 @@ KNOWN_SECRETS = {
     "m5stack_core_basic__encryption", "m5stack_core_basic__ap_password",
     "wifi_shrek_ssid", "wifi_shrek_password",
     "kitchentimerencryption",
+    "guest_eink_encryption", "guest_eink_ap_password",
 }
 
 # Fields that must never hold a literal value.
@@ -119,7 +120,7 @@ def _walk(node, path=()):  # noqa: ANN001, ANN202
 
 
 def test_there_are_configs_to_check() -> None:
-    assert CONFIGS, "no ESPHome device YAML found under m5stack/ or kitchen-timer/"
+    assert CONFIGS, "no ESPHome device YAML found under m5stack/, kitchen-timer/ or guest-eink/"
 
 
 def test_parses_without_duplicate_keys(config: Path) -> None:

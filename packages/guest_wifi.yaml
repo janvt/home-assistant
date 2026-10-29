@@ -1,0 +1,45 @@
+# Guest Wi-Fi: UniFi OS API calls for rotating the SchmatzGuest password.
+# Lives in /config/packages/guest_wifi.yaml. Used by scripts/rotate_guest_wifi_password.yaml.
+#
+# Auth is a UniFi OS session, not an API key: local Network "Integrations" API keys are
+# refused on these paths (401). The script logs in, pulls the TOKEN cookie and the
+# X-Csrf-Token header out of the login response, and sends both back on the PUT.
+#
+# secrets.yaml needs ONE line holding the whole login body, so the credentials never
+# appear in a script, an automation or a trace:
+#   unifi_login_payload: '{"username": "...", "password": "...", "rememberMe": false}'
+#
+# 6ae39d2bd1b56675553f544a is SchmatzGuest's wlanconf _id (the UniFi integration's device
+# identifier for the WLAN). verify_ssl is off because the UDR7 serves a self-signed cert.
+
+rest_command:
+  unifi_login:
+    url: "https://10.69.40.1/api/auth/login"
+    method: post
+    headers:
+      Content-Type: application/json
+    payload: !secret unifi_login_payload
+    verify_ssl: false
+    timeout: 15
+
+  # Generic read; pass `path` and `token`. Handy for poking at the API.
+  unifi_get:
+    url: "https://10.69.40.1{{ path }}"
+    method: get
+    headers:
+      Cookie: "TOKEN={{ token }}"
+      Accept: application/json
+    verify_ssl: false
+    timeout: 15
+
+  # Partial update; pass `path`, `token`, `csrf` and `body` (a mapping).
+  unifi_put:
+    url: "https://10.69.40.1{{ path }}"
+    method: put
+    headers:
+      Cookie: "TOKEN={{ token }}"
+      X-CSRF-Token: "{{ csrf }}"
+      Content-Type: application/json
+    payload: "{{ body | tojson }}"
+    verify_ssl: false
+    timeout: 15
