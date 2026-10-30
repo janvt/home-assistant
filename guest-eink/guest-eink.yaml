@@ -4,9 +4,13 @@
 # Driver board switch 1 = B (0.47 ohm), switch 2 = ON for USB flashing.
 # Ribbon: seated the other way round from the first attempt (that was the "no sign of life" cause).
 #
-# One page: greeting + guest name, current weather + 2-day forecast (lower left),
-# guest Wi-Fi QR code with network name and password (right).
-# Guest name empty -> idle card.
+# Two pages, chosen with the "Page" select:
+#   Welcome: greeting + guest name, current weather + 2-day forecast (lower left),
+#            guest Wi-Fi QR code with network name and password (right).
+#            Guest name empty -> idle card.
+#   Message: free text from the "Message" text entity, word-wrapped and centred in the
+#            largest of four sizes that fits. '|' forces a line break.
+# Each page only redraws for changes it actually shows (a ~19 s refresh is not free).
 # Language select (English / Deutsch / Français / Italiano) switches every fixed string,
 # weather labels and weekday names (tables in i18n.h). Lines that run too wide
 # for their column drop to the next smaller font.
@@ -23,7 +27,7 @@
 #
 # Deployed in the ESPHome dashboard as /config/esphome/guest-eink.yaml with the two headers
 # in /config/esphome/guest-eink/, so the live copy prefixes `includes:` with `guest-eink/`.
-# See README.md in this directory.
+# Source of truth: guest-eink/ in github.com/janvt/home-assistant. See README.md here.
 
 substitutions:
   name: guest-eink
@@ -40,6 +44,7 @@ esphome:
     - priority: -100
       then:
         - script.execute: update_qr
+        - script.execute: show_selected_page
         - delay: 20s
         # Normally the forecast fetch after the API connects has already drawn the panel
         - if:
@@ -183,6 +188,66 @@ display:
             snprintf(buf, sizeof(buf), "%s  %s", tr(L, T_PASSWORD), pw.c_str());
             it.print(460, 422, fit(buf, {id(f_small), id(f_tiny)}, 300), BLACK, TextAlign::TOP_LEFT, buf);
           }
+
+      - id: p_message
+        lambda: |-
+          const auto RED = Color(255, 0, 0);
+          const auto BLACK = Color::BLACK;
+          const int MAX_W = 720, MAX_H = 360;
+
+          std::string msg = id(message_text).state;
+          if (msg.empty()) msg = "Set a message in Home Assistant";
+
+          auto width_of = [&](const std::string &s, font::Font *f) {
+            int x1, y1, w, h;
+            it.get_text_bounds(0, 0, s.c_str(), f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+            return w;
+          };
+
+          // Biggest size first; wrap on spaces, '|' forces a line break.
+          font::Font *fonts[] = {id(f_name_l), id(f_name_m), id(f_name_s), id(f_text)};
+          std::vector<std::string> lines;
+          font::Font *use = fonts[3];
+          int lh = 0;
+          for (auto *f : fonts) {
+            lines.clear();
+            size_t start = 0;
+            while (true) {
+              size_t bar = msg.find('|', start);
+              std::string para = msg.substr(start, bar == std::string::npos ? std::string::npos : bar - start);
+              std::string cur;
+              size_t p = 0;
+              while (p <= para.size()) {
+                size_t sp = para.find(' ', p);
+                if (sp == std::string::npos) sp = para.size();
+                std::string word = para.substr(p, sp - p);
+                if (!word.empty()) {
+                  std::string trial = cur.empty() ? word : cur + " " + word;
+                  if (!cur.empty() && width_of(trial, f) > MAX_W) { lines.push_back(cur); cur = word; }
+                  else cur = trial;
+                }
+                p = sp + 1;
+              }
+              lines.push_back(cur);
+              if (bar == std::string::npos) break;
+              start = bar + 1;
+            }
+            int x1, y1, w, h;
+            it.get_text_bounds(0, 0, "Ag", f, TextAlign::TOP_LEFT, &x1, &y1, &w, &h);
+            lh = h * 12 / 10;
+            use = f;
+            bool fits = (int) lines.size() * lh <= MAX_H;
+            for (auto &l : lines) if (width_of(l, f) > MAX_W) fits = false;
+            if (fits) break;
+          }
+
+          // Centre the block, short red rule underneath
+          int y = (480 - (int) lines.size() * lh) / 2 - 12;
+          for (auto &l : lines) {
+            it.print(400, y, use, BLACK, TextAlign::TOP_CENTER, l.c_str());
+            y += lh;
+          }
+          it.filled_rectangle(370, y + 18, 60, 4, RED);
 
       - id: p_align
         lambda: |-
@@ -355,6 +420,17 @@ select:
     optimistic: true
     restore_value: true
     on_value:
+      - script.execute: refresh_welcome
+  - platform: template
+    id: page_select
+    name: "Page"
+    icon: mdi:book-open-page-variant
+    options: ["Welcome", "Message"]
+    initial_option: "Welcome"
+    optimistic: true
+    restore_value: true
+    on_value:
+      - script.execute: show_selected_page
       - script.execute: queue_refresh
 
 text:
@@ -368,7 +444,7 @@ text:
     restore_value: true
     initial_value: ""
     on_value:
-      - script.execute: queue_refresh
+      - script.execute: refresh_welcome
   - platform: template
     id: guest_name
     name: "Guest name"
@@ -379,7 +455,7 @@ text:
     restore_value: true
     initial_value: ""
     on_value:
-      - script.execute: queue_refresh
+      - script.execute: refresh_welcome
   - platform: template
     id: wifi_ssid
     name: "Wi-Fi name"
@@ -391,7 +467,7 @@ text:
     initial_value: "Bikepackers"
     on_value:
       - script.execute: update_qr
-      - script.execute: queue_refresh
+      - script.execute: refresh_welcome
   - platform: template
     id: wifi_password
     name: "Wi-Fi password"
@@ -403,7 +479,22 @@ text:
     initial_value: ""
     on_value:
       - script.execute: update_qr
-      - script.execute: queue_refresh
+      - script.execute: refresh_welcome
+  - platform: template
+    id: message_text
+    name: "Message"
+    icon: mdi:message-text
+    mode: text
+    max_length: 255
+    optimistic: true
+    restore_value: true
+    initial_value: ""
+    on_value:
+      - if:
+          condition:
+            display.is_displaying_page: p_message
+          then:
+            - script.execute: queue_refresh
 
 switch:
   - platform: template
@@ -416,7 +507,7 @@ switch:
       - display.page.show: p_align
       - script.execute: do_refresh
     turn_off_action:
-      - display.page.show: p_welcome
+      - script.execute: show_selected_page
       - script.execute: do_refresh
 
 button:
@@ -437,6 +528,32 @@ button:
 # ---------------------------------------------------------------- scripts ---
 
 script:
+  # Show the page chosen in the Page select (the alignment pattern wins while it is on)
+  - id: show_selected_page
+    then:
+      - if:
+          condition:
+            switch.is_on: align_mode
+          then:
+            - display.page.show: p_align
+          else:
+            - if:
+                condition:
+                  lambda: 'return id(page_select).current_option() == std::string("Message");'
+                then:
+                  - display.page.show: p_message
+                else:
+                  - display.page.show: p_welcome
+
+  # Redraw for a change that only the welcome page shows
+  - id: refresh_welcome
+    then:
+      - if:
+          condition:
+            display.is_displaying_page: p_welcome
+          then:
+            - script.execute: queue_refresh
+
   - id: update_qr
     then:
       - lambda: |-
@@ -507,7 +624,7 @@ script:
                 condition:
                   lambda: 'return !ha_empty(id(guest_name).state);'
                 then:
-                  - script.execute: queue_refresh
+                  - script.execute: refresh_welcome
           on_error:
             - logger.log:
                 level: WARN

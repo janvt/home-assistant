@@ -19,7 +19,7 @@ The Wi-Fi password rotates on its own whenever the guest changes.
 
 | File | What |
 |------|------|
-| `guest-eink.yaml` | The ESPHome device: one page plus an alignment test pattern, all text and entities |
+| `guest-eink.yaml` | The ESPHome device: Welcome and Message pages plus an alignment test pattern, all text and entities |
 | `weather_helpers.h` | HA weather condition → MDI glyph, Wi-Fi QR escaping, empty-state check |
 | `i18n.h` | English / Deutsch / Français / Italiano strings, weekday names, weather labels |
 | [`../packages/guest_wifi.yaml`](../packages/guest_wifi.yaml) | `rest_command`s for the UniFi OS API on the UDR7 |
@@ -31,8 +31,13 @@ The Wi-Fi password rotates on its own whenever the guest changes.
 Home Assistant owns the decisions; the display only renders.
 
 - **Device entities** (on the display's HA device page, kept across reboots):
-  Guest name, Greeting (empty = the language's default), Language, Wi-Fi name,
-  Wi-Fi password, Alignment test pattern, Refresh now.
+  Page (Welcome / Message), Guest name, Greeting (empty = the language's
+  default), Language, Message, Wi-Fi name, Wi-Fi password, Alignment test
+  pattern, Refresh now.
+- **Message page:** free text, word-wrapped and centred in the largest of four
+  sizes that fits; `|` forces a line break. It stays up until the Page select
+  goes back to Welcome. Each page only redraws for changes it shows, so a new
+  guest name or a forecast update doesn't cost a refresh while the message is up.
 - **Guest name drives everything.** Empty → idle card. Any change → the
   automation rotates the password; cleared also switches SchmatzGuest off, set
   switches it on *after* the new password is in place. If the rotation fails,
