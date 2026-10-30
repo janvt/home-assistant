@@ -155,6 +155,6 @@ def test_the_automation_brings_the_display_back_to_the_welcome_page() -> None:
     assert step["data"]["option"] in matches[0]["options"], (
         f"{step['data']['option']!r} is not an option of {entity}"
     )
-    assert _load(AUTOMATION)["actions"][0] is step, (
+    assert _load(AUTOMATION)["actions"][0] == step, (
         "switch the page before anything else, so a failed rotation still shows the welcome card"
     )
