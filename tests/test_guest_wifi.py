@@ -133,3 +133,28 @@ def test_the_script_only_uses_rest_commands_the_package_defines() -> None:
 def test_the_login_credentials_stay_in_secrets() -> None:
     login = _load(PACKAGE)["rest_command"]["unifi_login"]
     assert str(login["payload"]).startswith("!secret "), "login body must come from secrets.yaml"
+
+
+def test_the_automation_brings_the_display_back_to_the_welcome_page() -> None:
+    """A message left on the panel would otherwise hide the new guest and the new
+    QR code: the display only redraws the welcome page while it is showing.
+    """
+    display = _load(DISPLAY)
+    slug = lambda s: re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")  # noqa: E731
+    device = slug(display["substitutions"]["friendly_name"])
+    selects = {f"{device}_{slug(s['name'])}": s for s in display.get("select") or [] if "name" in s}
+    page_steps = [
+        step for step in _load(AUTOMATION)["actions"]
+        if step.get("action") == "select.select_option"
+    ]
+    assert page_steps, "the automation never switches the display's page"
+    step = page_steps[0]
+    entity = step["target"]["entity_id"]
+    matches = [s for suffix, s in selects.items() if entity.endswith(suffix)]
+    assert matches, f"{entity} is not a select the display declares ({sorted(selects)})"
+    assert step["data"]["option"] in matches[0]["options"], (
+        f"{step['data']['option']!r} is not an option of {entity}"
+    )
+    assert _load(AUTOMATION)["actions"][0] is step, (
+        "switch the page before anything else, so a failed rotation still shows the welcome card"
+    )

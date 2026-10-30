@@ -39,7 +39,8 @@ Home Assistant owns the decisions; the display only renders.
   goes back to Welcome. Each page only redraws for changes it shows, so a new
   guest name or a forecast update doesn't cost a refresh while the message is up.
 - **Guest name drives everything.** Empty → idle card. Any change → the
-  automation rotates the password; cleared also switches SchmatzGuest off, set
+  automation switches the display back to the Welcome page, then rotates the
+  password; cleared also switches SchmatzGuest off, set
   switches it on *after* the new password is in place. If the rotation fails,
   the script stops with an error and the network stays off, never up with a
   stale password.
