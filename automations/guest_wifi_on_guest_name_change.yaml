@@ -3,7 +3,8 @@ description: >-
   Any change of the guest name on the guest room display rotates the SchmatzGuest
   password. Name set: rotate, then enable the guest network. Name cleared (check-out):
   disable the guest network, then rotate so the old password is dead. Ignores reboots
-  and unavailable blips of the display. See guest-eink/README.md.
+  and unavailable blips of the display. Always switches the display back to the
+  Welcome page first. See guest-eink/README.md.
 id: "1793305230687"
 # queued: clearing a name and typing the next one quickly runs both, in order.
 mode: queued
@@ -19,6 +20,14 @@ triggers:
       - unavailable
 conditions: []
 actions:
+  # Back to the welcome / Wi-Fi page first, so a message left up never hides the new
+  # guest or the new QR code. The display coalesces this with the password update into
+  # one refresh.
+  - action: select.select_option
+    target:
+      entity_id: select.guest_room_display_page
+    data:
+      option: Welcome
   - if:
       - condition: state
         entity_id: text.guest_bedroom_guest_room_display_guest_name
