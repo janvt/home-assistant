@@ -349,6 +349,26 @@ ALERTS=[
    summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
    rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=OFFLINE[:6],hist=[]),
+# The bedroom blinds' Shelly 2PM sits in the tightest wall box in the flat,
+# right where the motor cable's conduit comes in from the cold blind housing.
+# Its predecessor died of condensate corrosion (Nov 2026): first the radio,
+# then everything. A weakening signal is the early warning, dropping off the
+# network the late one. The dew point and the conduit margin (outside minus
+# the bedroom's dew point, below 0 the outer end of the conduit can condense)
+# are UI template helpers, only shown here as context.
+ dict(key="bedroom_shades_relay",group="Maintenance",name="Bedroom shades relay unwell",icon="mdi:blinds-horizontal-closed",color="orange",
+   tmpl="{{ (is_state('cover.bedroom_shades','unavailable') and "+since("cover.bedroom_shades",600)+")"
+        " or "+f("sensor.bedroom_bedroom_shades_signal_strength",0)+" < -75 }}",
+   secondary="{{ 'Offline since ' ~ (states.cover.bedroom_shades.last_changed|as_local).strftime('%a %H:%M') if is_state('cover.bedroom_shades','unavailable')"
+             " else 'Wi-Fi at ' ~ states('sensor.bedroom_bedroom_shades_signal_strength') ~ ' dBm (usually around -63)' }}",
+   summary="{{ 'Wi-Fi ' ~ states('sensor.bedroom_bedroom_shades_signal_strength') ~ ' dBm' }}"
+           " · {{ 'up since ' ~ (states('sensor.bedroom_bedroom_shades_uptime')|as_datetime|as_local).strftime('%a %d.%m. %H:%M') if states('sensor.bedroom_bedroom_shades_uptime') not in ['unknown','unavailable'] else 'uptime unknown' }}"
+           " · conduit margin {{ states('sensor.bedroom_conduit_condensation_margin') }} °C",
+   rule="On when the bedroom blinds' Shelly has been offline for 10 minutes, or its Wi-Fi drops below -75 dBm. Its box is the one where condensate from the blind conduit killed the last one; a fading signal is the first sign of corrosion near the radio.",
+   data=[("sensor.bedroom_bedroom_shades_signal_strength","Wi-Fi signal"),("sensor.bedroom_bedroom_shades_uptime","Up since"),
+         ("sensor.bedroom_bedroom_shades_temperature","Chip temperature"),("sensor.bedroom_dew_point","Bedroom dew point"),
+         ("sensor.bedroom_conduit_condensation_margin","Conduit margin")],
+   hist=["sensor.bedroom_bedroom_shades_signal_strength","sensor.bedroom_conduit_condensation_margin"]),
  dict(key="guest_down",group="Proxmox",name="Guest down",icon="mdi:server-remove",color="red",
    tmpl=DOWN_GUESTS+"{{ ns.d | count > 0 }}",
    secondary=DOWN_GUESTS+"{{ ns.d | join(', ') }}",
