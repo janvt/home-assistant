@@ -185,8 +185,8 @@ def axenstrasse_section() -> dict[str, Any]:
         tile(AXENSTRASSE, "Axenstrasse (A4)", 4), tile(AXEN_TRAFFIC, "Traffic counted", 4),
         tile(AXEN_CLOSURE, "Next closure", 4),
         {"type": "markdown", "grid_options": {"columns": "full"}, "content":
-            "{{ '<small>The traffic messages say closed, but vehicles are counted at Sisikon: probably a stale '"
-            "'message.</small>' if is_state('" + AXENSTRASSE + "', 'off') and is_state('" + AXEN_TRAFFIC + "', 'on') }}"},
+            "{{ '<small>The traffic messages say closed, but vehicles are counted at Sisikon, so it shows as '"
+            "'open.</small>' if state_attr('" + AXENSTRASSE + "', 'traffic_flowing') and state_attr('" + AXENSTRASSE + "', 'closures') }}"},
     ]}
 
 
