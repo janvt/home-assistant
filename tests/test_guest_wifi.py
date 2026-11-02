@@ -158,3 +158,77 @@ def test_the_automation_brings_the_display_back_to_the_welcome_page() -> None:
     assert _load(AUTOMATION)["actions"][0] == step, (
         "switch the page before anything else, so a failed rotation still shows the welcome card"
     )
+
+
+CALENDAR = ROOT / "automations" / "guest_calendar_stays.yaml"
+
+
+def test_a_check_in_after_a_display_reboot_still_fires() -> None:
+    """After a reboot the display reports an empty name as `unknown`, not "". A
+    trigger that excludes `unknown` silently skips the next check-in: no new Wi-Fi
+    password, guest network left off. `unavailable` must stay excluded (reboots and
+    Wi-Fi blips are not guest changes).
+    """
+    automation = _load(AUTOMATION)
+    for trigger in automation["triggers"]:
+        for key in ("not_from", "not_to", "from", "to"):
+            values = trigger.get(key) or []
+            values = [values] if isinstance(values, str) else values
+            assert "unknown" not in values, f"trigger {key} excludes 'unknown'"
+        assert "unavailable" in trigger.get("not_from", []), "a reboot would fire it"
+    checkout = automation["actions"][1]["if"][0]
+    states = checkout["state"] if isinstance(checkout["state"], list) else [checkout["state"]]
+    assert {"", "unknown"} <= set(states), "check-out must treat unknown as an empty name"
+
+
+def test_the_calendar_automation_only_drives_entities_the_display_has() -> None:
+    display = _load(DISPLAY)
+    slug = lambda s: re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")  # noqa: E731
+    device = slug(display["substitutions"]["friendly_name"])
+    declared = {
+        f"{device}_{slug(entity['name'])}": entity
+        for platform in ("text", "select")
+        for entity in display.get(platform) or []
+        if "name" in entity
+    }
+    calendar = _load(CALENDAR)
+    ids = {
+        step["target"]["entity_id"]
+        for step in _walk_steps(calendar["actions"])
+        if str(step.get("action", "")).startswith(("text.", "select."))
+    } | {
+        m for s in _strings(calendar["variables"])
+        for m in re.findall(r"states\('((?:text|select)\.\w+)'\)", s)
+    }
+    assert ids, "the calendar automation touches no display entity"
+    for entity in ids:
+        assert any(entity.endswith(suffix) for suffix in declared), (
+            f"{entity} is not an entity the display declares ({sorted(declared)})"
+        )
+    page = next(e for suffix, e in declared.items() if suffix.endswith("_page"))
+    options = {
+        s["data"]["option"]
+        for s in _walk_steps(calendar["actions"])
+        if s.get("action") == "select.select_option"
+    }
+    assert options and options <= set(page["options"]), options
+
+
+def test_every_calendar_profile_has_a_farewell_the_display_can_render() -> None:
+    """The prefix regex and the farewells mapping must name the same profiles, and
+    the defaults go through the Message page's fonts (GF_Latin_Core: ASCII is safe).
+    """
+    calendar = _load(CALENDAR)
+    farewells = calendar["variables"]["farewells"]
+    prefixes = set(re.search(r"\(([A-Z|]+)\)", calendar["variables"]["match"]).group(1).split("|"))
+    assert prefixes == set(farewells), (prefixes, set(farewells))
+    for profile, text in farewells.items():
+        assert text and text.isascii(), f"{profile}: {text!r}"
+
+
+def _walk_steps(node: Any) -> list[dict[str, Any]]:
+    if isinstance(node, dict):
+        return [node] + [s for v in node.values() for s in _walk_steps(v)]
+    if isinstance(node, list):
+        return [s for v in node for s in _walk_steps(v)]
+    return []
