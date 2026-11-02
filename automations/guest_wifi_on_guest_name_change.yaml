@@ -10,15 +10,22 @@ id: "1793305230687"
 mode: queued
 max: 3
 triggers:
+  # The display reports an empty name as `unknown` after a reboot (and as "" when it is
+  # cleared while running), so `unknown` must be allowed here: excluding it meant the
+  # first check-in after a reboot rotated nothing and left the guest network off.
+  # `unavailable` (reboots, Wi-Fi blips) never fires.
   - trigger: state
     entity_id: text.guest_bedroom_guest_room_display_guest_name
     not_from:
-      - unknown
       - unavailable
     not_to:
-      - unknown
       - unavailable
-conditions: []
+conditions:
+  # unknown and "" both mean "no guest": a change between them is not a check-in or
+  # check-out.
+  - condition: template
+    value_template: >-
+      {% set f = '' if trigger.from_state.state == 'unknown' else trigger.from_state.state %}{% set t = '' if trigger.to_state.state == 'unknown' else trigger.to_state.state %}{{ f != t }}
 actions:
   # Back to the welcome / Wi-Fi page first, so a message left up never hides the new
   # guest or the new QR code. The display coalesces this with the password update into
@@ -31,7 +38,9 @@ actions:
   - if:
       - condition: state
         entity_id: text.guest_bedroom_guest_room_display_guest_name
-        state: ""
+        state:
+          - ""
+          - unknown
     then:
       # Check-out: take the guest network down first.
       - action: switch.turn_off

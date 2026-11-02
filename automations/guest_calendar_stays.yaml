@@ -1,0 +1,145 @@
+alias: "Guest calendar: check-in, farewell, check-out"
+description: >-
+  Drives the guest room display from calendar.home events titled 'GWS: <name>'
+  (Warm Showers guest, bikepacker) or 'GF: <name>' (friend). Check-in sets the guest
+  name 2 h before a timed event starts, or at midnight for an all-day one. Farewell
+  3 h before a timed event ends, or at midnight of the last day of an all-day one:
+  switches to the Message page, using the display's Message field if it is set, else
+  the profile default. Check-out at the event end clears message and name; the
+  name-change automation then rotates the Wi-Fi password and turns the guest network
+  off. See guest-eink/README.md.
+id: guest_calendar_stays
+# queued: back-to-back stays fire several triggers at the same instant (one guest's
+# check-out, the next one's check-in); they must all run, in order.
+mode: queued
+max: 10
+triggers:
+  # Each moment has a timed and an all-day variant; the actions keep only the one that
+  # matches the event, so a timed event never also fires at midnight and vice versa.
+  - trigger: calendar
+    event: start
+    entity_id: calendar.home
+    offset: "-2:0:0"
+    id: arrive_timed
+  - trigger: calendar
+    event: start
+    entity_id: calendar.home
+    offset: "0:0:0"
+    id: arrive_all_day
+  - trigger: calendar
+    event: end
+    entity_id: calendar.home
+    offset: "-3:0:0"
+    id: farewell_timed
+  # All-day events end at midnight AFTER the last day, so -24 h is midnight at the start
+  # of the last day.
+  - trigger: calendar
+    event: end
+    entity_id: calendar.home
+    offset: "-24:0:0"
+    id: farewell_all_day
+  - trigger: calendar
+    event: end
+    entity_id: calendar.home
+    offset: "0:0:0"
+    id: checkout
+variables:
+  # The two guest profiles: calendar prefix -> farewell when no message is set.
+  farewells:
+    GWS: Safe travels!
+    GF: "Good Bye :("
+  match: >-
+    {{ (trigger.calendar_event.summary | default('')) | regex_findall('^ *(GWS|GF) *: *(.*?) *$', ignorecase=True) }}
+  profile: "{{ (match[0][0] | upper) if match else '' }}"
+  guest: "{{ match[0][1] if match else '' }}"
+  all_day: "{{ trigger.calendar_event.all_day | default(false) }}"
+  current_guest: "{{ states('text.guest_bedroom_guest_room_display_guest_name') }}"
+  current_message: "{{ states('text.guest_bedroom_guest_room_display_message') }}"
+conditions:
+  # Only GWS:/GF: events with a name; everything else in the calendar is ignored.
+  - condition: template
+    value_template: "{{ profile in farewells and guest != '' }}"
+actions:
+  - choose:
+      - alias: Check-in
+        conditions:
+          - condition: or
+            conditions:
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: arrive_timed
+                  - condition: template
+                    value_template: "{{ not all_day }}"
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: arrive_all_day
+                  - condition: template
+                    value_template: "{{ all_day }}"
+        sequence:
+          # The name-change automation takes it from here: Welcome page, new Wi-Fi
+          # password, guest network on.
+          - action: text.set_value
+            target:
+              entity_id: text.guest_bedroom_guest_room_display_guest_name
+            data:
+              value: "{{ guest }}"
+      - alias: Farewell
+        conditions:
+          - condition: or
+            conditions:
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: farewell_timed
+                  - condition: template
+                    value_template: "{{ not all_day }}"
+              - condition: and
+                conditions:
+                  - condition: trigger
+                    id: farewell_all_day
+                  - condition: template
+                    value_template: "{{ all_day }}"
+          # Only for the guest actually on the display, so an overlapping booking can't
+          # hijack it.
+          - condition: template
+            value_template: "{{ current_guest == guest }}"
+        sequence:
+          - if:
+              - condition: template
+                value_template: "{{ current_message in ['', 'unknown', 'unavailable'] }}"
+            then:
+              # No manual message set: profile default.
+              - action: text.set_value
+                target:
+                  entity_id: text.guest_bedroom_guest_room_display_message
+                data:
+                  value: "{{ farewells[profile] }}"
+          - action: select.select_option
+            target:
+              entity_id: select.guest_room_display_page
+            data:
+              option: Message
+      - alias: Check-out
+        conditions:
+          - condition: trigger
+            id: checkout
+          # Never clear a different guest who has already been checked in.
+          - condition: template
+            value_template: "{{ current_guest == guest }}"
+        sequence:
+          # So the next stay falls back to its profile default unless a message is set
+          # again.
+          - action: text.set_value
+            target:
+              entity_id: text.guest_bedroom_guest_room_display_message
+            data:
+              value: ""
+          # Name-change automation: Welcome page (idle card), guest network off,
+          # password rotated.
+          - action: text.set_value
+            target:
+              entity_id: text.guest_bedroom_guest_room_display_guest_name
+            data:
+              value: ""

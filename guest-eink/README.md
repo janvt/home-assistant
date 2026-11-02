@@ -25,6 +25,7 @@ The Wi-Fi password rotates on its own whenever the guest changes.
 | [`../packages/guest_wifi.yaml`](../packages/guest_wifi.yaml) | `rest_command`s for the UniFi OS API on the UDR7 |
 | [`../scripts/rotate_guest_wifi_password.yaml`](../scripts/rotate_guest_wifi_password.yaml) | Generates a password, sets it on SchmatzGuest, then on the display |
 | [`../automations/guest_wifi_on_guest_name_change.yaml`](../automations/guest_wifi_on_guest_name_change.yaml) | Guest name changes → rotate; cleared → network off, set → network on |
+| [`../automations/guest_calendar_stays.yaml`](../automations/guest_calendar_stays.yaml) | `calendar.home` events `GWS: <name>` / `GF: <name>` → check-in, farewell message, check-out |
 
 ## How it fits together
 
@@ -44,6 +45,24 @@ Home Assistant owns the decisions; the display only renders.
   switches it on *after* the new password is in place. If the rotation fails,
   the script stops with an error and the network stays off, never up with a
   stale password.
+- **Calendar** (`calendar.home`): an event titled `GWS: <name>` (Warm Showers
+  guest, bikepacker) or `GF: <name>` (friend) runs the whole stay.
+
+  | | Timed event | All-day event |
+  |---|---|---|
+  | Check-in: set the guest name | 2 h before start | midnight, first day |
+  | Farewell: Message page | 3 h before end | midnight, last day |
+  | Check-out: clear message and name | at the end | midnight after the last day |
+
+  The farewell uses the display's Message field if it holds something, else the
+  profile default: "Safe travels!" (GWS) or "Good Bye :(" (GF). Check-out clears
+  the message, so a message set for one stay never leaks into the next. Farewell
+  and check-out only act on the guest currently on the display, so overlapping
+  bookings can't clear each other.
+- **An empty name is `unknown` after a reboot.** The display reports a restored
+  empty text as `unknown` in HA (and as `""` when cleared while running), so the
+  name-change automation treats both as "no guest" and only ignores
+  `unavailable`.
 - **Rotation** logs into UniFi OS (`/api/auth/login`), takes the `TOKEN` cookie
   and `X-Csrf-Token` header from the response, and `PUT`s only
   `{"x_passphrase": …}` to the WLAN's `wlanconf` entry. The display's Wi-Fi
