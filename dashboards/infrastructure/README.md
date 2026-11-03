@@ -41,8 +41,10 @@ Gotthard, Lukmanier and Furka.
   circle for closed (for the winter too), grey for unknown. The second line
   has the status, temperature and since when; a badge shows snow chains or
   truck limits. Needs Mushroom (HACS).
-- **Conditions:** the site's own words for the status, with snow chains and
-  truck limits, when it last changed, and the temperature and weather.
+- **Conditions:** when the integration last read alpen-paesse.ch (old if the
+  site cannot be read), then the site's own words for the status, with snow
+  chains and truck limits, when it last changed, and the temperature and
+  weather.
 - **Notices:** night closures, weight limits and the like, pass by pass.
 - **History:** which passes were open over 7 days, and their temperatures over
   48 hours.

@@ -39,8 +39,13 @@ def test_every_pass_entity_is_shown() -> None:
     assert set(build.PASS_ENTITIES) <= USED, sorted(set(build.PASS_ENTITIES) - USED)
 
 
+def test_the_last_update_is_shown() -> None:
+    """Old when alpen-paesse.ch cannot be read: the one sign of it."""
+    assert build.PASSES_LAST_UPDATE in USED
+
+
 def test_only_the_gotthard_and_pass_entities() -> None:
-    known = set(build.ENTITIES) | set(build.PASS_ENTITIES)
+    known = set(build.ENTITIES) | set(build.PASS_ENTITIES) | {build.PASSES_LAST_UPDATE}
     assert USED <= known, sorted(USED - known)
 
 
