@@ -91,6 +91,8 @@ PASS_ENTITY = {"status": "sensor.{}_status", "since": "sensor.{}_status_since",
                "trucks": "binary_sensor.{}_truck_restrictions"}
 # Every entity of the passes, all of them on the page.
 PASS_ENTITIES = [entity.format(slug) for slug in PASSES for entity in PASS_ENTITY.values()]
+# When the integration last read the site: old if the site cannot be read.
+PASSES_LAST_UPDATE = "sensor.alpine_passes_last_update"
 WEATHER = {"clear": "clear", "clouds": "cloudy", "atmosphere": "misty", "drizzle": "drizzle",
            "rain": "rain", "snow": "snow", "thunderstorm": "thunderstorms"}
 
@@ -358,6 +360,7 @@ def passes_section() -> dict[str, Any]:
 def conditions_section() -> dict[str, Any]:
     return {"type": "grid", "cards": [
         heading("Conditions", "mdi:thermometer"),
+        tile(PASSES_LAST_UPDATE, "Last update from alpen-paesse.ch", 12, vertical=False),
         {"type": "markdown", "content": conditions_table(), "grid_options": {"columns": "full"}},
         {"type": "markdown", "content":
             "<small>Data: IG Alpenpässe (alpen-paesse.ch), every 30 minutes. \"Since\" is when the site "
