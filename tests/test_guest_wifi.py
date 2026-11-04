@@ -214,6 +214,23 @@ def test_the_calendar_automation_only_drives_entities_the_display_has() -> None:
     assert options and options <= set(page["options"]), options
 
 
+def test_no_calendar_variable_depends_on_another() -> None:
+    """HA renders a variables block one key at a time, and the config API stored this
+    one alphabetically: `guest` landed before the `match` it read, so every event
+    rendered an empty guest and the automation never did anything. A top-level
+    variable must not read a sibling; derived values go in an action `variables` step.
+    """
+    variables = _load(CALENDAR)["variables"]
+    for name, value in variables.items():
+        for other in variables:
+            if other == name:
+                continue
+            for text in _strings(value):
+                assert not re.search(rf"\b{other}\b", text), (
+                    f"variable {name!r} reads {other!r}: breaks if HA reorders the keys"
+                )
+
+
 def test_every_calendar_profile_has_a_farewell_the_display_can_render() -> None:
     """The prefix regex and the farewells mapping must name the same profiles, and
     the defaults go through the Message page's fonts (GF_Latin_Core: ASCII is safe).

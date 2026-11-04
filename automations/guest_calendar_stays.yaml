@@ -43,6 +43,9 @@ triggers:
     entity_id: calendar.home
     offset: "0:0:0"
     id: checkout
+# No variable here may read another one: HA can store these keys reordered (the
+# config API saved them alphabetically), and a key only sees keys rendered before it.
+# Anything derived from `match` is set in the first action step instead.
 variables:
   # The two guest profiles: calendar prefix -> farewell when no message is set.
   farewells:
@@ -50,16 +53,17 @@ variables:
     GF: "Good Bye :("
   match: >-
     {{ (trigger.calendar_event.summary | default('')) | regex_findall('^ *(GWS|GF) *: *(.*?) *$', ignorecase=True) }}
-  profile: "{{ (match[0][0] | upper) if match else '' }}"
-  guest: "{{ match[0][1] if match else '' }}"
   all_day: "{{ trigger.calendar_event.all_day | default(false) }}"
   current_guest: "{{ states('text.guest_bedroom_guest_room_display_guest_name') }}"
   current_message: "{{ states('text.guest_bedroom_guest_room_display_message') }}"
 conditions:
   # Only GWS:/GF: events with a name; everything else in the calendar is ignored.
   - condition: template
-    value_template: "{{ profile in farewells and guest != '' }}"
+    value_template: "{{ match | count > 0 and match[0][1] != '' }}"
 actions:
+  - variables:
+      profile: "{{ match[0][0] | upper }}"
+      guest: "{{ match[0][1] }}"
   - choose:
       - alias: Check-in
         conditions:
