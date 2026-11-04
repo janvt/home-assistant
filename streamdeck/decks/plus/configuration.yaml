@@ -230,7 +230,7 @@ pages:
         icon: /app/icons/lights_off.png
 
       # ── Col 1 bottom: apartment door (Nuki lock.open). 5s cancel window. ─────
-      - entity_id: lock.nuki_schmatzknauf_lock_2
+      - entity_id: lock.schmatzknauf
         service: lock.open
         text: ''
         icon: /app/icons/apartment.png
