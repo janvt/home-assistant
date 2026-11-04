@@ -69,11 +69,11 @@ SOON=("{% set a = now().strftime('%Y-%m-%d %H:%M:%S') %}{% set b = (now() + time
       "{% set ns = namespace(ev=[]) %}{% for c in "+str(CALENDARS)+" %}{% set s = state_attr(c,'start_time') or '' %}"
       "{% if not state_attr(c,'all_day') and a < s <= b %}{% set ns.ev = ns.ev + [{'t': s, 'm': state_attr(c,'message'), 'c': state_attr(c,'friendly_name')}] %}{% endif %}{% endfor %}"
       "{% set ev = ns.ev | sort(attribute='t') %}")
-OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),("binary_sensor.nuki_bridge_connected","Nuki bridge"),
+OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),
          ("binary_sensor.athom_smart_plug_fridge_status","Fridge plug"),("binary_sensor.aqara_fridge","Fridge door sensor"),
          ("sensor.aqara_fridge_temp_temperature","Fridge thermometer"),("binary_sensor.aquara_smoke_acn03","Smoke detector"),
          ("sensor.ultimatesensor_scd41_co2","ultimatesensor"),("light.home_gym_dig_quad","Home gym WLED"),
-         ("lock.nuki_schmatzknauf_lock_2","Nuki lock"),("sensor.schmatzrouter_state","Router")]
+         ("lock.schmatzknauf","Nuki lock"),("sensor.schmatzrouter_state","Router")]
 DOWN=(SKIP+"{% set ns = namespace(d=[]) %}{% for e, n in "+str([list(x) for x in OFFLINE])+" if e not in skip %}"
       "{% if states(e) in ['unavailable','unknown'] or (e.endswith(('_status','_connected')) and is_state(e,'off')) %}{% set ns.d = ns.d + [n] %}{% endif %}{% endfor %}")
 CLIMATES=["climate.smart_thermostat_mts200b_main_channel","climate.meross_bedroom_mts200b_main_channel","climate.meross_guest_bedroom_mts200b_main_channel_2"]
@@ -293,15 +293,15 @@ ALERTS=[
    rule="On when the Aqara smoke detector or the G4 Instant CO detector raises an alarm.",
    data=[("binary_sensor.aquara_smoke_acn03","Smoke detector"),("binary_sensor.g4_instant_co_alarm_detected","CO detector"),("sensor.aquara_smoke_acn03_battery","Smoke detector battery")],hist=[]),
  dict(key="front_door_open",group="Safety",name="Front door open",icon="mdi:door-open",color="red",
-   tmpl="{{ is_state('binary_sensor.nuki_schmatzknauf_door_open_2','on') and "+since("binary_sensor.nuki_schmatzknauf_door_open_2",120)+" }}",
-   secondary="Open since {{ states.binary_sensor.nuki_schmatzknauf_door_open_2.last_changed | as_local | relative_time }}",
+   tmpl="{{ is_state('binary_sensor.schmatzknauf_door_sensor','on') and "+since("binary_sensor.schmatzknauf_door_sensor",120)+" }}",
+   secondary="Open since {{ states.binary_sensor.schmatzknauf_door_sensor.last_changed | as_local | relative_time }}",
    rule="On when the front door has been open for more than 2 minutes.",
-   data=[("binary_sensor.nuki_schmatzknauf_door_open_2","Door"),("lock.nuki_schmatzknauf_lock_2","Lock")],hist=[]),
+   data=[("binary_sensor.schmatzknauf_door_sensor","Door"),("lock.schmatzknauf","Lock")],hist=[]),
  dict(key="unlocked_nobody_home",group="Safety",name="Unlocked, nobody home",icon="mdi:lock-open-alert",color="red",
-   tmpl="{{ not is_state('lock.nuki_schmatzknauf_lock_2','locked') and states('lock.nuki_schmatzknauf_lock_2') not in ['unknown','unavailable'] and states.person | selectattr('state','eq','home') | list | count == 0 }}",
-   secondary="Lock is {{ states('lock.nuki_schmatzknauf_lock_2') }} and everyone is away",
+   tmpl="{{ not is_state('lock.schmatzknauf','locked') and states('lock.schmatzknauf') not in ['unknown','unavailable'] and states.person | selectattr('state','eq','home') | list | count == 0 }}",
+   secondary="Lock is {{ states('lock.schmatzknauf') }} and everyone is away",
    rule="On when the Nuki lock isn't locked while nobody is home.",
-   data=[("lock.nuki_schmatzknauf_lock_2","Lock"),("person.jan","Jan"),("person.silvia","Silvia"),("sensor.nuki_schmatzknauf_battery_2","Lock battery")],hist=[]),
+   data=[("lock.schmatzknauf","Lock"),("person.jan","Jan"),("person.silvia","Silvia"),("sensor.schmatzknauf_battery","Lock battery")],hist=[]),
  # --- home lab power
  dict(key="home_lab_shutting_down",group="Proxmox",name="Home lab shutting down",icon="mdi:power",color="red",
    tmpl="{{ is_state('"+SHUTDOWN+"','on') }}",
@@ -347,7 +347,7 @@ ALERTS=[
    tmpl=DOWN+"{{ ns.d | count > 0 }}",
    secondary=DOWN+"{{ ns.d | join(', ') }} offline",
    summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
-   rule="On when one of the key devices (camera, Nuki bridge and lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
+   rule="On when one of the key devices (camera, Nuki lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=OFFLINE[:6],hist=[]),
 # The bedroom blinds' Shelly 2PM sits in the tightest wall box in the flat,
 # right where the motor cable's conduit comes in from the cold blind housing.
@@ -729,7 +729,7 @@ ALERTS=[
    summary=LOWBAT_LIST,
    rule="On when any battery is below 20 %, or a device reports its battery as critical. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=[("sensor.aqara_fridge_temp_battery","Fridge thermometer"),("sensor.lumi_lumi_vibration_aq1_battery","Vibration sensor"),
-         ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.nuki_schmatzknauf_battery_2","Nuki lock")],hist=[]),
+         ("sensor.entrance_button_battery","Entrance button"),("sensor.hallway_tablet_battery_level","Hallway tablet"),("sensor.schmatzknauf_battery","Nuki lock")],hist=[]),
  dict(key="updates_waiting",group="Maintenance",name="Updates waiting",icon="mdi:package-up",color="grey",
    tmpl=UPDATES+"{{ ups | count > 0 }}",
    secondary=UPDATES+"{{ ups | count }} available: {{ ups | map(attribute='name') | join(', ') }}",

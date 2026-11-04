@@ -193,7 +193,7 @@ pages:
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
 
       # col 6 — unlock the apartment door (Nuki, unlatches). Same 5s guard.
-      - entity_id: lock.nuki_schmatzknauf_lock_2
+      - entity_id: lock.schmatzknauf
         service: lock.open
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/unlock_apartment.png
         delay: 5

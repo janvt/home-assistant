@@ -599,7 +599,7 @@ Keys are colour-grouped into columns (top row = keys 1-4, bottom = 5-8):
 | 2 | top | Open All | `script.open_all_blinds` |
 | 3 | top | Guest | toggle `input_boolean.guest_mode` |
 | 4 | top | Lights Off | `script.turn_off_all_lights` |
-| 5 | bottom | Apartment | `lock.open` on `lock.nuki_schmatzknauf_lock_2` (Nuki — unlatches), 5s cancel |
+| 5 | bottom | Apartment | `lock.open` on `lock.schmatzknauf` (Nuki — unlatches), 5s cancel |
 | 6 | bottom | Close All | `cover.close_cover` on all five shades (explicit list) |
 | 7 | bottom | Cleaning | toggle `input_boolean.cleaning_mode` |
 | 8 | bottom | Menu | mode button — cycle to next page |
