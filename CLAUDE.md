@@ -29,6 +29,10 @@ task -d streamdeck test:esphome    # ESPHome's own validator, separate venv
 task -d streamdeck test:alert-pills  # the integration in HA's test harness, separate venv
 ```
 
+Dashboards push to HA with `task -d streamdeck sync:<name>` (weather, trains,
+vpn, infrastructure, alert-pills, or `all`): a dry run unless you pass
+`-- --apply`. They read the token from `dashboards/.env`.
+
 Nothing needs hardware. The suite targets **seams, not functions**: a wrong
 value in these files doesn't crash, one thing quietly stops working. Each test
 names the failure it guards against; keep new tests in that style.
