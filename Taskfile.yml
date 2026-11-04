@@ -1,0 +1,69 @@
+version: '3'
+
+# Task runner for the whole repo (https://taskfile.dev). Run `task` with no
+# args to list everything.
+#
+# The Stream Deck tasks and the repo test suite live in streamdeck/Taskfile.yml
+# and are pulled in flat, so `task test`, `task plus:up` and the rest work from
+# here (`task -d streamdeck ...` still works too). Its tasks run in streamdeck/
+# as before; the ones that need the root say `dir: ..` themselves.
+#
+# Flattened includes need Task >= 3.39.
+
+includes:
+  streamdeck:
+    taskfile: ./streamdeck/Taskfile.yml
+    dir: ./streamdeck
+    flatten: true
+    excludes: [default]
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds: [task --list]
+    silent: true
+
+  # ── dashboards (push to Home Assistant) ───────────────────────────────────
+  # Each sync.py is a dry run unless given --apply, and reads the token from
+  # dashboards/.env. They run in the test venv, which already has websockets.
+  #   task sync:weather              show what would change
+  #   task sync:weather -- --apply   change Home Assistant
+  #   task sync:all -- --apply       every dashboard (only --apply is common
+  #                                  to all of them; mobile-alerts takes no
+  #                                  --allow-missing)
+  sync:
+    internal: true
+    deps: [test:venv]
+    requires:
+      vars: [DASH]
+    cmds:
+      - .venv-test/bin/python dashboards/{{.DASH}}/sync.py {{.CLI_ARGS}}
+
+  sync:weather:
+    desc: Sync the Weather dashboard (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: weather}}]
+
+  sync:trains:
+    desc: Sync the Trains dashboard (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: trains}}]
+
+  sync:vpn:
+    desc: Sync the VPN dashboard (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: vpn}}]
+
+  sync:infrastructure:
+    desc: Sync the Infrastructure dashboard (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: infrastructure}}]
+
+  sync:alert-pills:
+    desc: Load the alert pills and sync the Mobile dashboard row (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: mobile-alerts}}]
+
+  sync:all:
+    desc: Sync every dashboard, one after another (dry run; pass -- --apply to change HA)
+    cmds:
+      - task: sync:weather
+      - task: sync:trains
+      - task: sync:vpn
+      - task: sync:infrastructure
+      - task: sync:alert-pills

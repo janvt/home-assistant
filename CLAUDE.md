@@ -24,10 +24,16 @@ own README with the full context.
 ## Testing
 
 ```bash
-task -d streamdeck test            # whole suite (creates .venv-test/)
-task -d streamdeck test:esphome    # ESPHome's own validator, separate venv
-task -d streamdeck test:alert-pills  # the integration in HA's test harness, separate venv
+task test                # whole suite (creates .venv-test/)
+task test:esphome        # ESPHome's own validator, separate venv
+task test:alert-pills    # the integration in HA's test harness, separate venv
 ```
+
+The root `Taskfile.yml` pulls in `streamdeck/Taskfile.yml` flat (Task >= 3.39),
+so everything runs from the repo root. Dashboards push to HA with
+`task sync:<name>` (weather, trains, vpn, infrastructure, alert-pills, or
+`all`): a dry run unless you pass `-- --apply`. They read the token from
+`dashboards/.env`.
 
 Nothing needs hardware. The suite targets **seams, not functions**: a wrong
 value in these files doesn't crash, one thing quietly stops working. Each test
