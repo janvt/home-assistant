@@ -84,8 +84,11 @@ actions:
           title: Flight delay
           message: "{{ delays }}"
     else:
+      # Two steps: HA stores a variables block's keys alphabetically and
+      # renders them in turn, so `destination` would read `f` before it's set.
       - variables:
           f: "{{ trigger.event.data }}"
+      - variables:
           flight: "{{ f.get('flight_number') or f.get('callsign') or f.get('aircraft_registration') or 'Tracked flight' }}"
           origin: "{{ f.get('airport_origin_city') or '?' }}"
           destination: "{{ f.get('airport_destination_city') or '?' }}"

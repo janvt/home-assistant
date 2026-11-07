@@ -77,5 +77,27 @@ def test_departure_delay_before_take_off() -> None:
     assert delays([waiting(10)], [waiting(65)]) == "LX8 Zurich → Chicago: now 65 min late"
 
 
+def _variable_blocks(node) -> list[dict]:
+    if isinstance(node, dict):
+        found = [node["variables"]] if isinstance(node.get("variables"), dict) else []
+        return found + [b for v in node.values() for b in _variable_blocks(v)]
+    if isinstance(node, list):
+        return [b for v in node for b in _variable_blocks(v)]
+    return []
+
+
+def test_no_variable_reads_a_sibling() -> None:
+    """HA stores a variables block's keys alphabetically and renders them in
+    turn: a key reading a sibling may read it before it's set, and the
+    notification says "? → ?"."""
+    import re
+    blocks = _variable_blocks(AUTOMATION)
+    assert len(blocks) == 3
+    for block in blocks:
+        for name, value in block.items():
+            for other in set(block) - {name}:
+                assert not re.search(rf"\b{other}\b", value), f"{name!r} reads {other!r}"
+
+
 def test_events_do_not_render_the_delays() -> None:
     assert delays([flight(0)], [flight(90)], trigger_id="took_off") == ""
