@@ -55,6 +55,10 @@ tasks:
     desc: Sync the Infrastructure dashboard (dry run; pass -- --apply to change HA)
     cmds: [{task: sync, vars: {DASH: infrastructure}}]
 
+  sync:denise:
+    desc: Sync Denise's dashboard (dry run; pass -- --apply to change HA)
+    cmds: [{task: sync, vars: {DASH: denise}}]
+
   sync:alert-pills:
     desc: Load the alert pills and sync the Mobile dashboard row (dry run; pass -- --apply to change HA)
     cmds: [{task: sync, vars: {DASH: mobile-alerts}}]
@@ -66,4 +70,5 @@ tasks:
       - task: sync:trains
       - task: sync:vpn
       - task: sync:infrastructure
+      - task: sync:denise
       - task: sync:alert-pills
