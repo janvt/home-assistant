@@ -1,0 +1,109 @@
+alias: Tracked flight changes
+description: >-
+  Notifies the phone when a flight watched in FlightRadar24 (typed into "Track a
+  flight" on the Infrastructure dashboard's Flights view) leaves the gate, takes
+  off, lands or reaches the gate, and when its delay changes: 15, 30, 60 or 120
+  min late, or back on time. Times are ours (Europe/Zurich), not the airport's.
+  See dashboards/infrastructure/README.md.
+id: tracked_flight_changes
+# queued: a landing and the gate arrival can come within one poll.
+mode: queued
+max: 10
+triggers:
+  # The integration fires these for flights on its Additional tracked list only,
+  # not for those merely passing overhead.
+  - trigger: event
+    event_type: flightradar24_tracked_left_gate
+    id: left_gate
+  - trigger: event
+    event_type: flightradar24_tracked_took_off
+    id: took_off
+  - trigger: event
+    event_type: flightradar24_tracked_landed
+    id: landed
+  - trigger: event
+    event_type: flightradar24_tracked_arrived_gate
+    id: arrived_gate
+  # No event for a delay: the list changes on every poll (positions), and the
+  # `delays` variable picks out a delay that crossed a step.
+  - trigger: state
+    entity_id: sensor.flightradar24_additional_tracked
+    attribute: flights
+    id: delay
+variables:
+  # One line per flight whose delay crossed a step since the last poll: the
+  # arrival's if it's estimated, else the departure's until it departs.
+  # Comparing steps, not minutes, keeps an estimate that drifts a minute per
+  # poll quiet, and still catches it once it has drifted far.
+  delays: >-
+    {%- set ns = namespace(lines=[]) -%}
+    {%- if trigger.id == 'delay' and trigger.from_state and trigger.to_state -%}
+    {%- set old = trigger.from_state.attributes.get('flights') or [] -%}
+    {%- for f in trigger.to_state.attributes.get('flights') or [] -%}
+    {%- set key = f.get('id') or f.get('flight_number') or f.get('callsign') -%}
+    {%- for o in old if (o.get('id') or o.get('flight_number') or o.get('callsign')) == key -%}
+    {%- set d = namespace(v=[]) -%}
+    {%- for x in [o, f] -%}
+    {%- if x.get('time_estimated_arrival') and x.get('time_scheduled_arrival') -%}
+    {%- set d.v = d.v + [x.time_estimated_arrival - x.time_scheduled_arrival] -%}
+    {%- elif x.get('time_estimated_departure') and x.get('time_scheduled_departure') and not x.get('time_real_departure') -%}
+    {%- set d.v = d.v + [x.time_estimated_departure - x.time_scheduled_departure] -%}
+    {%- else -%}
+    {%- set d.v = d.v + [none] -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- if d.v[0] is not none and d.v[1] is not none -%}
+    {%- set step = namespace(old=0, new=0) -%}
+    {%- for s in [900, 1800, 3600, 7200] -%}
+    {%- if d.v[0] >= s %}{% set step.old = s %}{% endif -%}
+    {%- if d.v[1] >= s %}{% set step.new = s %}{% endif -%}
+    {%- endfor -%}
+    {%- if step.old != step.new -%}
+    {%- set eta = f.get('time_estimated_arrival') -%}
+    {%- set ns.lines = ns.lines + [
+          (f.get('flight_number') or f.get('callsign') or key) ~ ' '
+          ~ (f.get('airport_origin_city') or '?') ~ ' → ' ~ (f.get('airport_destination_city') or '?') ~ ': '
+          ~ ('now ' ~ (d.v[1] / 60) | round | int ~ ' min late' if step.new else 'back on time')
+          ~ (', lands ' ~ eta | timestamp_custom('%H:%M') if eta else '')] -%}
+    {%- endif -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- endfor -%}
+    {%- endif -%}
+    {{ ns.lines | join('\n') }}
+conditions:
+  - condition: template
+    value_template: "{{ trigger.id != 'delay' or delays != '' }}"
+actions:
+  - if:
+      - condition: trigger
+        id: delay
+    then:
+      - action: notify.mobile_app_schmatzphone
+        data:
+          title: Flight delay
+          message: "{{ delays }}"
+    else:
+      - variables:
+          f: "{{ trigger.event.data }}"
+          flight: "{{ f.get('flight_number') or f.get('callsign') or f.get('aircraft_registration') or 'Tracked flight' }}"
+          origin: "{{ f.get('airport_origin_city') or '?' }}"
+          destination: "{{ f.get('airport_destination_city') or '?' }}"
+          eta: "{{ f.get('time_estimated_arrival') or f.get('time_scheduled_arrival') }}"
+      - action: notify.mobile_app_schmatzphone
+        data:
+          title: "{{ flight }} {{ origin }} → {{ destination }}"
+          message: >-
+            {%- if trigger.id == 'left_gate' -%}
+            Left the gate in {{ origin }}.
+            {%- elif trigger.id == 'took_off' -%}
+            Took off from {{ origin }}{{ ', lands ' ~ eta | int | timestamp_custom('%H:%M') if eta else '' }}.
+            {%- elif trigger.id == 'landed' -%}
+            Landed in {{ destination }}.
+            {%- else -%}
+            At the gate in {{ destination }}.
+            {%- endif -%}
+          data:
+            # One notification per flight on the phone, each replacing the last.
+            tag: "flight-{{ f.get('id') or flight }}"
+            url: "https://www.flightradar24.com/{{ f.get('callsign') or flight }}/{{ f.get('id') or '' }}"

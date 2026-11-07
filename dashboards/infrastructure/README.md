@@ -61,7 +61,10 @@ HACS). Its area is the circle round home set in the integration's options.
   (`custom:flightradar-flight-card`, HACS); with none overhead, the tracked
   ones. Metres, km and km/h, not FlightRadar24's feet and knots.
 - **Tracked flights:** flights followed anywhere, by flight number, callsign
-  or registration, with the fields to add and remove them.
+  or registration, with the fields to add and remove them. A tracked flight
+  sends a notification to the phone when it leaves the gate, takes off, lands
+  and reaches the gate, and when its delay crosses 15, 30, 60 or 120 min (or
+  it's back on time): `automations/tracked_flight_changes.yaml`.
 - **Most watched worldwide:** FlightRadar24's top ten, while the Most tracked
   switch is on.
 - **Airport:** type an IATA or ICAO code (ZRH) for its arrivals and
