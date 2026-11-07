@@ -1,7 +1,7 @@
 """The Infrastructure dashboard (`dashboard-infrastructure`): the roads and
 tunnels around us. The Gotthard view has the road tunnel; the Roads view the
 Axenstrasse and the closures of the A2 and A4, each way; the Passes view the
-alpine passes nearby.
+alpine passes nearby; the Flights view the planes overhead, from FlightRadar24.
 
 `build()` returns the whole config, owned by the script like the Trains one: a
 card added in the UI is gone after the next sync.
@@ -386,6 +386,176 @@ def passes_history_section() -> dict[str, Any]:
     ]}
 
 
+# The Flights view: the FlightRadar24 integration
+# (github.com/AlexandrErohin/home-assistant-flightradar24, HACS). Its area is
+# a circle round home, set in its options; each sensor counts flights and has
+# them in a `flights` attribute.
+FR24 = "flightradar24"
+IN_AREA = f"sensor.{FR24}_current_in_area"
+ENTERED = f"sensor.{FR24}_entered_area"
+EXITED = f"sensor.{FR24}_exited_area"
+TRACKED = f"sensor.{FR24}_additional_tracked"
+MOST_TRACKED = f"switch.{FR24}_most_tracked"  # a switch: on fetches the list, the list is its attribute
+FETCHING = f"switch.{FR24}_api_data_fetching"
+ADD_TRACK, REMOVE_TRACK = f"text.{FR24}_add_to_track", f"text.{FR24}_remove_from_track"
+CLEAR_TRACKED = f"button.{FR24}_clear_additional_tracked"
+FR24_UPDATE = f"update.{FR24}_update"
+# The airport's sensors stay unavailable until an airport code is in this.
+AIRPORT_TRACK = f"text.{FR24}_airport_track"
+BOARDS = {"arrivals": f"sensor.{FR24}_airport_arrivals", "departures": f"sensor.{FR24}_airport_departures"}
+# (direction, kind): sensor. Mind the integration's names: only some have
+# "airport" in them.
+AIRPORT_STATS = {
+    ("arrivals", "on_time"): f"sensor.{FR24}_airport_arrivals_on_time",
+    ("arrivals", "delayed"): f"sensor.{FR24}_airport_arrivals_delayed",
+    ("arrivals", "canceled"): f"sensor.{FR24}_arrivals_canceled",
+    ("arrivals", "delay_average"): f"sensor.{FR24}_arrivals_delay_average",
+    ("arrivals", "delay_index"): f"sensor.{FR24}_arrivals_delay_index",
+    ("departures", "on_time"): f"sensor.{FR24}_departures_on_time",
+    ("departures", "delayed"): f"sensor.{FR24}_departures_delayed",
+    ("departures", "canceled"): f"sensor.{FR24}_departures_canceled",
+    ("departures", "delay_average"): f"sensor.{FR24}_departures_delay_average",
+    ("departures", "delay_index"): f"sensor.{FR24}_departures_delay_index",
+}
+STAT_NAMES = {"on_time": "On time", "delayed": "Delayed", "canceled": "Canceled",
+              "delay_average": "Average delay", "delay_index": "Delay index"}
+# Every entity the integration makes, all of them on the page.
+FLIGHT_ENTITIES = [IN_AREA, ENTERED, EXITED, TRACKED, MOST_TRACKED, FETCHING, ADD_TRACK, REMOVE_TRACK,
+                   CLEAR_TRACKED, FR24_UPDATE, AIRPORT_TRACK, *BOARDS.values(), *AIRPORT_STATS.values()]
+
+# FlightRadar24 gives feet and knots; here they're metres and km/h.
+FLIGHT_UNITS = {"altitude": "m", "distance": "km", "ground_speed": "kmh"}
+
+
+# For the two custom cards: the map card asks the sections grid for a fixed
+# five rows (~300 px), but draws its map at 16:10 across the section and the
+# flight list under it, so it ran over the cards below; the flight card asks
+# for nothing. "auto" makes the grid follow what they actually draw.
+AUTO_HEIGHT = {"columns": "full", "rows": "auto"}
+
+
+def _route(origin: str, destination: str) -> str:
+    """'Bern → Athens', with a ? for an end FlightRadar24 doesn't know."""
+    return (f"{{{{ f.get('{origin}') or '?' }}}} → {{{{ f.get('{destination}') or '?' }}}}")
+
+
+# The flights tracked outside the area: live or scheduled, with their route.
+TRACKED_LIST = ("{% for f in state_attr('" + TRACKED + "', 'flights') or [] %}"
+                "- **{{ f.get('flight_number') or f.get('callsign') or f.get('aircraft_registration') or '?' }}** "
+                + _route("airport_origin_city", "airport_destination_city") +
+                "{{ ' · ' ~ f.aircraft_model if f.get('aircraft_model') }}"
+                "{{ ' · _' ~ f.tracked_type ~ '_' if f.get('tracked_type') }}\n"
+                "{% else %}No flights tracked. Add one by its flight number, callsign or registration."
+                "{% endfor %}")
+# The ten flights most watched on FlightRadar24 worldwide.
+MOST_TRACKED_TABLE = ("{% set flights = state_attr('" + MOST_TRACKED + "', 'flights') or [] %}"
+                      "{% if flights %}| | Flight | Route | Aircraft | Watching |\n|--:|:--|:--|:--|--:|\n"
+                      "{% for f in flights %}| {{ loop.index }} "
+                      "| {{ f.get('flight_number') or f.get('callsign') or '–' }} "
+                      "| " + _route("airport_origin_city", "airport_destination_city") +
+                      " | {{ f.get('aircraft_model') or f.get('aircraft_code') or '–' }} "
+                      "| {{ f.get('clicks') or '–' }} |\n{% endfor %}"
+                      "{% else %}Not fetched: the Most tracked switch is off.{% endif %}")
+
+
+def airport_board(direction: str) -> str:
+    """The next flights in or out: the time, where from or to, the flight,
+    and its status ("Delayed 17:02")."""
+    time = "time_scheduled_arrival" if direction == "arrivals" else "time_scheduled_departure"
+    place = "From" if direction == "arrivals" else "To"
+    return ("{% set flights = (state_attr('" + BOARDS[direction] + "', 'flights') or [])[:15] %}"
+            f"{{% if flights %}}| Time | {place} | Flight | Status |\n|:--|:--|:--|:--|\n"
+            "{% for f in flights %}"
+            f"| {{{{ f.{time} | timestamp_custom('%H:%M') if f.get('{time}') else '--:--' }}}} "
+            "| {{ f.get('airport_city') or '–' }} | {{ f.get('flight_number') or f.get('callsign') or '–' }} "
+            "| {{ f.get('status_text') or '–' }} |\n{% endfor %}"
+            f"{{% else %}}No {direction}.{{% endif %}}")
+
+
+def flights_now_section() -> dict[str, Any]:
+    """The integration's own map card, with the flights overhead listed
+    under it; it only takes the Current in area sensor."""
+    return {"type": "grid", "column_span": 2, "cards": [
+        heading("Overhead now", "mdi:airplane-marker"),
+        tile(IN_AREA, "In the area", 4), tile(ENTERED, "Just entered", 4), tile(EXITED, "Just left", 4),
+        {"type": "custom:flightradar24-card", "entity": IN_AREA, "show_header": False, "show_flights": True,
+         "show_tracks": True, "map_style": "topo", "altitude_unit": "m", "distance_unit": "km",
+         "speed_unit": "km/h", "grid_options": AUTO_HEIGHT},
+    ]}
+
+
+def flight_card_section() -> dict[str, Any]:
+    """A card per flight overhead, with its photo and route; with none
+    overhead, the flights tracked elsewhere."""
+    return {"type": "grid", "cards": [
+        heading("Flight", "mdi:airplane"),
+        {"type": "custom:flightradar-flight-card", "grid_options": AUTO_HEIGHT,
+         "entities": [{"entity_id": IN_AREA, "title": "Overhead"}, {"entity_id": TRACKED, "title": "Tracked"}],
+         "units": FLIGHT_UNITS, "show_distance": "closest", "show_country_flags": "emoji",
+         "carousel": {"enable": True, "show_controls": True, "loop": True}},
+    ]}
+
+
+def tracked_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Tracked flights", "mdi:airplane-search"),
+        tile(TRACKED, "Tracked", 12, vertical=False),
+        {"type": "markdown", "content": TRACKED_LIST, "grid_options": {"columns": "full"}},
+        {"type": "entities", "grid_options": {"columns": "full"}, "entities": [
+            {"entity": ADD_TRACK, "name": "Track a flight"},
+            {"entity": REMOVE_TRACK, "name": "Stop tracking"},
+            {"entity": CLEAR_TRACKED, "name": "Stop tracking all"},
+        ]},
+    ]}
+
+
+def most_tracked_section() -> dict[str, Any]:
+    return {"type": "grid", "cards": [
+        heading("Most watched worldwide", "mdi:fire"),
+        {"type": "markdown", "content": MOST_TRACKED_TABLE, "grid_options": {"columns": "full"}},
+        tile(MOST_TRACKED, "Fetch the most watched", 12, vertical=False),
+    ]}
+
+
+def airport_section() -> dict[str, Any]:
+    """The airport typed in above: its boards and today's punctuality. Until
+    one is, the sensors are unavailable and only a hint shows."""
+    tracking = {"condition": "state", "entity": BOARDS["arrivals"], "state_not": "unavailable"}
+    cards: list[dict[str, Any]] = [
+        heading("Airport", "mdi:airport"),
+        {"type": "entities", "grid_options": {"columns": "full"},
+         "entities": [{"entity": AIRPORT_TRACK, "name": "Airport (IATA or ICAO, e.g. ZRH)"}]},
+        {"type": "markdown", "grid_options": {"columns": "full"},
+         "visibility": [{"condition": "state", "entity": BOARDS["arrivals"], "state": "unavailable"}],
+         "content": "<small>Type an airport's code above for its arrivals, departures and delays today; "
+                    "empty it to stop.</small>"},
+    ]
+    for direction in BOARDS:
+        cards += [dict(heading(direction.capitalize(), f"mdi:airplane-{'landing' if direction == 'arrivals' else 'takeoff'}",
+                               "subtitle"), visibility=[tracking]),
+                  *(dict(tile(AIRPORT_STATS[(direction, kind)], name, 4), visibility=[tracking])
+                    for kind, name in STAT_NAMES.items() if kind != "delay_index"),
+                  dict(tile(AIRPORT_STATS[(direction, "delay_index")], STAT_NAMES["delay_index"], 6),
+                       visibility=[tracking]),
+                  dict(tile(BOARDS[direction], f"Next {direction}", 6), visibility=[tracking]),
+                  {"type": "markdown", "content": airport_board(direction), "visibility": [tracking],
+                   "grid_options": {"columns": "full"}}]
+    return {"type": "grid", "cards": cards}
+
+
+def flights_history_section() -> dict[str, Any]:
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("History", "mdi:chart-timeline-variant"),
+        dict(hist({IN_AREA: "In the area"}, "Flights overhead, last 24 hours"), grid_options={"columns": 12}),
+        tile(FETCHING, "Fetching from FlightRadar24", 6, vertical=False),
+        tile(FR24_UPDATE, "FlightRadar24 integration", 6, vertical=False),
+        {"type": "markdown", "grid_options": {"columns": "full"}, "content":
+            "<small>Data: FlightRadar24, through the FlightRadar24 integration. After a restart the area "
+            "can show too few flights for a few minutes. Turning off fetching stops every call to "
+            "FlightRadar24, the map included.</small>"},
+    ]}
+
+
 def build() -> dict[str, Any]:
     return {"views": [
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
@@ -397,4 +567,7 @@ def build() -> dict[str, Any]:
         {"title": "Traffic", "path": "traffic", "icon": "mdi:car-multiple", "type": "sections", "max_columns": 3,
          "sections": [traffic_gotthard_section(), traffic_map_section(), traffic_table_section(),
                       traffic_history_section()]},
+        {"title": "Flights", "path": "flights", "icon": "mdi:airplane", "type": "sections", "max_columns": 3,
+         "sections": [flights_now_section(), flight_card_section(), tracked_section(), most_tracked_section(),
+                      airport_section(), flights_history_section()]},
     ]}
