@@ -49,6 +49,27 @@ Gotthard, Lukmanier and Furka.
 - **History:** which passes were open over 7 days, and their temperatures over
   48 hours.
 
+The **Flights** view (`/dashboard-infrastructure/flights`) has the planes
+overhead, from the FlightRadar24 integration
+([AlexandrErohin/home-assistant-flightradar24](https://github.com/AlexandrErohin/home-assistant-flightradar24),
+HACS). Its area is the circle round home set in the integration's options.
+
+- **Overhead now:** how many flights are in the area, just entered and just
+  left, and the integration's own map card (`custom:flightradar24-card`,
+  registered by the integration) with their tracks and a list under it.
+- **Flight:** a card per flight overhead with its photo, route and progress
+  (`custom:flightradar-flight-card`, HACS); with none overhead, the tracked
+  ones. Metres, km and km/h, not FlightRadar24's feet and knots.
+- **Tracked flights:** flights followed anywhere, by flight number, callsign
+  or registration, with the fields to add and remove them.
+- **Most watched worldwide:** FlightRadar24's top ten, while the Most tracked
+  switch is on.
+- **Airport:** type an IATA or ICAO code (ZRH) for its arrivals and
+  departures boards and today's punctuality. Until one is typed the airport
+  sensors are unavailable, so their cards stay hidden behind a hint.
+- **History:** flights overhead over 24 hours, the switch that stops every
+  call to FlightRadar24, and the integration's update.
+
 The Gotthard, Roads and Traffic views come from the Gotthard integration
 ([janvt/homeassistant-gotthard](https://github.com/janvt/homeassistant-gotthard),
 installed through HACS), which reads FEDRO's traffic messages from
@@ -61,7 +82,7 @@ sync refuses to save a dashboard naming an entity HA doesn't have.
 
 | File | What |
 |------|------|
-| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes. |
+| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes, `FLIGHT_ENTITIES` every one of FlightRadar24's. |
 | [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. Refuses to drop a view HA has that `build.py` doesn't make (`--drop-views` overrides). |
 
 ```bash

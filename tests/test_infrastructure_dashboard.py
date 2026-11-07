@@ -21,7 +21,7 @@ spec = importlib.util.spec_from_file_location("infrastructure_build", HERE / "bu
 build = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(build)
 CONFIG = build.build()
-USED = set(re.findall(r"\b(?:sensor|binary_sensor|camera|update|calendar)\.[a-z0-9_]+", json.dumps(CONFIG)))
+USED = set(re.findall(r"\b(?:sensor|binary_sensor|camera|update|calendar|switch|text|button)\.[a-z0-9_]+", json.dumps(CONFIG)))
 
 
 def test_build_is_plain_json() -> None:
@@ -44,8 +44,16 @@ def test_the_last_update_is_shown() -> None:
     assert build.PASSES_LAST_UPDATE in USED
 
 
-def test_only_the_gotthard_and_pass_entities() -> None:
-    known = set(build.ENTITIES) | set(build.PASS_ENTITIES) | {build.PASSES_LAST_UPDATE}
+def test_every_flight_entity_is_shown() -> None:
+    """The same for FlightRadar24: its switches, texts and button too, which
+    the sync's check didn't see until the Flights view."""
+    assert len(set(build.FLIGHT_ENTITIES)) == 23
+    assert set(build.FLIGHT_ENTITIES) <= USED, sorted(set(build.FLIGHT_ENTITIES) - USED)
+
+
+def test_only_the_gotthard_pass_and_flight_entities() -> None:
+    known = (set(build.ENTITIES) | set(build.PASS_ENTITIES) | {build.PASSES_LAST_UPDATE}
+             | set(build.FLIGHT_ENTITIES))
     assert USED <= known, sorted(USED - known)
 
 
@@ -180,6 +188,52 @@ def test_pass_card_unknown() -> None:
 
 def test_every_status_has_a_look() -> None:
     assert set(build.PASS_LOOK) == {"open", "restricted", "partially_open", "closed", "winter_closure"}
+
+
+def test_tracked_list_renders_sparse_flights() -> None:
+    """A scheduled flight tracked before it takes off has little more than
+    its number: strict, as in HA, nothing it lacks may break the list."""
+    env = strict_env({}, {(build.TRACKED, "flights"): [
+        {"flight_number": "LX8", "airport_origin_city": "Zurich", "airport_destination_city": "Chicago",
+         "aircraft_model": "Airbus A340-313", "tracked_type": "live"},
+        {"callsign": "SWR8T"}]})
+    assert env.from_string(build.TRACKED_LIST).render() == (
+        "- **LX8** Zurich → Chicago · Airbus A340-313 · _live_\n- **SWR8T** ? → ?\n")
+    assert strict_env({}, {}).from_string(build.TRACKED_LIST).render().startswith("No flights tracked.")
+
+
+def test_most_tracked_table() -> None:
+    """A row per flight, as the switch's attribute has them (a military one
+    with no number, no route, no squawk); a hint when the switch is off."""
+    env = strict_env({}, {(build.MOST_TRACKED, "flights"): [
+        {"flight_number": "LH453", "callsign": "DLH453", "clicks": 285, "airport_origin_city": "Los Angeles",
+         "airport_destination_city": "Munich", "aircraft_model": "Airbus A380-841", "aircraft_code": "A388"},
+        {"flight_number": None, "callsign": None, "clicks": 267, "airport_origin_city": None,
+         "airport_destination_city": None, "aircraft_model": "Boeing 787-8 Dreamliner"}]})
+    rows = env.from_string(build.MOST_TRACKED_TABLE).render().splitlines()
+    assert rows[2:] == ["| 1 | LH453 | Los Angeles → Munich | Airbus A380-841 | 285 |",
+                        "| 2 | – | ? → ? | Boeing 787-8 Dreamliner | 267 |"]
+    assert strict_env({}, {}).from_string(build.MOST_TRACKED_TABLE).render().startswith("Not fetched")
+
+
+def test_airport_board() -> None:
+    env = strict_env({}, {(build.BOARDS["departures"], "flights"): [
+        {"time_scheduled_departure": 1794051000, "airport_city": "Athens", "flight_number": "LX1842",
+         "status_text": "Delayed 17:02"}, {"callsign": "EDW12"}]})
+    rows = env.from_string(build.airport_board("departures")).render().splitlines()
+    assert rows[0] == "| Time | To | Flight | Status |"
+    assert rows[2:] == ["| <1794051000> | Athens | LX1842 | Delayed 17:02 |", "| --:-- | – | EDW12 | – |"]
+    assert strict_env({}, {}).from_string(build.airport_board("arrivals")).render() == "No arrivals."
+
+
+def test_airport_cards_hide_until_an_airport_is_tracked() -> None:
+    """Untracked, the airport sensors are unavailable: ten tiles saying so
+    would hide the hint to type a code."""
+    view = next(v for v in CONFIG["views"] if v["path"] == "flights")
+    section = next(s for s in view["sections"] if s["cards"][0].get("heading") == "Airport")
+    stats = [c for c in section["cards"] if c.get("entity") in set(build.AIRPORT_STATS.values()) | set(build.BOARDS.values())]
+    assert len(stats) == 12
+    assert all(c["visibility"][0]["state_not"] == "unavailable" for c in stats)
 
 
 def test_the_roads_view_lists_no_closures_the_calendar_has() -> None:
