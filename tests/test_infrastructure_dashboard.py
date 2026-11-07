@@ -226,6 +226,15 @@ def test_airport_board() -> None:
     assert strict_env({}, {}).from_string(build.airport_board("arrivals")).render() == "No arrivals."
 
 
+def test_custom_flight_cards_size_to_their_content() -> None:
+    """The map card asks for a fixed five rows and draws far more: at a fixed
+    height it overlapped the cards under it."""
+    view = next(v for v in CONFIG["views"] if v["path"] == "flights")
+    cards = [c for s in view["sections"] for c in s["cards"] if c["type"].startswith("custom:")]
+    assert {c["type"] for c in cards} == {"custom:flightradar24-card", "custom:flightradar-flight-card"}
+    assert all(c["grid_options"].get("rows") == "auto" for c in cards)
+
+
 def test_airport_cards_hide_until_an_airport_is_tracked() -> None:
     """Untracked, the airport sensors are unavailable: ten tiles saying so
     would hide the hint to type a code."""

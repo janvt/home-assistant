@@ -427,6 +427,13 @@ FLIGHT_ENTITIES = [IN_AREA, ENTERED, EXITED, TRACKED, MOST_TRACKED, FETCHING, AD
 FLIGHT_UNITS = {"altitude": "m", "distance": "km", "ground_speed": "kmh"}
 
 
+# For the two custom cards: the map card asks the sections grid for a fixed
+# five rows (~300 px), but draws its map at 16:10 across the section and the
+# flight list under it, so it ran over the cards below; the flight card asks
+# for nothing. "auto" makes the grid follow what they actually draw.
+AUTO_HEIGHT = {"columns": "full", "rows": "auto"}
+
+
 def _route(origin: str, destination: str) -> str:
     """'Bern → Athens', with a ? for an end FlightRadar24 doesn't know."""
     return (f"{{{{ f.get('{origin}') or '?' }}}} → {{{{ f.get('{destination}') or '?' }}}}")
@@ -473,7 +480,7 @@ def flights_now_section() -> dict[str, Any]:
         tile(IN_AREA, "In the area", 4), tile(ENTERED, "Just entered", 4), tile(EXITED, "Just left", 4),
         {"type": "custom:flightradar24-card", "entity": IN_AREA, "show_header": False, "show_flights": True,
          "show_tracks": True, "map_style": "topo", "altitude_unit": "m", "distance_unit": "km",
-         "speed_unit": "km/h", "grid_options": {"columns": "full"}},
+         "speed_unit": "km/h", "grid_options": AUTO_HEIGHT},
     ]}
 
 
@@ -482,7 +489,7 @@ def flight_card_section() -> dict[str, Any]:
     overhead, the flights tracked elsewhere."""
     return {"type": "grid", "cards": [
         heading("Flight", "mdi:airplane"),
-        {"type": "custom:flightradar-flight-card", "grid_options": {"columns": "full"},
+        {"type": "custom:flightradar-flight-card", "grid_options": AUTO_HEIGHT,
          "entities": [{"entity_id": IN_AREA, "title": "Overhead"}, {"entity_id": TRACKED, "title": "Tracked"}],
          "units": FLIGHT_UNITS, "show_distance": "closest", "show_country_flags": "emoji",
          "carousel": {"enable": True, "show_controls": True, "loop": True}},
