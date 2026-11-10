@@ -124,3 +124,26 @@ def test_every_page_has_its_radar_loop() -> None:
     for place in places:
         entities = set(_walk(pages[place["path"]], "entity"))
         assert f"image.{place['weather'].split('.')[1]}_radar_loop" in entities, place["title"]
+
+
+def test_earthquake_page_is_reachable_and_reads_the_entry() -> None:
+    """The page sits behind the Overview's details button; its map finds the
+    quakes by the entry's source, so a wrong source is an empty map, not an error."""
+    linked = set(_walk(VIEWS[0], "navigation_path"))
+    assert f"{build.BASE}/{build.QUAKES_PATH}" in linked
+    page = next(v for v in VIEWS if v["path"] == build.QUAKES_PATH)
+    maps = [c for c in _walk(page, "geo_location_sources")]
+    assert maps == [[build.EARTHQUAKES["source"]]]
+
+
+def test_earthquake_pill_matches_the_page() -> None:
+    """The pill and the page are two files naming the same SED entry: re-adding
+    the entry renames its sensors, and the pill's Details button opens the page.
+    Changing one without the other leaves an unavailable row or a dead button."""
+    import runpy
+    pills = runpy.run_path(str(ROOT / "dashboards" / "mobile-alerts" / "pills.py"))
+    assert pills["QUAKE"] == "sensor." + build.EARTHQUAKES["sensors"]
+    assert pills["QUAKES_LINK"] == f"{build.BASE}/{build.QUAKES_PATH}"
+    assert f"'{build.EARTHQUAKES['source']}'" in pills["FELT"]
+    pill = next(p for p in pills["ALERTS"] if p["key"] == "earthquake_felt")
+    assert pill["link"] == pills["QUAKES_LINK"]

@@ -2,7 +2,7 @@
 
 The **Weather** dashboard (`/dashboard-weather`), built from the forked
 [MeteoSwiss integration](https://github.com/janvt/homeassistant-meteoswiss)
-plus SLF, Bergfex and the Andermatt webcams.
+plus SLF, Bergfex, the Andermatt webcams and the SED's earthquakes.
 
 | File | What |
 |------|------|
@@ -20,7 +20,8 @@ plus SLF, Bergfex and the Andermatt webcams.
   section per mountain or pass with its freezing level and radar precipitation, and the FOEN river
   stations with a rising/falling trend against their 24-hour mean. Last, what
   MeteoSwiss downloaded (24 h and this month) and each place's Downloads
-  switch, which pauses it.
+  switch, which pauses it. An earthquakes section shows the latest and the
+  strongest quake and opens the Earthquakes page.
 - **One page per location:** MeteoSwiss warnings in full, the ground
   temperature (5 cm) and snow depth, today's forecast and the lowest freezing
   level in 48 h, hourly and daily forecast, wind gauges, sun, the animated rain radar loop,
@@ -32,6 +33,16 @@ plus SLF, Bergfex and the Andermatt webcams.
   Andermatt adds the
   webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
   their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
+- **Earthquakes** (`/dashboard-weather/earthquakes`, from the Overview's
+  Earthquake details button): a map of every quake the Swiss Seismological
+  Service (SED) located within 150 km in the last 30 days, the latest and the
+  strongest, how many over 30 days, a table of those of magnitude 2 and up and
+  one of the latest 25, and what a magnitude means (the integration's own
+  scale). From the Swiss Earthquakes (SED) integration
+  ([prusuino/ha_swiss_earthquakes](https://github.com/prusuino/ha_swiss_earthquakes),
+  HACS). Its sensors end in the entry's radius and id (`_150km_cmbz`): if the
+  entry is re-added, change `EARTHQUAKES` in `locations.py` and `QUAKE` in
+  `dashboards/mobile-alerts/pills.py` together (a test checks they agree).
 - **One page per mountain:** the forecast for the summit's altitude, today's
   forecast, freezing level now and lowest in 48 h, the radar loop over the
   summit, and for Gross Windgällen the measured values of its IMIS station.

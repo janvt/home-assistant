@@ -5,7 +5,7 @@ this one is owned by the script end to end: a card added in the UI is gone
 after the next sync.
 
 Views: an Overview (one section per location and mountain, plus comparison
-graphs), then one sub-page per location and mountain.
+graphs), then one sub-page per location and mountain, and one for earthquakes.
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ MOUNTAINS: list[dict[str, Any]] = _loc["MOUNTAINS"]
 IMIS: dict[str, dict[str, Any]] = _loc["IMIS"]
 RIVERS: list[dict[str, Any]] = _loc["RIVERS"]
 POLLEN_TYPES: list[str] = _loc["POLLEN_TYPES"]
+EARTHQUAKES: dict[str, Any] = _loc["EARTHQUAKES"]
 
 DASHBOARD = "dashboard-weather"
 BASE = f"/{DASHBOARD}"
@@ -512,6 +513,7 @@ def overview() -> dict[str, Any]:
         *[overview_section(l) for l in LOCATIONS],
         compare_section(),
         rivers_section(),
+        earthquake_section(),
         {"type": "grid", "column_span": 4, "cards": [
             {"type": "heading", "heading": "Mountains & passes", "heading_style": "title",
              "icon": "mdi:image-filter-hdr"}]},
@@ -539,5 +541,91 @@ def data_section() -> dict[str, Any]:
              grid_options={"columns": 12})]}
 
 
+# ── earthquakes (SED) ───────────────────────────────────────────────────────
+QUAKES_PATH = "earthquakes"
+
+
+def quake(kind: str) -> str:
+    """One of the SED entry's sensors: count, latest or latest_summary."""
+    return f"sensor.{EARTHQUAKES['sensors'].format(kind)}"
+
+
+# Every quake the entry knows, newest first. Its `time` is UTC without a zone.
+_QUAKES = ("{% set qs = states.geo_location | selectattr('attributes.source','eq','" + EARTHQUAKES["source"] + "')"
+           " | sort(attribute='attributes.time', reverse=true) | list %}")
+_WHEN = "((g.attributes.time ~ '+00:00')|as_datetime|as_local).strftime('%a %d.%m. %H:%M')"
+_ROW = ("| {{ " + _WHEN + " }} | {{ '%.1f'|format(g.attributes.magnitude|float(0)) }} | {{ g.attributes.place }} "
+        "| {{ g.state|float(0)|round(0)|int }} | {{ g.attributes.depth_km }} |\n")
+_HEAD = "| When | M | Where | km away | Depth km |\n|:--|--:|:--|--:|--:|\n"
+
+
+def quake_table(where: str, limit: int, empty: str) -> str:
+    """A markdown table of the quakes that pass `where` (a Jinja test on g), newest first."""
+    return (_QUAKES + "{% set ns = namespace(r=[]) %}{% for g in qs if " + where + " %}{% set ns.r = ns.r + [g] %}"
+            "{% endfor %}{% if ns.r %}" + _HEAD + "{% for g in ns.r[:" + str(limit) + "] %}" + _ROW +
+            "{% endfor %}{% else %}" + empty + "{% endif %}")
+
+
+def strongest() -> str:
+    return ("{% set q = state_attr('" + quake("count") + "','strongest_quake') %}{% if q %}"
+            "Strongest in " + str(EARTHQUAKES["days"]) + " days: **M {{ '%.1f'|format(q.magnitude) }}**, "
+            "{{ q.place }}, {{ q.distance_km|round(0)|int }} km away, {{ q.depth_km }} km deep, "
+            "{{ ((q.time ~ '+00:00')|as_datetime|as_local).strftime('%a %d.%m. %H:%M') }}{% endif %}")
+
+
+def earthquake_section() -> dict[str, Any]:
+    t = nav(QUAKES_PATH)
+    return {"type": "grid", "column_span": 4, "cards": [
+        {"type": "heading", "heading": "Earthquakes (SED)", "heading_style": "title", "icon": "mdi:vibrate",
+         "tap_action": t},
+        dict(tile(quake("latest_summary"), "Latest", icon="mdi:map-marker-alert", tap_action=t),
+             grid_options={"columns": 6}),
+        dict(tile(quake("count"), f"Within {EARTHQUAKES['radius']} km, {EARTHQUAKES['days']} days", tap_action=t),
+             grid_options={"columns": 6}),
+        {"type": "markdown", "content": "<small>" + strongest() + "</small>"},
+        details_button("Earthquake", t)]}
+
+
+def magnitude_scale() -> str:
+    """What a magnitude means, in the integration's own words (SED's reference values)."""
+    return ("{% set s = state_attr('" + quake("count") + "','magnitude_scale') or {} %}"
+            "| Magnitude | Effect |\n|:--|:--|\n{% for k, v in s.items() if k != 'note' %}| {{ k }} | {{ v }} |\n"
+            "{% endfor %}\n<small>{{ s.note }}</small>")
+
+
+def earthquake_view() -> dict[str, Any]:
+    r, d = EARTHQUAKES["radius"], EARTHQUAKES["days"]
+    return {"title": "Earthquakes", "path": QUAKES_PATH, "icon": "mdi:vibrate", "type": "sections",
+            "max_columns": 3, "subview": True, "back_path": f"{BASE}/overview", "sections": [
+        {"type": "grid", "column_span": 2, "cards": [
+            {"type": "heading", "heading": f"Earthquakes within {r} km", "heading_style": "title",
+             "icon": "mdi:vibrate"},
+            {"type": "map", "geo_location_sources": [EARTHQUAKES["source"]], "entities": ["zone.home"],
+             "default_zoom": 7, "grid_options": {"columns": 12, "rows": 8}},
+            {"type": "markdown", "content": "<small>Every quake the Swiss Seismological Service (SED, ETH "
+                                            f"Zürich) located within {r} km of home in the last {d} days. "
+                                            "From magnitude 3 the SED usually publishes a rapid assessment "
+                                            "on seismo.ethz.ch.</small>"}]},
+        {"type": "grid", "cards": [
+            {"type": "heading", "heading": "Now", "icon": "mdi:clock-alert-outline"},
+            tile(quake("latest_summary"), "Latest", icon="mdi:map-marker-alert", grid_options={"columns": 12}),
+            tile(quake("latest"), "Latest at", icon="mdi:clock-alert-outline"),
+            tile(quake("count"), f"Count ({d} days)"),
+            {"type": "markdown", "content": strongest()},
+            hist([quake("count")], f"Count ({d} days)", 24 * d)]},
+        {"type": "grid", "column_span": 2, "cards": [
+            {"type": "heading", "heading": "Magnitude 2 and up", "icon": "mdi:alert"},
+            {"type": "markdown", "content": quake_table("g.attributes.magnitude|float(0) >= 2", 50,
+                                                        f"None in the last {d} days.")}]},
+        {"type": "grid", "cards": [
+            {"type": "heading", "heading": "What a magnitude means", "icon": "mdi:information-outline"},
+            {"type": "markdown", "content": magnitude_scale()}]},
+        {"type": "grid", "column_span": 3, "cards": [
+            {"type": "heading", "heading": "Latest 25", "icon": "mdi:format-list-bulleted"},
+            {"type": "markdown", "content": quake_table("true", 25, "None located.")}]},
+    ]}
+
+
 def build() -> dict[str, Any]:
-    return {"views": [overview(), *[location_view(l) for l in LOCATIONS], *[mountain_view(m) for m in MOUNTAINS]]}
+    return {"views": [overview(), *[location_view(l) for l in LOCATIONS], *[mountain_view(m) for m in MOUNTAINS],
+                      earthquake_view()]}

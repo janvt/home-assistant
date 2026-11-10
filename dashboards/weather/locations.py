@@ -64,3 +64,10 @@ RIVERS = [
 ]
 
 POLLEN_TYPES = ["hazel", "alder", "ash", "birch", "beech", "oak", "grasses"]
+
+# SED earthquakes (HACS: prusuino/ha_swiss_earthquakes), one entry: 150 km
+# round home, the last 30 days. Its sensors end in the radius and the last four
+# characters of the config entry id, so re-adding the entry renames them: change
+# `sensors` here, and QUAKE in dashboards/mobile-alerts/pills.py with it. Each
+# quake is a geo_location entity, found by its source rather than by id.
+EARTHQUAKES = dict(sensors="sed_earthquakes_{}_150km_cmbz", source="sed_earthquakes", radius=150, days=30)
