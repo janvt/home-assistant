@@ -35,9 +35,9 @@ def test_every_vpn_pill_links_to_the_dashboard() -> None:
 
 def test_every_pill_link_goes_to_a_known_dashboard() -> None:
     """A typo in `link` sends the card to a page that doesn't exist. Known:
-    the VPN's link, and every view of the Infrastructure and Weather dashboards."""
+    the VPN's link, and every view of the Infrastructure, Weather and Health dashboards."""
     views = set()
-    for name in ("infrastructure", "weather"):
+    for name in ("infrastructure", "weather", "health"):
         spec = importlib.util.spec_from_file_location(f"{name}_build", ROOT / "dashboards" / name / "build.py")
         dashboard = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(dashboard)

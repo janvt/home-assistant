@@ -93,6 +93,7 @@ def warn_lines(entities):
             "{% endif %}{% endfor %}{% endfor %}")
 # Global Health Score (HACS): the score and, from its attributes, what costs points.
 HEALTH="sensor.system_ha_global_health_score"
+HEALTH_LINK="/dashboard-health/score"  # dashboards/health/build.py LINK, the HAGHS Pro card
 HEALTH_LINES=("{{ (state_attr('"+HEALTH+"','recommendations') or 'Nothing to fix.').split('\\n') | map('trim') | reject('eq','') | join(' · ') }}")
 LIGHTNING="sensor.altdorf_lightning"
 COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
@@ -476,8 +477,8 @@ ALERTS=[
    content="{{ "+f(HEALTH,0)+"|int }}%",
    secondary="{{ "+f(HEALTH,0)+"|int }} % · "+HEALTH_LINES,
    summary="{{ states('"+HEALTH+"') }} % · hardware {{ state_attr('"+HEALTH+"','hardware_score') }} %, apps {{ state_attr('"+HEALTH+"','application_score') }} %<br>"+HEALTH_LINES,
-   rule="On when the Global Health Score drops below 85 %. It weighs the hardware (CPU, RAM, IO, disk, power) against HA itself (failed integrations, zombie and stale entities, dead devices, repairs, pending updates, stale backups); the card lists what costs points.",
-   data=[(HEALTH,"Global health score")],hist=[HEALTH]),
+   rule="On when the Global Health Score drops below 85 %. It weighs the hardware (CPU, RAM, IO, disk, power) against HA itself (failed integrations, zombie and stale entities, dead devices, repairs, pending updates, stale backups); the card lists what costs points, and opens the Health dashboard with the integration's Pro card.",
+   data=[(HEALTH,"Global health score")],hist=[HEALTH],link=HEALTH_LINK),
  dict(key="air_stuffy",group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
    tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
    secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
