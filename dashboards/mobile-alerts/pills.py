@@ -91,6 +91,9 @@ def warn_lines(entities):
             "{{ ' · ' if ns.seen|count > 1 }}{{ w.event }} ({{ w.level }}, {{ w.region }}) "
             "{{ ('until ' ~ off.strftime('%a %H:%M')) if on <= now() else ('from ' ~ on.strftime('%a %H:%M') ~ ' to ' ~ off.strftime('%a %H:%M')) }}"
             "{% endif %}{% endfor %}{% endfor %}")
+# Global Health Score (HACS): the score and, from its attributes, what costs points.
+HEALTH="sensor.system_ha_global_health_score"
+HEALTH_LINES=("{{ (state_attr('"+HEALTH+"','recommendations') or 'Nothing to fix.').split('\\n') | map('trim') | reject('eq','') | join(' · ') }}")
 LIGHTNING="sensor.altdorf_lightning"
 COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
          "{{ ['N','NE','E','SE','S','SW','W','NW'][((az + 22.5) // 45)|int % 8] if az >= 0 else '' }}")
@@ -462,6 +465,19 @@ ALERTS=[
    rule="On when the last successful automatic backup is more than 2 days old, or HA flags its backups as stale.",
    data=[("sensor.backup_last_successful_automatic_backup","Last successful"),("sensor.backup_last_attempted_automatic_backup","Last attempted"),
          ("sensor.backup_next_scheduled_automatic_backup","Next scheduled"),("sensor.backup_backup_manager_state","Backup manager")],hist=[]),
+# The Global Health Score integration (HACS) rates HA itself, 0-100 %: hardware
+# (CPU, RAM, IO, disk, power), application (zombie and stale entities, dead
+# devices, failed integrations, repairs, updates, backups) and a config audit
+# bonus. Its `recommendations` attribute is one line per thing costing points.
+# It sat at 94 % with four integrations failing to set up, so 85 % means more
+# than one or two small things are wrong.
+ dict(key="ha_health_low",group="Maintenance",name="HA health low",icon="mdi:shield-alert",color="orange",
+   tmpl="{{ states('"+HEALTH+"') not in ['unknown','unavailable'] and "+f(HEALTH,100)+" < 85 }}",
+   content="{{ "+f(HEALTH,0)+"|int }}%",
+   secondary="{{ "+f(HEALTH,0)+"|int }} % · "+HEALTH_LINES,
+   summary="{{ states('"+HEALTH+"') }} % · hardware {{ state_attr('"+HEALTH+"','hardware_score') }} %, apps {{ state_attr('"+HEALTH+"','application_score') }} %<br>"+HEALTH_LINES,
+   rule="On when the Global Health Score drops below 85 %. It weighs the hardware (CPU, RAM, IO, disk, power) against HA itself (failed integrations, zombie and stale entities, dead devices, repairs, pending updates, stale backups); the card lists what costs points.",
+   data=[(HEALTH,"Global health score")],hist=[HEALTH]),
  dict(key="air_stuffy",group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
    tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
    secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
