@@ -114,7 +114,7 @@ def test_templates_compile() -> None:
             pytest.fail(f"{label}: {err}")
 
 
-DOMAINS = {"sensor", "binary_sensor", "lock", "cover", "calendar", "input_boolean", "person", "climate",
+DOMAINS = {"sensor", "binary_sensor", "lock", "cover", "calendar", "input_boolean", "input_select", "person", "climate",
            "media_player", "camera", "light", "update", "sun", "weather", "todo", "image"}
 
 
