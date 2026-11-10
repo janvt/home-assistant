@@ -115,7 +115,7 @@ stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
 Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, SED earthquakes, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection: cardboard only), Meross
-thermostats, Backup, UniFi, Sonos, Spotify and `update.*`.
+thermostats, Backup, the Global Health Score (HACS), UniFi, Sonos, Spotify and `update.*`.
 "Home" is Altdorf (HA's home zone): the rain, frost, shades and fog pills read
 Altdorf's sensors. Schlieren and Zürich only appear as a comparison (föhn). A renamed entity doesn't
 break anything loudly: its pill just stops turning on. The Alerts page shows
