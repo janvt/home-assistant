@@ -7,6 +7,13 @@ condition is true. Tapping any icon opens the **Alerts** sub-page
 (`/dashboard-mobile/weather-alerts`) with a full card per active alert and,
 grouped by topic, every alert's rule and the live values it checks.
 
+The **Earthquake** pill (`earthquake_felt`) is on for 24 hours after a quake
+that may have been felt at home: magnitude 2.5 or more within 50 km, or 3.5
+or more within the SED integration's 150 km. It reads every quake (the
+integration's `geo_location` entities), not just the latest, so a small one
+right after doesn't hide a strong one. Its card opens the Weather
+dashboard's Earthquakes page.
+
 | File | What |
 |------|------|
 | [`pills.py`](pills.py) | The pills, in priority order: template, icon, colour, group, and what the Alerts page shows. **The source of truth.** |
@@ -105,7 +112,7 @@ editor.
 The pills read entities from all over the house: MeteoSwiss (the forked
 integration, including its forecast summary, warning and radar rain and hail sensors), SLF bulletins and IMIS
 stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
-Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, Swiss public
+Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, SED earthquakes, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection: cardboard only), Meross
 thermostats, Backup, UniFi, Sonos, Spotify and `update.*`.

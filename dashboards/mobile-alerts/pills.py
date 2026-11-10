@@ -274,6 +274,18 @@ GOTTHARD_QUEUES=" · ".join(f"{side} before {town}: "
 # when it stays below input_number.ups_shutdown_threshold for 2 minutes: every
 # container except HA (nicely, then forced), then the Synology. Proxmox and HA
 # keep running; shutting the host down is a manual script.
+# SED earthquakes: every quake within 150 km is a geo_location entity (state:
+# km from home; `time`: UTC without a zone). "Felt here" is rough: M 2.5 is
+# felt near the epicentre, M 3.5 for some 100 km round it (SED's scale). The
+# sensor ids carry the config entry's tail: keep them in step with EARTHQUAKES
+# in dashboards/weather/locations.py.
+QUAKE="sensor.sed_earthquakes_{}_150km_cmbz"
+QUAKES_LINK="/dashboard-weather/earthquakes"  # dashboards/weather/build.py QUAKES_PATH
+FELT=("{% set ns = namespace(q=[]) %}{% for g in states.geo_location | selectattr('attributes.source','eq','sed_earthquakes') %}"
+      "{% set m = g.attributes.magnitude|float(0) %}{% set d = g.state|float(999) %}"
+      "{% set t = ((g.attributes.time or '') ~ '+00:00')|as_datetime(none) %}"
+      "{% if t and now() - t < timedelta(hours=24) and (m >= 3.5 or (m >= 2.5 and d <= 50)) %}{% set ns.q = ns.q + [g] %}{% endif %}"
+      "{% endfor %}{% set felt = ns.q | sort(attribute='attributes.magnitude', reverse=true) %}")
 MAINS="binary_sensor.mains_power"
 UPS_PCT="sensor.anker_757_battery_estimate"
 UPS_LOAD="input_number.anker_757_load_on_battery"
@@ -385,6 +397,13 @@ ALERTS=[
    secondary="{{ "+f(METEO_MONTH)+"|round(0)|int }} of {{ states('"+METEO_LIMIT+"')|int }} MB this month, all places together",
    rule="On when MeteoSwiss has downloaded 80 % of your monthly limit this month. It counts from the first of the month (local time), for all places together.",
    data=[(METEO_MONTH,"This month"),(METEO_LIMIT,"Your limit"),("sensor.altdorf_ur_downloaded_last_24_hours","Last 24 h")],hist=[METEO_MONTH]),
+ dict(key="earthquake_felt",group="Earthquakes",name="Earthquake",icon="mdi:vibrate",color="deep-orange",
+   tmpl=FELT+"{{ felt | count > 0 }}",
+   secondary=FELT+"{% if felt %}{% set g = felt[0] %}{% set t = (g.attributes.time ~ '+00:00')|as_datetime %}M {{ '%.1f'|format(g.attributes.magnitude|float(0)) }} · {{ g.attributes.place }}, {{ g.state|float(0)|round(0)|int }} km away, {{ g.attributes.depth_km }} km deep · {{ (t|as_local).strftime('%H:%M') }} ({{ relative_time(t) }} ago){{ ' · ' ~ (felt|count - 1) ~ ' more' if felt|count > 1 }}{% else %}None felt in the last 24 h{% endif %}",
+   summary="Latest: {{ states('"+QUAKE.format("latest_summary")+"') }}",
+   rule="On for 24 hours after an earthquake that may have been felt at home, from the Swiss Seismological Service (SED): magnitude 2.5 or more within 50 km, or 3.5 or more within 150 km. From magnitude 3 the SED usually publishes a rapid assessment.",
+   data=[(QUAKE.format("latest_summary"),"Latest"),(QUAKE.format("count"),"Earthquakes (150 km, 30 days)")],
+   hist=[QUAKE.format("count")],link=QUAKES_LINK),
  dict(key="hail",group="Weather now",name="Hail",icon="mdi:weather-hail",color="red",
    tmpl="{{ "+f(RADAR_HAIL)+" >= 50 }}",
    secondary="{{ "+f(RADAR_HAIL)+"|round(0)|int }} % chance of hail at home on the radar{{ ', stones up to ' ~ "+f(RADAR_HAIL_SIZE)+"|round(0)|int ~ ' mm' if "+f(RADAR_HAIL_SIZE)+" > 0 }}",
@@ -797,4 +816,4 @@ ALERTS=[
    hist=[TRAIN_PASSING,TELE_PASSING]),
  month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
-GROUPS=["Safety","Kitchen","Travel","Rivers","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","VPN","Maintenance"]
+GROUPS=["Safety","Kitchen","Travel","Rivers","Earthquakes","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","VPN","Maintenance"]
