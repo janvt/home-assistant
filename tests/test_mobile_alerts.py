@@ -178,6 +178,15 @@ def test_apply_touches_only_the_row_and_the_sub_page() -> None:
     assert [v.get("path") for v in after["views"]][-1] == build.SUBVIEW
 
 
+def test_apply_keeps_dashboard_level_settings() -> None:
+    """Settings next to `views`, like kiosk mode hiding the header on the
+    phone, aren't the sync's: it must save them back exactly as they were."""
+    before = _weather_dashboard()
+    before["kiosk_mode"] = {"mobile_settings": {"hide_header": True}}
+    after = build.apply(before)
+    assert {k: v for k, v in after.items() if k != "views"} == {k: v for k, v in before.items() if k != "views"}
+
+
 def test_apply_is_idempotent() -> None:
     """Running the sync twice must not stack a second row or sub-page."""
     once = build.apply(_weather_dashboard())
