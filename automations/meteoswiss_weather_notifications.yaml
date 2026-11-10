@@ -1,0 +1,88 @@
+alias: MeteoSwiss weather notifications
+description: >-
+  Notifies the phone when MeteoSwiss announces an orange or red warning for
+  Altdorf within 24 hours, when its radar sees a 50 % chance of hail over home,
+  and when strong south föhn is coming. Uses the MeteoSwiss integration's own
+  triggers (v2.3.0 and newer, Home Assistant 2026.11 and newer): each fires
+  once when its sensor reaches the level, not on every update while it stays
+  there, nor when the sensor comes back from unavailable. The alert pills
+  (dashboards/mobile-alerts/pills.py) show the same, and longer.
+id: meteoswiss_weather_notifications
+# queued: a warning and hail can come in the same storm, minutes apart.
+mode: queued
+max: 5
+triggers:
+  # On the next-24-hours sensor: fires when the warning is announced, hours
+  # before it comes into force. Yellow ones are the Weather warning pill's.
+  - trigger: meteoswiss.warning_reached
+    target:
+      entity_id: sensor.altdorf_ur_weather_warning_next_24_hours
+    options:
+      level: orange
+    id: warning
+  # The Hail pill's threshold.
+  - trigger: meteoswiss.hail_expected
+    target:
+      entity_id: sensor.altdorf_ur_radar_hail_probability
+    options:
+      probability: 50
+    id: hail
+  # Strong only: plain south föhn is common, and the Föhn coming pill has it.
+  - trigger: meteoswiss.foehn_expected
+    target:
+      entity_id: sensor.altdorf_ur_fohn_outlook
+    options:
+      outlook: strong_south
+    id: foehn
+conditions: []
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: warning
+        sequence:
+          - action: notify.mobile_app_schmatzphone
+            data:
+              title: "MeteoSwiss {{ states('sensor.altdorf_ur_weather_warning_next_24_hours') }} warning, Altdorf"
+              message: >-
+                {%- set ns = namespace(lines=[]) -%}
+                {%- for w in state_attr('sensor.altdorf_ur_weather_warning_next_24_hours', 'warnings') or []
+                      if w.level in ['orange', 'red'] -%}
+                {%- set on = w.onset | as_datetime | as_local -%}
+                {%- set off = w.expires | as_datetime | as_local -%}
+                {%- set ns.lines = ns.lines + [w.event ~ ' (' ~ w.level ~ '), '
+                      ~ ('until ' ~ off.strftime('%a %H:%M') if on <= now()
+                         else on.strftime('%a %H:%M') ~ ' to ' ~ off.strftime('%a %H:%M'))] -%}
+                {%- endfor -%}
+                {{ ns.lines | join('\n') if ns.lines else 'See the Weather dashboard.' }}
+              data:
+                tag: meteoswiss-warning
+                url: /dashboard-weather/altdorf
+      - conditions:
+          - condition: trigger
+            id: hail
+        sequence:
+          - action: notify.mobile_app_schmatzphone
+            data:
+              title: Hail on the radar
+              message: >-
+                {{ states('sensor.altdorf_ur_radar_hail_probability') | float(0) | round(0) | int }} % chance
+                of hail over home
+                {%- set size = states('sensor.altdorf_ur_radar_hail_size') | float(0) -%}
+                {{ ', stones up to ' ~ size | round(0) | int ~ ' mm' if size > 0 }}.
+              data:
+                tag: meteoswiss-hail
+                url: /dashboard-weather/altdorf
+      - conditions:
+          - condition: trigger
+            id: foehn
+        sequence:
+          - action: notify.mobile_app_schmatzphone
+            data:
+              title: Strong south föhn coming
+              message: >-
+                {{ states('sensor.altdorf_ur_fohn_pressure_difference') }} hPa more pressure in Lugano
+                than Kloten. It often comes hours before the wind.
+              data:
+                tag: meteoswiss-foehn
+                url: /dashboard-weather/altdorf

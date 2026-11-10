@@ -47,6 +47,19 @@ plus SLF, Bergfex, the Andermatt webcams and the SED's earthquakes.
   forecast, freezing level now and lowest in 48 h, the radar loop over the
   summit, and for Gross Windgällen the measured values of its IMIS station.
 
+## Notifications
+
+`automations/meteoswiss_weather_notifications.yaml` sends a notification to
+the phone when MeteoSwiss announces an orange or red warning for Altdorf
+within 24 hours, when the radar sees a 50 % chance of hail over home, and
+when strong south föhn is coming. It uses the integration's own triggers
+(*Weather warning reached*, *Hail expected*, *Föhn expected*), which came
+with v2.3.0-beta.1 and need Home Assistant 2026.11. Each one fires once when
+its sensor reaches the level, not on every update. Without that version HA
+refuses the automation (Settings → Repairs). The alert pills show the same
+things for longer; the tests keep both on the same sensors and the same hail
+threshold.
+
 ## Changing it
 
 Edit `locations.py` (or `build.py` for layout), run the tests, then:
