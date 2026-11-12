@@ -19,6 +19,15 @@
 # to keep the ring and service calls aligned.
 
 brightness: 80          # Stream Deck LCD/button brightness (0-100)
+# Live brightness and screen on/off from Home Assistant, same mechanism as the
+# XL. `brightness:` above is only the value used until the helper's first
+# state arrives. Both helpers are written by one automation, "Stream Deck Plus
+# display" (../../../automations/streamdeck_plus_display.yaml): off while the
+# house mode is away (unless guest mode is on), dim in sleep, otherwise by
+# time of day. A key press on a
+# dark deck wakes it and turns the toggle back on.
+brightness_entity_id: input_number.streamdeck_plus_brightness
+state_entity_id: input_boolean.streamdeck_plus_on
 auto_reload: true       # reload this file automatically when it changes
 inactivity_time: -1     # auto-off after N seconds of inactivity (-1 = disabled)
 

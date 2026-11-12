@@ -846,6 +846,17 @@ Helper**:
   `input_number.streamdeck_xl_brightness`, min 0, max 100, step 1.
 - **Toggle** `Stream Deck XL On`, entity ID `input_boolean.streamdeck_xl_on`.
 
+The Plus wires both too (`decks/plus/configuration.yaml`), to helpers of its
+own, `input_number.streamdeck_plus_brightness` and
+`input_boolean.streamdeck_plus_on`. One automation writes them, "Stream Deck
+Plus display"
+([`automations/streamdeck_plus_display.yaml`](../automations/streamdeck_plus_display.yaml)):
+the hallway deck is off while the house mode is `away` (unless
+`input_boolean.guest_mode` is on, since guests are then in the flat), at brightness 10 in
+`sleep`, and otherwise follows the time of day (80 from 06:00, 60 from sunset,
+30 from whichever comes first of sunset + 3 h and 23:00). A key press on a
+dark deck wakes it and turns the toggle back on.
+
 Any HA automation can drive them — dim the deck at night, turn the number down
 when a movie scene activates, flip the toggle off when everyone's away — and
 no `task xl:run` restart is needed, since these sync live over the same
