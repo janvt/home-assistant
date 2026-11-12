@@ -154,6 +154,49 @@ def test_entity_ids_are_domain_qualified(deck: str) -> None:
         assert re.fullmatch(r"[a-z_]+\.[a-z0-9_]+", eid), f"malformed entity id {eid!r}"
 
 
+# Helpers Home Assistant no longer has since the house mode
+# (input_select.house_mode) replaced them. Cleaning and Sleep are modes now,
+# Autopilot is a template sensor, the fan hold is timer.bathroom_fan_hold.
+RETIRED_HELPERS = {
+    "input_boolean.cleaning_mode",
+    "input_boolean.awake",
+    "input_boolean.be_smart",
+    "input_boolean.keep_bathroom_fan_on",
+    "automation.keep_bathroom_fan_on",
+}
+
+
+@pytest.mark.parametrize("deck", DECKS)
+def test_no_key_points_at_a_helper_the_house_mode_replaced(deck: str) -> None:
+    """A key on a helper that no longer exists does not fail: the press is a
+    service call Home Assistant drops, and `is_state()` on a missing entity is
+    just false, so the key sits there grey and dead.
+    """
+    assert sorted(entity_ids(deck) & RETIRED_HELPERS) == []
+
+
+@pytest.mark.parametrize("deck", DECKS)
+def test_the_cleaning_key_follows_the_house_mode(configs: dict, deck: str) -> None:
+    """Cleaning is the `cleaning` option of the house mode, entered and left by
+    script.toggle_cleaning_mode (which picks Home or Away on the way out). A
+    key that sets the option itself would skip that choice; one that renders
+    from anything but the house mode would not light when a dashboard or the
+    hallway display started the cleaning.
+    """
+    keys = [
+        button
+        for page in configs[deck].pages
+        for button in page.buttons
+        if "cleaning_on.png" in (button.icon or "")
+    ]
+    assert len(keys) == 1, f"{deck}: expected one Cleaning key, found {len(keys)}"
+    key = keys[0]
+    assert key.entity_id == "input_select.house_mode"
+    assert 'is_state("input_select.house_mode", "cleaning")' in key.icon
+    assert key.service == "script.turn_on"
+    assert key.service_data == {"entity_id": "script.toggle_cleaning_mode"}
+
+
 @pytest.mark.parametrize("deck", DECKS)
 def test_page_navigation_targets_exist(configs: dict, deck: str) -> None:
     """`go-to-page` takes a page NAME. A typo leaves a key that looks like

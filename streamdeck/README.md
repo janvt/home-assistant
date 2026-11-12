@@ -530,7 +530,7 @@ straight onto the two rows:
 | 4 | top | Work S | tap: toggle `scene.work_s` ↔ Kitchen off · **hold ~1s: activate `scene.work`** |
 | 5 | bottom | Hallway | toggle `light.shellypro1pm_ec62608ad35c_switch_0` (Hallway Spots) |
 | 6 | bottom | Outside | toggle `light.balcony_ceiling_light` |
-| 7 | bottom | 💩 | trigger `automation.keep_bathroom_fan_on` |
+| 7 | bottom | 💩 | tap: start `timer.bathroom_fan_hold` (15 min) · **hold ~1s: cancel it** |
 | 8 | bottom | Shades | **mode button** — cycle to the next view |
 
 Key 4 uses a `long_press:` override — a tap runs the normal toggle, a ~1s hold
@@ -539,10 +539,12 @@ can take a `long_press` with its own `service`/`entity_id`/`target`. Its icon is
 three-way: `work_s_on` (desk) when `scene.work_s` is active, a dedicated
 `work.png` (briefcase, "Work") when `scene.work` is active, else the grey
 `work_s_off` — so you can tell which of the two Work scenes is on.
-The poop key (7) fires `automation.trigger` on the fan automation, but shows the
-status of `input_boolean.keep_bathroom_fan_on`: `linked_entity` points at the
-helper so the key re-renders on its changes, and the `emoticon-poop` icon +
-`icon_background_color` brighten while the helper is `on`.
+The poop key (7) starts `timer.bathroom_fan_hold` and a hold cancels it, the
+same tap/hold as the "Fan hold" tile on the mobile dashboard. Home Assistant
+does the rest: the timer starting switches the fan on, and the "Bathroom
+lights" automation leaves the fan running until the timer ends. The
+`emoticon-poop` icon is lit while the timer is `active`, whoever started it
+(this key, the wall button, a shower).
 
 ### Scene toggle behaviour
 
@@ -601,7 +603,7 @@ Keys are colour-grouped into columns (top row = keys 1-4, bottom = 5-8):
 | 4 | top | Lights Off | `script.turn_off_all_lights` |
 | 5 | bottom | Apartment | `lock.open` on `lock.schmatzknauf` (Nuki — unlatches), 5s cancel |
 | 6 | bottom | Close All | `cover.close_cover` on all five shades (explicit list) |
-| 7 | bottom | Cleaning | toggle `input_boolean.cleaning_mode` |
+| 7 | bottom | Cleaning | `script.toggle_cleaning_mode`; lit while `input_select.house_mode` is `cleaning` |
 | 8 | bottom | Menu | mode button — cycle to next page |
 
 So the columns read: **doors (red)**, **shades (green)**, **modes (blue)**, then
@@ -671,8 +673,10 @@ edges:
 ```
 
 Rows 1-3 are five wide so the left block squares off: **scenes**, then **room
-lights**, then the **`input_boolean` toggles** (`cleaning_mode`, `guest_mode`,
-and the bathroom fan — `awake`/`be_smart` moved to Settings, see below).
+lights**, then the **mode toggles**: Cleaning (`script.toggle_cleaning_mode`,
+lit while `input_select.house_mode` is `cleaning`), Guest
+(`input_boolean.guest_mode`) and the bathroom fan (tap starts
+`timer.bathroom_fan_hold`, hold cancels it).
 Column 6 is the vertical strip of always-reachable actions. Columns 7-9
 (rows 1-3) are Mac app launchers — all [local Mac actions](#local-mac-control-ext),
 not HA calls — with 1Password kept in the corner since it's used constantly.
@@ -687,11 +691,15 @@ not a second grid to fill:
 
 ```
  col: 1        2         3   ...   9
- r1   Awake    Be Smart  ·   ...   ·
+ r1   Sleep    Autopilot ·   ...   ·
  r4   ·        ·         ·   ...   Home
 ```
 
-Just the two toggles that were crowding Home's row 3, a `Home` key in the
+The house mode's two keys: **Sleep** switches `input_select.house_mode` to
+`sleep`, or back to `home` when it already is (HA's Go To Bed and Wake Up
+automations follow the mode), and **Autopilot** is a read-only tile for
+`binary_sensor.autopilot` (home and no guests staying; pressing it does
+nothing). Then a `Home` key in the
 same bottom-right corner to go back, and dial 1 wired to the deck's own
 screen brightness (see
 [below](#exposing-deck-settings-to-home-assistant)) — the reason this page

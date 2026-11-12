@@ -20,7 +20,7 @@ own README with the full context.
 | `automations/` | HA automations kept in version control | |
 | `scripts/`, `packages/` | HA scripts (scripts.yaml form) and YAML packages kept in version control | |
 | `blueprints/automation/janvt/` | The Road closure notice blueprint: per-person automations are made from it in the HA UI, not kept here | its header comment |
-| `ha-scene-tracker.yaml` | `input_select.active_scene` + one automation per scene | |
+| `ha-scene-tracker.yaml` | `input_select.active_scene` + the automation that tracks the scenes | |
 
 ## Testing
 

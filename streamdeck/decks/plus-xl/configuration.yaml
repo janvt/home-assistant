@@ -20,7 +20,7 @@
 # unconfigured touchscreen segments on page switch.
 #
 #   col: 1        2         3   ...   9
-#   r1   Awake    Be Smart  ·   ...   ·
+#   r1   Sleep    Autopilot ·   ...   ·
 #   r4   ·        ·         ·   ...   Home  (same corner as Home's Settings key)
 #
 # ICON PATHS ARE ABSOLUTE AND MACHINE-SPECIFIC. The app resolves a relative
@@ -168,29 +168,38 @@ pages:
         icon: /Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/phpstorm.png
 
       # ══ Row 3 ════════════════════════════════════════════════════════════
-      # cols 1-5 — input_boolean toggles. Grey when off, blue when on.
-      - entity_id: input_boolean.cleaning_mode
-        service: input_boolean.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_on.png" if is_state("input_boolean.cleaning_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_off.png" }}'
+      # cols 1-5 — mode toggles. Grey when off, blue when on.
+      # Cleaning is a house mode now (input_select.house_mode), not a helper of
+      # its own. script.toggle_cleaning_mode switches into Cleaning, or out of
+      # it to Home/Away depending on whether Jan's iPhone is home. `entity_id`
+      # is the house mode so the key re-renders when it changes; the script to
+      # run is named in service_data.
+      - entity_id: input_select.house_mode
+        service: script.turn_on
+        service_data:
+          entity_id: script.toggle_cleaning_mode
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_on.png" if is_state("input_select.house_mode", "cleaning") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/cleaning_off.png" }}'
 
       - entity_id: input_boolean.guest_mode
         service: input_boolean.toggle
         icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_on.png" if is_state("input_boolean.guest_mode", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/guest_off.png" }}'
 
-      # cols 3-4 — empty. Awake and Be Smart used to live here; they moved to
-      # the Settings page (row 4 col 9 below is the way there now), along
-      # with the deck's own brightness dial.
+      # cols 3-4 — empty. The house-mode keys (Sleep, Autopilot) live on the
+      # Settings page (row 4 col 9 below is the way there), along with the
+      # deck's own brightness dial.
       - special_type: empty
       - special_type: empty
 
-      # Poop button: press triggers the "Keep bathroom fan on" automation, but
-      # the icon reflects the input_boolean it manages. `linked_entity` makes the
-      # key re-render when that helper changes while `entity_id` keeps
-      # automation.trigger aimed at the automation.
-      - entity_id: automation.keep_bathroom_fan_on
-        linked_entity: input_boolean.keep_bathroom_fan_on
-        service: automation.trigger
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
+      # Poop button: tap starts timer.bathroom_fan_hold (15 min, the timer's
+      # own default), hold ~1s cancels it. Home Assistant does the rest: the
+      # timer starting switches the fan on, and "Bathroom lights" leaves the
+      # fan alone while it runs. Lit while the timer is active, whoever
+      # started it (this key, the wall button, a shower).
+      - entity_id: timer.bathroom_fan_hold
+        service: timer.start
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_on.png" if is_state("timer.bathroom_fan_hold", "active") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/fan_off.png" }}'
+        long_press:
+          service: timer.cancel
 
       # col 6 — unlock the apartment door (Nuki, unlatches). Same 5s guard.
       - entity_id: lock.schmatzknauf
@@ -415,15 +424,23 @@ pages:
   - name: Settings
 
     buttons:
-      # col 1 — moved from Home row 3.
-      - entity_id: input_boolean.awake
-        service: input_boolean.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_on.png" if is_state("input_boolean.awake", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/awake_off.png" }}'
+      # col 1 — Sleep house mode (was the Awake helper, inverted). Switches
+      # input_select.house_mode to sleep, or back to home if it is already
+      # sleep; HA's "Go To Bed" / "Wake Up" automations follow the mode and do
+      # the lights and blinds. Lit while the house is in Sleep.
+      - entity_id: input_select.house_mode
+        service: input_select.select_option
+        service_data:
+          entity_id: input_select.house_mode
+          option: '{{ "home" if is_state("input_select.house_mode", "sleep") else "sleep" }}'
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/sleep_on.png" if is_state("input_select.house_mode", "sleep") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/sleep_off.png" }}'
 
-      # col 2 — moved from Home row 3.
-      - entity_id: input_boolean.be_smart
-        service: input_boolean.toggle
-        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_on.png" if is_state("input_boolean.be_smart", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/be_smart_off.png" }}'
+      # col 2 — Autopilot (was the Be Smart helper). A read-only tile: no
+      # `service:`, so pressing it does nothing. binary_sensor.autopilot is a
+      # template in HA (house mode is home and no guests staying), so there
+      # is nothing to toggle; change the house mode instead.
+      - entity_id: binary_sensor.autopilot
+        icon: '{{ "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/autopilot_on.png" if is_state("binary_sensor.autopilot", "on") else "/Users/janvt/dev/jan/home-assistant/streamdeck/decks/plus-xl/icons/autopilot_off.png" }}'
 
       # cols 3-9 — empty
       - special_type: empty

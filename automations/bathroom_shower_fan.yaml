@@ -20,17 +20,21 @@
 # threshold separates them. A rise of 3 %RH within 10 minutes happened only
 # during showers that week; the normal 99th percentile was +0.8.
 #
-# The hold is input_boolean.keep_bathroom_fan_on, the same flag the manual
-# "Keep bathroom fan on" automation uses: "Turn off bathroom lights" won't
-# switch the fan off while it's on, and turning it off re-runs that check.
+# The hold is timer.bathroom_fan_hold, the same timer the wall button, the
+# dashboards and the Stream Deck poop key start. Two other automations act on
+# it: "Bathroom fan: hold and button run-on" switches the fan on whenever the
+# timer starts, and "Bathroom lights" leaves the fan running while the timer
+# is active and switches it off when the timer ends with nobody in the room.
+# The timer is restored across restarts, so the fan can't get stuck on.
 alias: Bathroom shower fan
 description: >-
-  Detects the humidity spike of a shower and keeps the bathroom fan running
-  until relative humidity is back within 2 %RH of where it was before.
+  Detects the humidity spike of a shower and holds the fan
+  (timer.bathroom_fan_hold) until relative humidity is back within 1 %RH of
+  where it was before, then 5 minutes of run-on. The timer survives restarts
+  and caps the hold at 45 minutes, so the fan can't get stuck on.
 id: bathroom_shower_fan
-# A second spike while holding (Oct 14: a second rise at 16:20, 105 minutes
-# into the first hold) restarts with a fresh cap rather than being ignored and
-# released mid-shower by the old one.
+# A second spike while holding restarts with a fresh 45-minute cap rather than
+# being ignored and released mid-shower by the old one.
 mode: restart
 triggers:
   - trigger: numeric_state
@@ -43,20 +47,25 @@ actions:
       # reading from ~10 minutes ago: the room before the shower started.
       target: >-
         {{ states('sensor.bathroom_ruuvi_humidity') | float(0)
-           - states('sensor.bathroom_humidity_change_10m') | float(0) + 2 }}
-  - action: input_boolean.turn_on
+           - states('sensor.bathroom_humidity_change_10m') | float(0) + 1 }}
+  - action: light.turn_on
     target:
-      entity_id: input_boolean.keep_bathroom_fan_on
-  - action: switch.turn_on
+      entity_id: light.bathroom_mirror_fan_bathroom_mirror_fan
+  # The cap: if the humidity never gets back down, the timer runs out after
+  # 45 minutes and "Bathroom lights" switches the fan off.
+  - action: timer.start
     target:
-      entity_id: switch.bathroom_lights_mirror_fan
+      entity_id: timer.bathroom_fan_hold
+    data:
+      duration: "00:45:00"
+  # On timeout the run stops here and the 45-minute timer simply ends.
   - wait_template: >-
       {{ states('sensor.bathroom_ruuvi_humidity') | float(100) <= target }}
-    # A cap, not the expected case: on Oct 18 the room took 140 minutes to get
-    # back to baseline + 2 with the fan on for only 15 of them. Without it, a
-    # baseline that drifts up mid-shower (Oct 14) would hold the fan forever.
-    timeout:
-      hours: 2
-  - action: input_boolean.turn_off
+    timeout: "00:45:00"
+    continue_on_timeout: false
+  # Humidity is back down: shorten the hold to 5 minutes of run-on.
+  - action: timer.start
     target:
-      entity_id: input_boolean.keep_bathroom_fan_on
+      entity_id: timer.bathroom_fan_hold
+    data:
+      duration: "00:05:00"

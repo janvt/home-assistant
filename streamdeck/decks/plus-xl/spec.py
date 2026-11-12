@@ -21,8 +21,9 @@ edges:
   row 4     MuteLR   MuteMad MuteMac   Line In  CO2     PowerUse    ·        Caffein ...
 
 Rows 1-3 are five wide, so the left block squares off: scenes, then lights,
-then the input_boolean toggles (Awake and Be Smart moved to the Settings page
-— see below). Column 6 is the vertical strip of always-reachable actions.
+then the mode toggles (Cleaning is a house mode, Guest a helper, Fan the
+bathroom fan hold timer; Sleep and Autopilot are on the Settings page — see
+below). Column 6 is the vertical strip of always-reachable actions.
 Columns 7-9 (rows 1-3) are Mac app launchers — `mac.open_app`, see ../../ext/
 — with 1Password in the corner since it's used constantly. Row 4 col 4 groups
 Living Room into Madagascar's Line In (`script.streamdeck_audio_scene_linein`,
@@ -38,7 +39,7 @@ than another feature button. Everything else is `special_type: empty`.
 Settings is a second page, not a second grid to fill — deliberately sparse:
 
       col: 1        2         3   ...   9
-  row 1     Awake    Be Smart  ·   ...   ·
+  row 1     Sleep    Autopilot ·   ...   ·
   row 4     ·        ·         ·   ...   Home
 
 Home (row 4 col 9) is in the same physical spot as Home page's Settings key —
@@ -74,12 +75,17 @@ STATEFUL = [
     ("outside",     "cloud",            "Outside",   "amber"),
     ("record",      "record-player",    "Record",    "amber"),
 
-    # row 3 — input_boolean toggles (blue = "mode", per the other decks)
+    # row 3 — mode toggles (blue = "mode", per the other decks). Cleaning
+    # follows input_select.house_mode, Guest its input_boolean, Fan the
+    # bathroom fan hold timer.
     ("cleaning",    "broom",            "Cleaning",  "blue"),
     ("guest",       "account-group",    "Guest",     "blue"),
-    ("awake",       "eye",              "Awake",     "blue"),
-    ("be_smart",    "brain",            "Be Smart",  "blue"),
     ("fan",         "emoticon-poop",    "Fan",       "blue"),
+
+    # Settings page row 1 — the house mode: Sleep toggles it, Autopilot is a
+    # read-only tile for binary_sensor.autopilot.
+    ("sleep",       "sleep",            "Sleep",     "blue"),
+    ("autopilot",   "robot",            "Autopilot", "blue"),
 
     # row 4 col 8 — keep-awake toggle, next to the Settings page-nav key.
     # Drives KeepingYouAwake.app on this Mac, not an HA entity

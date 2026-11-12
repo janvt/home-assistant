@@ -98,13 +98,30 @@ def _input_select(path: Path) -> dict:
 
 
 def _selected_options(path: Path) -> set[str]:
-    """Options the tracker's automations actually select."""
-    return {
-        step["data"]["option"]
-        for block in _automations(path)
-        for step in block.get("actions", [])
-        if isinstance(step, dict) and step.get("action") == "input_select.select_option"
-    }
+    """Options the tracker can select.
+
+    "Track active scene" is one automation for every scene: it triggers on a
+    list of scene entities and selects `trigger.entity_id.split('.')[1]`, so
+    the options it can produce are the names of the scenes it triggers on.
+    """
+    found: set[str] = set()
+    for block in _automations(path):
+        steps = [
+            step for step in block.get("actions", [])
+            if isinstance(step, dict) and step.get("action") == "input_select.select_option"
+        ]
+        if not steps:
+            continue
+        for step in steps:
+            assert "trigger.entity_id.split('.')[1]" in step["data"]["option"], (
+                f"{block.get('alias')}: option is no longer the triggering scene's name"
+            )
+        for trigger in block.get("triggers", []):
+            ids = trigger.get("entity_id", [])
+            for eid in [ids] if isinstance(ids, str) else ids:
+                assert eid.startswith("scene."), f"{eid} is not a scene"
+                found.add(eid.split(".", 1)[1])
+    return found
 
 
 def _scenes_activated_by(deck: str) -> set[str]:
@@ -167,14 +184,14 @@ def test_scene_tracker_declares_the_helper() -> None:
 
 
 def test_every_scene_automation_sets_a_declared_option() -> None:
-    """One automation per scene keeps the helper updated. Selecting an option
+    """The tracker selects the triggering scene's own name. Selecting an option
     outside the list makes Home Assistant log an error and the deck key never
     highlights.
     """
     options = set(_input_select(SCENE_TRACKER)["options"])
     selected = _selected_options(SCENE_TRACKER)
-    assert selected, "no scene automations found"
-    assert sorted(selected - options) == [], "automations select undeclared options"
+    assert selected, "no scene tracking automation found"
+    assert sorted(selected - options) == [], "tracked scenes with no matching option"
 
 
 def test_every_scene_has_an_automation_to_track_it() -> None:
