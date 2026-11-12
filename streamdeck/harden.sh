@@ -50,14 +50,20 @@ else
   echo 'dtparam=watchdog=on' | sudo tee -a "$CFG" >/dev/null
   set_ "enabled watchdog device in $CFG"; REBOOT=1
 fi
-SYSCONF=/etc/systemd/system.conf
-if grep -qxF 'RuntimeWatchdogSec=15' "$SYSCONF"; then
-  ok "RuntimeWatchdogSec=15 set"
+# The systemd side goes in a drop-in, not an edit of /etc/systemd/system.conf:
+# newer releases (Debian Trixie) keep the defaults under /usr/lib/systemd and
+# may not have that file at all, and Raspberry Pi OS ships its own watchdog
+# drop-in there (40-rpi-enable-watchdog.conf). A drop-in in /etc with a later
+# name wins over both, on Bookworm and Trixie alike.
+WDOG=/etc/systemd/system.conf.d/90-streamdeck-watchdog.conf
+WDOG_CONTENT='[Manager]
+RuntimeWatchdogSec=15'
+if [ "$(sudo cat "$WDOG" 2>/dev/null || true)" = "$WDOG_CONTENT" ]; then
+  ok "RuntimeWatchdogSec=15 set ($WDOG)"
 else
-  sudo sed -i 's/^#\?RuntimeWatchdogSec=.*/RuntimeWatchdogSec=15/' "$SYSCONF"
-  grep -qxF 'RuntimeWatchdogSec=15' "$SYSCONF" \
-    || echo 'RuntimeWatchdogSec=15' | sudo tee -a "$SYSCONF" >/dev/null
-  set_ "set RuntimeWatchdogSec=15 in $SYSCONF"; REBOOT=1
+  sudo mkdir -p "$(dirname "$WDOG")"
+  printf '%s\n' "$WDOG_CONTENT" | sudo tee "$WDOG" >/dev/null
+  set_ "set RuntimeWatchdogSec=15 in $WDOG"; REBOOT=1
 fi
 
 # 4. Unattended security upgrades
@@ -93,7 +99,8 @@ fi
 
 # 6. log2ram — RAM-back /var/log to cut SD-card writes (we're staying on SD).
 # Installs from the third-party azlux apt repo (the upstream/standard source for
-# log2ram). Needs a reboot to take effect. Default config RAM-backs /var/log at
+# log2ram; see https://github.com/azlux/log2ram). Needs a reboot to take
+# effect. Default config RAM-backs /var/log at
 # 40M, which covers journald/syslog churn; container logs live under
 # /var/lib/docker (already size-capped in compose), not /var/log.
 if dpkg -s log2ram >/dev/null 2>&1; then
@@ -101,9 +108,19 @@ if dpkg -s log2ram >/dev/null 2>&1; then
 else
   KEYRING=/usr/share/keyrings/azlux-archive-keyring.gpg
   LIST=/etc/apt/sources.list.d/azlux.list
+  PIN=/etc/apt/preferences.d/log2ram.pref
+  # The suite is this release's codename (bookworm, trixie, …), as upstream's
+  # install steps have it, not a fixed "stable".
+  CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
   [ -s "$KEYRING" ] || sudo curl -fsSL https://azlux.fr/repo.gpg -o "$KEYRING"
-  echo "deb [signed-by=$KEYRING] http://packages.azlux.fr/debian/ stable main" \
+  echo "deb [signed-by=$KEYRING] http://packages.azlux.fr/debian/ $CODENAME main" \
     | sudo tee "$LIST" >/dev/null
+  # Debian Trixie carries a log2ram package of its own, which upstream advises
+  # against (https://bugs.debian.org/1122989): pin the azlux one so apt picks
+  # it. Upstream writes this pin on Trixie only; it is harmless elsewhere and
+  # covers whatever release comes next.
+  printf '%s\n' 'Package: log2ram' 'Pin: origin packages.azlux.fr' 'Pin-Priority: 1001' \
+    | sudo tee "$PIN" >/dev/null
   sudo apt-get update -qq
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y log2ram >/dev/null
   set_ "installed log2ram (RAM-backed /var/log; azlux repo)"; REBOOT=1

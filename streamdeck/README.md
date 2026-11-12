@@ -348,9 +348,15 @@ watchdog:
 # Enable the watchdog device
 echo 'dtparam=watchdog=on' | sudo tee -a /boot/firmware/config.txt
 # Have systemd pet it and reboot on a hung host
-sudo sed -i 's/^#\?RuntimeWatchdogSec=.*/RuntimeWatchdogSec=15/' /etc/systemd/system.conf
+sudo mkdir -p /etc/systemd/system.conf.d
+printf '[Manager]\nRuntimeWatchdogSec=15\n' \
+  | sudo tee /etc/systemd/system.conf.d/90-streamdeck-watchdog.conf
 sudo reboot
 ```
+
+The systemd setting is a drop-in rather than an edit of
+`/etc/systemd/system.conf`: Debian Trixie may not have that file, and a
+drop-in in `/etc` works the same on Bookworm.
 
 **SD-card durability / power loss** — SD cards corrupt on abrupt power loss, and
 this deployment writes icon builds + logs. In rough priority:
@@ -361,7 +367,9 @@ this deployment writes icon builds + logs. In rough priority:
   cause reset loops — the same USB-link flakiness the [Troubleshooting](#troubleshooting)
   section warns about.
 - Staying on SD: `task harden` installs **`log2ram`** (RAM-backs `/var/log`,
-  syncing to disk periodically) to cut card writes. Container logs are already
+  syncing to disk periodically) to cut card writes. It comes from the azlux apt
+  repo for the running release's codename, pinned so apt prefers it over
+  Debian's own `log2ram` package (Trixie has one). Container logs are already
   size-capped in compose; keep icon rebuilds occasional. Needs a reboot to mount.
 
 **Unattended host patches + time sync** — for an always-on box:
