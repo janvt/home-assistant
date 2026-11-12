@@ -17,7 +17,7 @@ My Home Assistant setup: the bits that live in files rather than in the HA UI.
 | [`dashboards/health/`](dashboards/health/) | The Health dashboard: the Global Health Score (HAGHS) with its Pro card, what costs points and 30 days of the score. Not in the sidebar; the "HA health low" pill opens it. Has its own [README](dashboards/health/README.md). |
 | [`dashboards/mobile-alerts/`](dashboards/mobile-alerts/) | The alert pills on the Mobile dashboard: a row of icons that never wraps, and an Alerts sub-page. `pills.py` is the source of truth, `sync.py` loads it into the integration below. Has its own [README](dashboards/mobile-alerts/README.md). |
 | [`custom_components/alert_pills/`](custom_components/alert_pills/) | The **Alert Pills** integration that evaluates the pills, with options (switch pills or groups off, card only, row size) you can change from the phone. Installed through HACS from this repo ([`hacs.json`](hacs.json)). |
-| [`ha-scene-tracker.yaml`](ha-scene-tracker.yaml) | The `input_select.active_scene` helper plus one automation per scene. Both Stream Decks read this to highlight the active scene. |
+| [`ha-scene-tracker.yaml`](ha-scene-tracker.yaml) | The `input_select.active_scene` helper plus the one automation that tracks every scene. Both Stream Decks read this to highlight the active scene. |
 
 ## Tests
 

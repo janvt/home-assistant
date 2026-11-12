@@ -1,19 +1,21 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# M5Stack Dial — Active Scene Tracker
+# Active Scene Tracker
 #
 # PURPOSE
 #   A single input_select helper acts as the source of truth for "which scene
-#   is currently active".  One automation per scene keeps it updated.
-#   The M5Stack Dial reads this helper and highlights the active scene button.
+#   is currently active". One automation, "Track active scene", sets it to
+#   whichever scene was activated last. Both Stream Decks and the M5Stack Dial
+#   read this helper and highlight the active scene button; the Stream Deck
+#   scene toggle (script.streamdeck_scene_toggle) reads it too.
 #
 # TO ADD A NEW SCENE
-#   1. Add its name (lowercase) to the options list below
-#   2. Copy one of the automation blocks and change the entity_id and option
-#   3. Add a corresponding button on the dial (see m5-dial-volume.yaml)
+#   1. Add its name (lowercase, the part after `scene.`) to the options below
+#   2. Add the scene to the automation's trigger entity_id list
+#   3. Add a corresponding button on the decks / dial
 #
 # HOW TO RESET TO NONE
 #   Call  input_select.select_option  with option: none  from any automation,
-#   script, or the HA UI to clear the active scene indicator on the dial.
+#   script, or the HA UI to clear the active scene indicator.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Add to configuration.yaml (or your input_select.yaml if split):
@@ -34,108 +36,40 @@ input_select:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Add each block below to your automations.yaml file.
-- id: 'scene_vinyl_active'
-  alias: "Mark Vinyl scene active"
-  description: ''
+# Add the block below to your automations.yaml file.
+# It replaces the seven "Mark … scene active" automations. Scenes going
+# unavailable/unknown and coming back (restarts, scene reloads) are ignored:
+# those used to fire all seven at once.
+- id: '1793834156132'
+  alias: "Track active scene"
+  description: >-
+    Sets input_select.active_scene to whichever scene was activated last.
+    Ignores scenes going unavailable/unknown and coming back (restarts, scene
+    reloads). The Stream Deck scene toggle reads the helper.
   triggers:
   - trigger: state
-    entity_id: scene.vinyl
+    entity_id:
+    - scene.chill
+    - scene.cleaning
+    - scene.pain_cave
+    - scene.sleep
+    - scene.vinyl
+    - scene.work
+    - scene.work_s
+    not_from:
+    - unavailable
+    - unknown
+    not_to:
+    - unavailable
+    - unknown
   conditions: []
   actions:
   - action: input_select.select_option
     target:
       entity_id: input_select.active_scene
     data:
-      option: vinyl
-  mode: single
-
-- id: 'scene_chill_active'
-  alias: "Mark Chill scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.chill
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: chill
-  mode: single
-
-- id: 'scene_cleaning_active'
-  alias: "Mark Cleaning scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.cleaning
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: cleaning
-  mode: single
-
-- id: 'scene_pain_cave_active'
-  alias: "Mark Pain Cave scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.pain_cave
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: pain_cave
-  mode: single
-
-- id: 'scene_work_active'
-  alias: "Mark Work scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.work
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: work
-  mode: single
-
-- id: 'scene_work_s_active'
-  alias: "Mark Work S scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.work_s
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: work_s
-  mode: single
-
-- id: 'scene_sleep_active'
-  alias: "Mark Sleep scene active"
-  description: ''
-  triggers:
-  - trigger: state
-    entity_id: scene.sleep
-  conditions: []
-  actions:
-  - action: input_select.select_option
-    target:
-      entity_id: input_select.active_scene
-    data:
-      option: sleep
-  mode: single
+      # The option is the scene's own name: scene.work_s -> work_s. So every
+      # scene in the trigger list needs a matching option above.
+      option: "{{ trigger.entity_id.split('.')[1] }}"
+  mode: queued
+  max: 10

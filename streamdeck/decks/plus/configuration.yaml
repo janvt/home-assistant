@@ -83,15 +83,18 @@ pages:
         service: light.toggle
         text: ''
         icon: '{{ "/app/icons/outside_on.png" if is_state("light.balcony_ceiling_light", "on") else "/app/icons/outside_off.png" }}'
-      # Key 7: poop button — press triggers the "Keep bathroom fan on"
-      # automation; the icon/background reflect input_boolean.keep_bathroom_fan_on.
-      # `linked_entity` makes the button re-render when that helper changes,
-      # while `entity_id` keeps automation.trigger aimed at the automation.
-      - entity_id: automation.keep_bathroom_fan_on
-        linked_entity: input_boolean.keep_bathroom_fan_on
-        service: automation.trigger
+      # Key 7: poop button — tap starts timer.bathroom_fan_hold (15 min, the
+      # timer's own default), hold ~1s cancels it. Home Assistant does the rest:
+      # the timer starting switches the fan on, and "Bathroom lights" leaves the
+      # fan alone while it runs. Lit while the timer is active, whoever started
+      # it (this key, the wall button, a shower). Same tap/hold as the "Fan
+      # hold" tile on the mobile dashboard.
+      - entity_id: timer.bathroom_fan_hold
+        service: timer.start
         text: ''
-        icon: '{{ "/app/icons/fan_on.png" if is_state("input_boolean.keep_bathroom_fan_on", "on") else "/app/icons/fan_off.png" }}'
+        icon: '{{ "/app/icons/fan_on.png" if is_state("timer.bathroom_fan_hold", "active") else "/app/icons/fan_off.png" }}'
+        long_press:
+          service: timer.cancel
 
       # Key 8: mode button — cycles to the next view (next-page wraps around).
       - special_type: next-page
@@ -193,7 +196,7 @@ pages:
 
   # ═══════════════════════════════════════════════════════════════════════════
   # Page 2 — Shades: dials control shade positions, buttons handle whole-home
-  # actions and mode helpers. Key 8 mirrors Home's mode button to cycle back.
+  # actions and modes (guest helper, cleaning house mode). Key 8 mirrors Home's mode button to cycle back.
   # ═══════════════════════════════════════════════════════════════════════════
   - name: Shades
 
@@ -249,10 +252,17 @@ pages:
         icon: /app/icons/close_all.png
 
       # ── Col 3 bottom: cleaning mode ─────────────────────────────────────────
-      - entity_id: input_boolean.cleaning_mode
-        service: input_boolean.toggle
+      # Cleaning is a house mode now (input_select.house_mode), not a helper of
+      # its own. script.toggle_cleaning_mode switches into Cleaning, or out of
+      # it to Home/Away depending on whether Jan's iPhone is home. `entity_id`
+      # is the house mode so the key re-renders when it changes; the script to
+      # run is named in service_data.
+      - entity_id: input_select.house_mode
+        service: script.turn_on
+        service_data:
+          entity_id: script.toggle_cleaning_mode
         text: ''
-        icon: '{{ "/app/icons/cleaning_on.png" if is_state("input_boolean.cleaning_mode", "on") else "/app/icons/cleaning_off.png" }}'
+        icon: '{{ "/app/icons/cleaning_on.png" if is_state("input_select.house_mode", "cleaning") else "/app/icons/cleaning_off.png" }}'
 
       # ── Col 4 bottom: mode button (cycles pages) ────────────────────────────
       - special_type: next-page
