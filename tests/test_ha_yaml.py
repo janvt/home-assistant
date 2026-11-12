@@ -252,3 +252,30 @@ def test_scenes_the_decks_activate_are_tracked(deck: str) -> None:
     assert sorted(activated - options) == [], (
         f"decks/{deck} activates scenes the tracker does not know about"
     )
+
+
+def test_the_plus_listens_to_the_helpers_its_display_automation_writes() -> None:
+    """The hallway deck's brightness and screen on/off come from two helpers
+    named in its config; "Stream Deck Plus display" is what writes them. A
+    rename on either side breaks nothing loudly: the automation keeps running
+    against a helper nobody reads, and the deck stays at its startup
+    brightness forever.
+    """
+    deck = yaml.safe_load(config_path("plus").read_text())
+    listened = {deck.get("brightness_entity_id"), deck.get("state_entity_id")}
+    assert None not in listened, "the Plus config names no brightness/state helper"
+
+    written: set[str] = set()
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if str(node.get("action", "")).startswith(("input_number.", "input_boolean.")):
+                written.add(node["target"]["entity_id"])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(_load(AUTOMATION_DIR / "streamdeck_plus_display.yaml")["actions"])
+    assert written == listened

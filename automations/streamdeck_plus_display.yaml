@@ -1,0 +1,113 @@
+# Brightness and on/off for the hallway Stream Deck Plus.
+#
+# The deck listens to two helpers (decks/plus/configuration.yaml:
+# `brightness_entity_id` and `state_entity_id`); this automation is the only
+# thing that writes them. Both were created in Home Assistant, not here:
+#
+#   input_number.streamdeck_plus_brightness   0-100, step 1
+#   input_boolean.streamdeck_plus_on
+#
+# The rules, in order:
+#   house mode away   -> screen off (any key press wakes it again: the app
+#                        turns the toggle back on itself). Not while guest
+#                        mode is on: guests are in the flat when Jan is away,
+#                        and the deck then behaves as it does at home.
+#   house mode sleep  -> on, brightness 10: readable on the way to the
+#                        bathroom, not a night light
+#   otherwise         -> on, by time of day: 80 from 06:00, 60 from sunset,
+#                        30 from whichever comes first of sunset + 3 h and 23:00
+#
+# The time-of-day part is the same schedule as "Set XL Brightness" (which
+# lives in Home Assistant only). The house mode part is what the hallway deck
+# has and the desk deck does not.
+alias: Stream Deck Plus display
+description: >-
+  Hallway Stream Deck Plus: off while the house mode is away (unless guest
+  mode is on), brightness 10 in sleep, otherwise by time of day (80 from
+  06:00, 60 from sunset, 30 from whichever comes first of sunset + 3 h and
+  23:00). Recomputed on every house mode or guest mode change and on startup,
+  so a missed trigger fixes itself.
+id: streamdeck_plus_display
+# queued: a mode change landing on a time trigger must not be dropped.
+mode: queued
+max: 5
+triggers:
+  - trigger: time
+    at: "06:00:00"
+    id: "80"
+  - trigger: time
+    at: sensor.sun_next_setting
+    id: "60"
+  - trigger: time
+    at:
+      entity_id: sensor.sun_next_setting
+      offset: "03:00:00"
+    id: "30"
+  - trigger: time
+    at: "23:00:00"
+    id: "30"
+  - trigger: state
+    entity_id: input_select.house_mode
+    not_to:
+      - unavailable
+      - unknown
+    id: resync
+  # Guest mode switched on or off while away: the screen follows at once.
+  - trigger: state
+    entity_id: input_boolean.guest_mode
+    not_to:
+      - unavailable
+      - unknown
+    id: resync
+  - trigger: homeassistant
+    event: start
+    id: resync
+conditions: []
+actions:
+  - variables:
+      # A time trigger carries its value as its id. Anything else (mode
+      # change, startup, a manual run, which has no trigger id at all) works
+      # the value out from the clock. At the sunset trigger itself
+      # sensor.sun_next_setting may or may not have rolled over to tomorrow
+      # yet, which is why that trigger does not go through the clock branch.
+      by_time: >-
+        {%- set id = trigger.id | default('resync') -%}
+        {%- if id != 'resync' -%}
+          {{ id | int }}
+        {%- else -%}
+          {%- set n = now() -%}
+          {%- set nxt = as_datetime(states('sensor.sun_next_setting')) -%}
+          {%- set sunset_today = nxt - timedelta(days=1)
+                if is_state('sun.sun', 'below_horizon') and n.hour >= 12 else nxt -%}
+          {%- set night = [sunset_today + timedelta(hours=3),
+                           n.replace(hour=23, minute=0, second=0, microsecond=0)] | min -%}
+          {%- if n.hour < 6 -%}30
+          {%- elif n < sunset_today -%}80
+          {%- elif n < night -%}60
+          {%- else -%}30
+          {%- endif -%}
+        {%- endif -%}
+      value: >-
+        {{ 10 if is_state('input_select.house_mode', 'sleep') else by_time | int }}
+  # Brightness first: the app stores it while the screen is off and applies it
+  # when the screen comes back on.
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.streamdeck_plus_brightness
+    data:
+      value: "{{ value }}"
+  - if:
+      - condition: state
+        entity_id: input_select.house_mode
+        state: away
+      - condition: state
+        entity_id: input_boolean.guest_mode
+        state: "off"
+    then:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.streamdeck_plus_on
+    else:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.streamdeck_plus_on
