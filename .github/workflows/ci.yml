@@ -42,12 +42,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The floor is the oldest Python a deck actually runs on: the Pi's
-        # Raspberry Pi OS Bookworm ships 3.11 (the upstream app itself still
-        # allows >= 3.10, which went end-of-life in October 2026). The ceiling
-        # is what the Mac deck runs on. Raise both with the hosts, and keep
-        # MINPY in streamdeck/Taskfile.yml in step with the floor.
-        python: ["3.11", "3.13"]
+        # The Python the decks actually run on. Both hosts are on 3.13: the
+        # Mac, and the Pi since it moved to Raspberry Pi OS Trixie (it was
+        # 3.11 on Bookworm, which used to be the floor here). The upstream
+        # app itself still allows >= 3.10. If the hosts ever diverge again,
+        # list both versions, and keep MINPY in streamdeck/Taskfile.yml in
+        # step with the oldest.
+        python: ["3.13"]
     steps:
       - uses: actions/checkout@v7
 

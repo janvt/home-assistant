@@ -43,7 +43,7 @@ names the failure it guards against; keep new tests in that style.
 - ESPHome needs pydantic v2, the Stream Deck app pins `<2`: they never share a venv.
 - Known gaps against current ESPHome are recorded as non-strict `xfail` with a
   reason (`KNOWN_VALIDATION_GAPS`), not skipped.
-- Python floor is 3.11 (the Pi), ceiling 3.13 (the Mac). CI runs both.
+- Python is 3.13 on both hosts (the Mac, and the Pi on Trixie), and that is what CI runs. `MINPY` in `streamdeck/Taskfile.yml` enforces it.
 
 ## Conventions
 

@@ -17,15 +17,16 @@ vars:
   PIP: '{{.VENV}}/bin/pip'
   XLVENV: decks/plus-xl/.venv
   XLLABEL: com.janvt.streamdeck-xl
-  # Oldest Python we run and test (CI's matrix floor — keep them in step). The
-  # upstream app still allows 3.10, but nothing here runs it any more.
-  MINPY: '3.11'
-  # macOS ships 3.9 as `python3` (Xcode CLT), so pick the newest suitable
-  # interpreter on PATH; override with XLPY=... if you want a specific one.
+  # Oldest Python we run and test (CI's matrix — keep them in step). Both
+  # hosts run 3.13: the Mac, and the Pi since it moved to Trixie (it was 3.11
+  # on Bookworm). The upstream app still allows 3.10, but nothing here runs it.
+  MINPY: '3.13'
+  # macOS ships 3.9 as `python3` (Xcode CLT), so look for python3.13 on PATH
+  # first; override with XLPY=... if you want a specific one.
   # Used for every venv here, the image renderer's included.
   XLPY:
     sh: |
-      for p in python3.13 python3.12 python3.11; do
+      for p in python3.13; do
         command -v "$p" 2>/dev/null && exit 0
       done
       command -v python3
