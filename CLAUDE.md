@@ -10,7 +10,6 @@ own README with the full context.
 | `m5stack/` | ESPHome configs for M5Stack Core, CoreS3, Dial | the YAML headers |
 | `kitchen-timer/` | DIY 7-segment kitchen timer: ESPHome config, custom `mux7seg` component, HA-owned timer | `kitchen-timer/README.md` (architecture, hardware, decision log) |
 | `dashboards/weather/` | The Weather dashboard (earthquakes from SED too), built end to end from `locations.py` and pushed by `sync.py` (shares `dashboards/ha_client.py` and `.env` with the pills) | `dashboards/weather/README.md` |
-| `dashboards/trains/` | The Trains debug dashboard for Frigate on the train tracks, built by `build.py` and pushed by `sync.py` | `dashboards/trains/README.md` |
 | `dashboards/vpn/` | The VPN usage dashboard (not in the sidebar; the VPN alert pills link to it), built by `build.py` and pushed by `sync.py` | `dashboards/vpn/README.md` |
 | `dashboards/infrastructure/` | The Infrastructure dashboard (Gotthard tunnel, from the Gotthard integration; passes nearby, from Alpine Passes), built by `build.py` and pushed by `sync.py` | `dashboards/infrastructure/README.md` |
 | `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
@@ -31,7 +30,7 @@ task test:alert-pills    # the integration in HA's test harness, separate venv
 
 The root `Taskfile.yml` pulls in `streamdeck/Taskfile.yml` flat (Task >= 3.39),
 so everything runs from the repo root. Dashboards push to HA with
-`task sync:<name>` (weather, trains, vpn, infrastructure, alert-pills, or
+`task sync:<name>` (weather, vpn, infrastructure, alert-pills, or
 `all`): a dry run unless you pass `-- --apply`. They read the token from
 `dashboards/.env`.
 

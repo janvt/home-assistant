@@ -43,10 +43,6 @@ tasks:
     desc: Sync the Weather dashboard (dry run; pass -- --apply to change HA)
     cmds: [{task: sync, vars: {DASH: weather}}]
 
-  sync:trains:
-    desc: Sync the Trains dashboard (dry run; pass -- --apply to change HA)
-    cmds: [{task: sync, vars: {DASH: trains}}]
-
   sync:vpn:
     desc: Sync the VPN dashboard (dry run; pass -- --apply to change HA)
     cmds: [{task: sync, vars: {DASH: vpn}}]
@@ -63,7 +59,6 @@ tasks:
     desc: Sync every dashboard, one after another (dry run; pass -- --apply to change HA)
     cmds:
       - task: sync:weather
-      - task: sync:trains
       - task: sync:vpn
       - task: sync:infrastructure
       - task: sync:alert-pills

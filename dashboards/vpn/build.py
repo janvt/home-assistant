@@ -3,7 +3,7 @@ egress the WireGuard VPN has used, and what the AWS account costs so far.
 
 Not in the sidebar: the VPN alert pills on the Mobile dashboard link here
 (`LINK`, used by `mobile-alerts/pills.py`). `build()` returns the whole config,
-owned by the script like the Trains one: a card added in the UI is gone after
+owned by the script: a card added in the UI is gone after
 the next sync.
 
 Everything on it comes from the wg-vpn Terraform stack's EventBridge webhook

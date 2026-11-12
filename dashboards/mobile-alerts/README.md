@@ -55,15 +55,8 @@ dashboard's Earthquakes page.
   when it's missing and never touches its value; change it on the Alerts page.
 - A few pills read a **Statistics** helper (`STATISTICS` in `pills.py`), e.g.
   Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
-- The train counts are **History stats** helpers (`HISTORY_STATS`), kept here
-  for the Trains dashboard; no pill reads them. `sensor.trains_today` counts how often `binary_sensor.train_passing` turned
-  on since midnight. That one is a plain template helper (`TEMPLATES`) on
-  Frigate's train-on-the-track sensor, held on for 30 s so a train that
-  flickers out of the zone counts once. `sensor.trains_this_hour` counts the
-  same per hour; both keep long-term statistics for the Trains dashboard's
-  bar charts. The `_tele` versions (`binary_sensor.train_passing_tele`,
-  `sensor.trains_today_tele`, `sensor.trains_this_hour_tele`) count the same
-  from the iPhone camera `train_tele`, in parallel, to compare the two.
+- `sync.py` can also create template and History stats helpers (`TEMPLATES`,
+  `HISTORY_STATS`); none are defined at the moment.
 - A pill with `content` shows that template next to its icon in the row, e.g.
   the house mode.
 - The weather chips row above it is never touched. `build.apply` refuses to run
