@@ -37,7 +37,7 @@ share the renderer, the palette, and the Home-Assistant-side helpers.
 
 **Raspberry Pi (Plus)**
 
-- Raspberry Pi 5 running a 64-bit OS (Raspberry Pi OS Bookworm or similar), headless.
+- Raspberry Pi 5 running a 64-bit OS (Raspberry Pi OS Trixie, i.e. Debian 13 with Python 3.13), headless.
 - Docker Engine + Compose plugin:
   ```bash
   curl -fsSL https://get.docker.com | sh
@@ -47,7 +47,9 @@ share the renderer, the palette, and the Home-Assistant-side helpers.
 - Renderer deps + go-task:
   ```bash
   sudo apt-get install -y python3-venv fonts-dejavu-core
-  sudo snap install task --classic   # or: see taskfile.dev/installation
+  # go-task: snapd isn't preinstalled on Raspberry Pi OS, so use the install
+  # script (or see taskfile.dev/installation for other ways)
+  sudo sh -c "$(curl -fsSL https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
   ```
 
 **Mac (Plus XL)** — *not* Docker: Docker Desktop on macOS runs in a VM with no
@@ -58,12 +60,12 @@ side; it needs Homebrew libs, go-task, and a modern Python:
 brew install go-task hidapi cairo libffi python@3.13
 ```
 
-> **Python ≥ 3.11 required.** macOS ships 3.9 as `python3` (from the Xcode
-> command line tools), which is too old. The Taskfile picks the newest
-> `python3.13/3.12/3.11` it finds on PATH for every venv, the image renderer's
-> included, and fails with a clear message if none qualifies; override with
-> `task xl:install XLPY=/path/to/python3.13`. 3.11 is the oldest a deck runs
-> (the Pi's Bookworm) and what CI tests as the floor.
+> **Python ≥ 3.13 required.** macOS ships 3.9 as `python3` (from the Xcode
+> command line tools), which is too old. The Taskfile looks for `python3.13`
+> on PATH for every venv, the image renderer's included, and fails with a
+> clear message if what it finds is older; override with
+> `task xl:install XLPY=/path/to/python3.13`. 3.13 is what both hosts run (the
+> Mac, and the Pi on Trixie) and what CI tests.
 
 > **Plus XL needs the library from git.** `StreamDeckPlusXL` exists only on
 > `python-elgato-streamdeck`'s `master` — the latest release (0.9.8) has neither
