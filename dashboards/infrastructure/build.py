@@ -3,7 +3,7 @@ tunnels around us. The Gotthard view has the road tunnel; the Roads view the
 Axenstrasse and the closures of the A2 and A4, each way; the Passes view the
 alpine passes nearby; the Flights view the planes overhead, from FlightRadar24.
 
-`build()` returns the whole config, owned by the script like the Trains one: a
+`build()` returns the whole config, owned by the script: a
 card added in the UI is gone after the next sync.
 
 Everything on the Gotthard view comes from the Gotthard integration
