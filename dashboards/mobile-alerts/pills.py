@@ -29,7 +29,7 @@ def since(e,sec):
 # after that it's yours: the sync never touches who has it.
 IGNORE_LABEL="no_alert_pills"
 IGNORE_LABEL_NAME="No alert pills"
-IGNORED_AT_FIRST=["sensor.iphone_battery_level","sensor.jans_ipad_battery_level","sensor.sm_f741b_battery_level","sensor.silvs_iphone_battery_level"]
+IGNORED_AT_FIRST=["sensor.iphone_battery_level","sensor.jans_ipad_battery_level","sensor.silvs_iphone_battery_level"]
 SKIP=("{% set skip = label_entities('"+IGNORE_LABEL+"') + (label_devices('"+IGNORE_LABEL+"') | map('device_entities') | sum(start=[])) %}")
 LOWBAT=(SKIP+
         "{% set low = states.sensor | selectattr('attributes.device_class','defined') | selectattr('attributes.device_class','eq','battery')"
@@ -91,10 +91,6 @@ def warn_lines(entities):
             "{{ ' · ' if ns.seen|count > 1 }}{{ w.event }} ({{ w.level }}, {{ w.region }}) "
             "{{ ('until ' ~ off.strftime('%a %H:%M')) if on <= now() else ('from ' ~ on.strftime('%a %H:%M') ~ ' to ' ~ off.strftime('%a %H:%M')) }}"
             "{% endif %}{% endfor %}{% endfor %}")
-# Global Health Score (HACS): the score and, from its attributes, what costs points.
-HEALTH="sensor.system_ha_global_health_score"
-HEALTH_LINK="/dashboard-health/score"  # dashboards/health/build.py LINK, the HAGHS Pro card
-HEALTH_LINES=("{{ (state_attr('"+HEALTH+"','recommendations') or 'Nothing to fix.').split('\\n') | map('trim') | reject('eq','') | join(' · ') }}")
 LIGHTNING="sensor.altdorf_lightning"
 COMPASS=("{% set az = states('"+LIGHTNING+"_azimuth')|float(-1) %}"
          "{{ ['N','NE','E','SE','S','SW','W','NW'][((az + 22.5) // 45)|int % 8] if az >= 0 else '' }}")
@@ -138,19 +134,16 @@ TRAIN_PASSING="binary_sensor.train_passing"
 TRAINS_TODAY="sensor.trains_today"
 TRAINS_THIS_HOUR="sensor.trains_this_hour"
 # The same count from the iPhone (Frigate camera train_tele, no zone yet), run
-# in parallel to compare the two cameras. The pill stays on the Reolink one.
+# in parallel to compare the two cameras.
 TELE_TRAIN="binary_sensor.train_tele_train_occupancy"
 TELE_PASSING="binary_sensor.train_passing_tele"
 TELE_TODAY="sensor.trains_today_tele"
 TELE_THIS_HOUR="sensor.trains_this_hour_tele"
-# The last match to the timetable per camera, written by the Trains dashboard's
-# sync (dashboards/trains/timetable.py).
-LAST_TRAIN="input_text.last_train"
-LAST_TRAIN_TELE="input_text.last_train_tele"
 HOLD={"additional_options": {"delay_off": {"hours": 0, "minutes": 0, "seconds": 30}}}
 TODAY_START="{{ today_at() }}"
 HOUR_START="{{ now().replace(minute=0, second=0, microsecond=0) }}"
-# Template helpers the pills read that aren't pills; sync.py creates and updates them.
+# Template helpers for the Trains dashboard's counts (no pill reads them any more);
+# sync.py creates and updates them.
 TEMPLATES=[dict(entity=TRAIN_PASSING, kind="binary_sensor", name="Train passing",
                 tmpl="{{ is_state('"+TRAIN_ON_TRACK+"','on') }}", extra=HOLD),
            dict(entity=TELE_PASSING, kind="binary_sensor", name="Train passing tele",
@@ -298,6 +291,11 @@ OUTAGE_START="input_datetime.mains_outage_started"
 SHUTDOWN="script.home_lab_graceful_shutdown"
 UPS_THRESHOLD="input_number.ups_shutdown_threshold"
 UPS_HOURS="(("+f(UPS_PCT)+" - "+f(UPS_THRESHOLD,50)+") / 100 * "+f(UPS_CAP,1040)+" / "+f(UPS_LOAD,75)+")"
+def no_data(e,what,line):
+    """`line`, or a plain "no reading" when the pill's source is gone or silent:
+    a pill on a dead entity is off, which reads as "all fine"."""
+    return ("{% if states('"+e+"') in ['unknown','unavailable'] %}**No reading:** "+what+" isn't reporting, so this alert can't turn on."
+            "{% else %}"+line+"{% endif %}")
 # Pills you clear by acting (closing a door, checking the fridge) rather than
 # by acknowledging them. These can't be dismissed on the Alerts page.
 CRITICAL={"smoke_or_co","front_door_open","unlocked_nobody_home","fridge_open","fridge_not_cooling","heating_while_away"}
@@ -461,24 +459,11 @@ ALERTS=[
    rule="On when the Nabu Casa remote UI is disconnected.",
    data=[("binary_sensor.remote_ui","Remote UI")],hist=["binary_sensor.remote_ui"]),
  dict(key="backup_overdue",group="Maintenance",name="Backup overdue",icon="mdi:backup-restore",color="orange",
-   tmpl="{{ is_state('binary_sensor.backups_stale','on') or (states('sensor.backup_last_successful_automatic_backup') not in ['unknown','unavailable'] and now() - as_datetime(states('sensor.backup_last_successful_automatic_backup')) > timedelta(days=2)) }}",
+   tmpl="{{ states('sensor.backup_last_successful_automatic_backup') not in ['unknown','unavailable'] and now() - as_datetime(states('sensor.backup_last_successful_automatic_backup')) > timedelta(days=2) }}",
    secondary="Last good backup {{ as_datetime(states('sensor.backup_last_successful_automatic_backup')) | relative_time }} ago · next {{ (states('sensor.backup_next_scheduled_automatic_backup')|as_datetime|as_local).strftime('%a %H:%M') if states('sensor.backup_next_scheduled_automatic_backup') not in ['unknown','unavailable'] }}",
-   rule="On when the last successful automatic backup is more than 2 days old, or HA flags its backups as stale.",
+   rule="On when the last successful automatic backup is more than 2 days old.",
    data=[("sensor.backup_last_successful_automatic_backup","Last successful"),("sensor.backup_last_attempted_automatic_backup","Last attempted"),
          ("sensor.backup_next_scheduled_automatic_backup","Next scheduled"),("sensor.backup_backup_manager_state","Backup manager")],hist=[]),
-# The Global Health Score integration (HACS) rates HA itself, 0-100 %: hardware
-# (CPU, RAM, IO, disk, power), application (zombie and stale entities, dead
-# devices, failed integrations, repairs, updates, backups) and a config audit
-# bonus. Its `recommendations` attribute is one line per thing costing points.
-# It sat at 94 % with four integrations failing to set up, so 85 % means more
-# than one or two small things are wrong.
- dict(key="ha_health_low",group="Maintenance",name="HA health low",icon="mdi:shield-alert",color="orange",
-   tmpl="{{ states('"+HEALTH+"') not in ['unknown','unavailable'] and "+f(HEALTH,100)+" < 85 }}",
-   content="{{ "+f(HEALTH,0)+"|int }}%",
-   secondary="{{ "+f(HEALTH,0)+"|int }} % · "+HEALTH_LINES,
-   summary="{{ states('"+HEALTH+"') }} % · hardware {{ state_attr('"+HEALTH+"','hardware_score') }} %, apps {{ state_attr('"+HEALTH+"','application_score') }} %<br>"+HEALTH_LINES,
-   rule="On when the Global Health Score drops below 85 %. It weighs the hardware (CPU, RAM, IO, disk, power) against HA itself (failed integrations, zombie and stale entities, dead devices, repairs, pending updates, stale backups); the card lists what costs points, and opens the Health dashboard with the integration's Pro card.",
-   data=[(HEALTH,"Global health score")],hist=[HEALTH],link=HEALTH_LINK),
  dict(key="air_stuffy",group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
    tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
    secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
@@ -666,9 +651,6 @@ ALERTS=[
  dict(key="guests",group="Calendar",name="Guests",icon="mdi:account-group",color="purple",
    tmpl="{{ is_state('input_boolean.guest_mode','on') }}",secondary="Guest mode is on",
    rule="On while guest mode is on.",data=[("input_boolean.guest_mode","Guest mode")],hist=[]),
- dict(key="cleaning",group="Calendar",name="Cleaning mode",icon="mdi:broom",color="brown",
-   tmpl="{{ is_state('input_boolean.cleaning_mode','on') }}",secondary="Cleaning mode is on",
-   rule="On while cleaning mode is on.",data=[("input_boolean.cleaning_mode","Cleaning mode")],hist=[]),
  dict(key="house_mode",group="Calendar",name="House mode",icon="mdi:home-switch-outline",color="blue-grey",
    tmpl="{{ states('input_select.house_mode') not in ['home','away','unknown','unavailable'] }}",
    content="{{ states('input_select.house_mode')|capitalize }}",
@@ -727,6 +709,7 @@ ALERTS=[
  dict(key="server_hot",group="Proxmox",name="Server running hot",icon="mdi:thermometer-high",color="red",
    tmpl="{{ states('"+PROX+"_cpu_temperature')|float(0) > 80 }}",
    secondary="CPU at {{ states('"+PROX+"_cpu_temperature')|round(0)|int }} °C, {{ states('"+PROX+"_cpu_usage')|round(0)|int }} % busy · NVMe {{ states('"+PROX+"_micron_mtfdkcd1t0tfk_953gb')|round(0)|int }} °C",
+   summary=no_data(PROX+"_cpu_temperature","the Proxmox sidecar (it reads the temperatures)","CPU at {{ states('"+PROX+"_cpu_temperature')|float(0)|round(0)|int }} °C"),
    rule="On when the Proxmox host's CPU is above 80 °C.",
    data=[(PROX+"_cpu_temperature","CPU temperature"),(PROX+"_cpu_usage","CPU usage"),(PROX+"_micron_mtfdkcd1t0tfk_953gb","NVMe temperature")],
    hist=[PROX+"_cpu_temperature"]),
@@ -825,18 +808,6 @@ ALERTS=[
  month_pill("sunny_month","Sunny month","mdi:white-balance-sunny","yellow",SUN_PCT+" > 150",MONTH_TEXT,"On when Altdorf has had more than 150 % of the month's normal sunshine."),
  month_pill("grey_month","Grey month","mdi:weather-cloudy","grey",SUN_PCT+" < 50",MONTH_TEXT,"On when Altdorf has had less than half the month's normal sunshine."),
  month_pill("warm_month","Warm month","mdi:trending-up","orange",MONTH_T+" >= 2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C warmer than normal."),
- dict(key="trains_today",group="Travel",name="Trains today",icon="mdi:train",color="green",
-   tmpl="{{ states('"+TRAINS_TODAY+"')|int(0) > 0 or states('"+TELE_TODAY+"')|int(0) > 0 }}",
-   # Both cameras while they're compared: "Reolink|iPhone".
-   content="{{ states('"+TRAINS_TODAY+"')|int(0) }}|{{ states('"+TELE_TODAY+"')|int(0) }}",
-   secondary="Reolink {{ states('"+TRAINS_TODAY+"')|int(0) }}, iPhone {{ states('"+TELE_TODAY+"')|int(0) }} trains since midnight"
-             "{{ ' · one on the track now' if is_state('"+TRAIN_PASSING+"','on') or is_state('"+TELE_PASSING+"','on') }}",
-   summary="Last train, Reolink: {{ states('"+LAST_TRAIN+"') if states('"+LAST_TRAIN+"') not in ['unknown',''] else '–' }}<br>"
-           "Last train, iPhone: {{ states('"+LAST_TRAIN_TELE+"') if states('"+LAST_TRAIN_TELE+"') not in ['unknown',''] else '–' }}",
-   rule="On from the first train of the day; the row shows the count of each camera, Reolink|iPhone. The Reolink counts a train when Frigate sees it in the track zone of the full-resolution crop camera, the iPhone anywhere in its picture; one that drops out for under 30 s still counts once. Each train is matched to the timetable (dashboards/trains/timetable.py).",
-   data=[(TRAINS_TODAY,"Reolink today"),(TELE_TODAY,"iPhone today"),(TRAIN_PASSING,"Reolink: train passing"),
-         (TELE_PASSING,"iPhone: train passing"),(LAST_TRAIN,"Reolink: last train"),(LAST_TRAIN_TELE,"iPhone: last train")],
-   hist=[TRAIN_PASSING,TELE_PASSING]),
  month_pill("cold_month","Cold month","mdi:trending-down","light-blue",MONTH_T+" <= -2",MONTH_TEXT,"On when the month in Altdorf is running at least 2 °C colder than normal."),
 ]
 GROUPS=["Safety","Kitchen","Travel","Rivers","Earthquakes","Forecast","Weather now","Mountains","Home","Calendar","Climate","Proxmox","VPN","Maintenance"]

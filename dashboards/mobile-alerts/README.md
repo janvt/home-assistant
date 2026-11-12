@@ -55,19 +55,17 @@ dashboard's Earthquakes page.
   when it's missing and never touches its value; change it on the Alerts page.
 - A few pills read a **Statistics** helper (`STATISTICS` in `pills.py`), e.g.
   Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
-- "Trains today" reads a **History stats** helper (`HISTORY_STATS`):
-  `sensor.trains_today` counts how often `binary_sensor.train_passing` turned
+- The train counts are **History stats** helpers (`HISTORY_STATS`), kept here
+  for the Trains dashboard; no pill reads them. `sensor.trains_today` counts how often `binary_sensor.train_passing` turned
   on since midnight. That one is a plain template helper (`TEMPLATES`) on
   Frigate's train-on-the-track sensor, held on for 30 s so a train that
   flickers out of the zone counts once. `sensor.trains_this_hour` counts the
   same per hour; both keep long-term statistics for the Trains dashboard's
   bar charts. The `_tele` versions (`binary_sensor.train_passing_tele`,
   `sensor.trains_today_tele`, `sensor.trains_this_hour_tele`) count the same
-  from the iPhone camera `train_tele`, in parallel, to compare the two; the
-  pill shows both counts while the cameras are compared, "Reolink|iPhone", and
-  its Alerts card both last trains matched to the timetable.
+  from the iPhone camera `train_tele`, in parallel, to compare the two.
 - A pill with `content` shows that template next to its icon in the row, e.g.
-  the number of trains.
+  the house mode.
 - The weather chips row above it is never touched. `build.apply` refuses to run
   if the first card on the dashboard isn't that row any more.
 
@@ -115,7 +113,7 @@ stations, Bergfex, Aqara/Zigbee door and temperature sensors, the Nuki lock,
 Athom plugs, the ultimatesensor, Blitzortung, FOEN river data, MeteoSwiss pollen, Proxmox (node, guests, storages), FlightRadar24, SED earthquakes, Swiss public
 transport, Workday (Uri and Zürich), calendars (birthdays, Swiss holidays,
 copebit, copebit vacations, iCloud Home, ZAKU waste collection: cardboard only), Meross
-thermostats, Backup, the Global Health Score (HACS), UniFi, Sonos, Spotify and `update.*`.
+thermostats, Backup, UniFi, Sonos, Spotify and `update.*`.
 "Home" is Altdorf (HA's home zone): the rain, frost, shades and fog pills read
 Altdorf's sensors. Schlieren and Zürich only appear as a comparison (föhn). A renamed entity doesn't
 break anything loudly: its pill just stops turning on. The Alerts page shows
