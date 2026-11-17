@@ -69,6 +69,12 @@ SOON=("{% set a = now().strftime('%Y-%m-%d %H:%M:%S') %}{% set b = (now() + time
       "{% set ns = namespace(ev=[]) %}{% for c in "+str(CALENDARS)+" %}{% set s = state_attr(c,'start_time') or '' %}"
       "{% if not state_attr(c,'all_day') and a < s <= b %}{% set ns.ev = ns.ev + [{'t': s, 'm': state_attr(c,'message'), 'c': state_attr(c,'friendly_name')}] %}{% endif %}{% endfor %}"
       "{% set ev = ns.ev | sort(attribute='t') %}")
+# Ping integration sensors along the way out: UniFi → Salt Box (10.69.1.1) →
+# Salt's first hop past it (10.124.118.1) → Cloudflare (1.1.1.1). Which one
+# goes quiet says where the line broke.
+SALT_BOX="binary_sensor.salt_box_ping"
+SALT_LINE="binary_sensor.salt_line_ping"
+INTERNET="binary_sensor.internet_ping"
 OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),
          ("binary_sensor.athom_smart_plug_fridge_status","Fridge plug"),("binary_sensor.aqara_fridge","Fridge door sensor"),
          ("sensor.aqara_fridge_temp_temperature","Fridge thermometer"),("binary_sensor.aquara_smoke_acn03","Smoke detector"),
@@ -336,6 +342,17 @@ ALERTS=[
    summary=DOWN+"{{ (ns.d | join(', ') ~ ' offline') if ns.d else 'All key devices are online.' }}",
    rule="On when one of the key devices (camera, Nuki lock, fridge plug and sensors, smoke detector, ultimatesensor, home gym WLED, router) is unavailable or reports itself disconnected. Anything labelled \"No alert pills\" (the entity or its device) is left out.",
    data=OFFLINE[:6],hist=[]),
+ dict(key="salt_box_down",group="Maintenance",name="Salt Box down",icon="mdi:router-wireless-off",color="red",
+   tmpl="{{ is_state('"+SALT_BOX+"','off') }}",
+   secondary="Not answering for {{ states."+SALT_BOX+".last_changed | as_local | relative_time }} · restart the Salt Box",
+   rule="On while the Salt Box (10.69.1.1, between the UniFi router and the fibre) doesn't answer pings. Everything past it is unreachable then too.",
+   data=[(SALT_BOX,"Salt Box"),(SALT_LINE,"Salt line"),(INTERNET,"Internet")],hist=[SALT_BOX,INTERNET]),
+ dict(key="internet_down",group="Maintenance",name="Internet down",icon="mdi:web-off",color="red",
+   tmpl="{{ is_state('"+INTERNET+"','off') and is_state('"+SALT_BOX+"','on') }}",
+   secondary="{% if is_state('"+SALT_LINE+"','off') %}Salt Box answers, Salt's line doesn't: the fibre or Salt{% else %}Salt's line answers, 1.1.1.1 doesn't: further out{% endif %}"
+             " · down for {{ states."+INTERNET+".last_changed | as_local | relative_time }}",
+   rule="On when 1.1.1.1 stops answering pings while the Salt Box still does. If Salt's first hop past the box (10.124.118.1) is quiet too, the break is the line or Salt; if it answers, it's further out.",
+   data=[(INTERNET,"Internet (1.1.1.1)"),(SALT_LINE,"Salt line (10.124.118.1)"),(SALT_BOX,"Salt Box (10.69.1.1)")],hist=[INTERNET,SALT_LINE,SALT_BOX]),
 # The bedroom blinds' Shelly 2PM sits in the tightest wall box in the flat,
 # right where the motor cable's conduit comes in from the cold blind housing.
 # Its predecessor died of condensate corrosion (Nov 2026): first the radio,
