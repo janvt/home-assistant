@@ -75,6 +75,14 @@ SOON=("{% set a = now().strftime('%Y-%m-%d %H:%M:%S') %}{% set b = (now() + time
 SALT_BOX="binary_sensor.salt_box_ping"
 SALT_LINE="binary_sensor.salt_line_ping"
 INTERNET="binary_sensor.internet_ping"
+# Pings can pass while nothing else does (Salt, 2026-11-18: two hours of no web
+# with all three pings green). These two go unavailable when a name lookup
+# (DNS IP integration: www.google.com via 1.1.1.1) or a page load (Scrape:
+# https://www.google.com/) fails.
+DNS_CHECK="sensor.dns_check"
+WEB_CHECK="sensor.web_check"
+DNS_BAD="(states('"+DNS_CHECK+"') in ['unavailable','unknown'] and "+since(DNS_CHECK,300)+")"
+WEB_BAD="(states('"+WEB_CHECK+"') in ['unavailable','unknown'] and "+since(WEB_CHECK,300)+")"
 OFFLINE=[("camera.g4_instant_high_resolution_channel","G4 Instant camera"),
          ("binary_sensor.athom_smart_plug_fridge_status","Fridge plug"),("binary_sensor.aqara_fridge","Fridge door sensor"),
          ("sensor.aqara_fridge_temp_temperature","Fridge thermometer"),("binary_sensor.aquara_smoke_acn03","Smoke detector"),
@@ -353,6 +361,12 @@ ALERTS=[
              " · down for {{ states."+INTERNET+".last_changed | as_local | relative_time }}",
    rule="On when 1.1.1.1 stops answering pings while the Salt Box still does. If Salt's first hop past the box (10.124.118.1) is quiet too, the break is the line or Salt; if it answers, it's further out.",
    data=[(INTERNET,"Internet (1.1.1.1)"),(SALT_LINE,"Salt line (10.124.118.1)"),(SALT_BOX,"Salt Box (10.69.1.1)")],hist=[INTERNET,SALT_LINE,SALT_BOX]),
+ dict(key="internet_broken",group="Maintenance",name="Internet broken",icon="mdi:web-remove",color="red",
+   tmpl="{{ is_state('"+INTERNET+"','on') and ("+DNS_BAD+" or "+WEB_BAD+") }}",
+   secondary="Pings get through, {% if "+DNS_BAD+" and "+WEB_BAD+" %}name lookups and web pages don't{% elif "+DNS_BAD+" %}name lookups don't{% else %}web pages don't{% endif %}"
+             " · since {{ (states."+DNS_CHECK+".last_changed if "+DNS_BAD+" else states."+WEB_CHECK+".last_changed) | as_local | relative_time }}",
+   rule="On when 1.1.1.1 still answers pings but, for 5 minutes or more, a name lookup (www.google.com via 1.1.1.1) or loading https://www.google.com/ fails. The line is up for pings only, so the other internet pills stay off.",
+   data=[(DNS_CHECK,"Name lookup"),(WEB_CHECK,"Web page"),(INTERNET,"Internet (1.1.1.1)")],hist=[DNS_CHECK,WEB_CHECK,INTERNET]),
 # The bedroom blinds' Shelly 2PM sits in the tightest wall box in the flat,
 # right where the motor cable's conduit comes in from the cold blind housing.
 # Its predecessor died of condensate corrosion (Nov 2026): first the radio,
