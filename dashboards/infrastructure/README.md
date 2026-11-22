@@ -1,8 +1,8 @@
 # Infrastructure dashboard
 
 The **Infrastructure** dashboard (`/dashboard-infrastructure/gotthard`) is for
-the roads and tunnels around us. For now it has one view, the Gotthard road
-tunnel:
+the roads, tunnels, passes, flights and ski lifts around us. The Gotthard
+view has the road tunnel:
 
 - **Right now:** whether the tunnel is open, the next announced closure, and
   for each portal the queue (km) and the time it costs (min). The north
@@ -73,6 +73,22 @@ HACS). Its area is the circle round home set in the integration's options.
 - **History:** flights overhead over 24 hours, the switch that stops every
   call to FlightRadar24, and the integration's update.
 
+The **Andermatt** view (`/dashboard-infrastructure/andermatt`) has the lifts,
+slopes, snow and car parks of Andermatt+Sedrun+Disentis, from the Andermatt
+Live integration (`andermatt-live/` in this repository, copied over SSH), which
+reads the resort's beta Live Dashboard every 10 minutes.
+
+- **Overview:** a row per sector (Gemsstock, Andermatt-Oberalppass,
+  Oberalppass-Dieni, Sedrun, Disentis): open or not, lifts and slopes open of
+  all, km of slopes open, snow depth and new snow.
+- **A section per sector:** its Open badge, the counts, snow and its car parks
+  (free or full), then a table of its lifts (🟢 open, ⚪ closed, ❔ unknown,
+  with type and first and last ride) and one of its slopes (status, colour,
+  length). The tables are built from each sector's device in HA, so a lift or
+  slope the site adds shows up without a change here.
+- **History:** lifts open and km of slopes open per sector over 7 days, snow
+  depth over 30 days.
+
 The Gotthard, Roads and Traffic views come from the Gotthard integration
 ([janvt/homeassistant-gotthard](https://github.com/janvt/homeassistant-gotthard),
 installed through HACS), which reads FEDRO's traffic messages from
@@ -85,7 +101,7 @@ sync refuses to save a dashboard naming an entity HA doesn't have.
 
 | File | What |
 |------|------|
-| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes, `FLIGHT_ENTITIES` every one of FlightRadar24's. |
+| [`build.py`](build.py) | Builds the whole dashboard config. Pure functions. `ENTITIES` is every entity the Gotthard integration makes, `PASS_ENTITIES` every one of the passes, `FLIGHT_ENTITIES` every one of FlightRadar24's, `SKI_ENTITIES` every Andermatt Live sector's own (its lifts and slopes are in the tables). |
 | [`sync.py`](sync.py) | Creates the dashboard if needed (in the sidebar) and pushes it. Refuses to drop a view HA has that `build.py` doesn't make (`--drop-views` overrides). |
 
 ```bash

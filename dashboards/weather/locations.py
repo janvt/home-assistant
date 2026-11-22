@@ -23,6 +23,10 @@ LOCATIONS = [
          cams=["camera.andermatt_gemsstock", "camera.andermatt_baezberg"],
          # Bergfex resort id, name on the dashboard.
          ski=[("andermatt_gemsstock", "Gemsstock"), ("andermatt_oberalp_sedrun", "Oberalp – Sedrun")],
+         # Andermatt Live sectors (andermatt-live/): entity prefix, name.
+         # Bergfex refuses Home Assistant since 17 November 2026; its sections
+         # stay, hidden while their status is unavailable.
+         lifts=[("gemsstock", "Gemsstock"), ("andermatt_oberalppass", "Andermatt-Oberalppass")],
          slf="andermatt_9pb7", imis=["gos3_zwja", "tuj2_mr82", "urs1_prsf"],
          # The Andermatt entry has its own copy (…_2); Altdorf's is the same station.
          pollen=("Luzern", "luzern_pollen"), freezing=True),

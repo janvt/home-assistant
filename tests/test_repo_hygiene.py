@@ -93,6 +93,8 @@ def test_env_templates_carry_a_placeholder_not_a_value(deck: str) -> None:
         "kitchen-timer/secrets.yaml",
         "guest-eink/secrets.yaml",
         ".venv-test/lib/x.py",
+        "andermatt-live/.deploy.env",
+        ".venv-andermatt-live/lib/x.py",
     ],
 )
 def test_git_actually_ignores_the_sensitive_paths(path: str) -> None:

@@ -3,6 +3,7 @@
 .venv-test/
 .venv-esphome/
 .venv-alert-pills/
+.venv-andermatt-live/
 .pytest_cache/
 __pycache__/
 *.pyc

@@ -276,6 +276,7 @@ RIVERS_LINK=WEATHER_LINK.format("overview")       # the rivers section
 WINDGALLEN_LINK=WEATHER_LINK.format("mtn-gross-windgallen")
 OBERALPPASS_LINK=WEATHER_LINK.format("mtn-oberalppass")
 FLIGHTS_LINK="/dashboard-infrastructure/flights"
+SKI_LINK="/dashboard-infrastructure/andermatt"     # Andermatt Live: lifts, slopes, snow
 MOBILE_LINK="/dashboard-mobile/{}"
 FELT=("{% set ns = namespace(q=[]) %}{% for g in states.geo_location | selectattr('attributes.source','eq','sed_earthquakes') %}"
       "{% set m = g.attributes.magnitude|float(0) %}{% set d = g.state|float(999) %}"
@@ -615,10 +616,13 @@ dict(key="ptarmigan",link=ANDERMATT_LINK,group="Forecast",name="Ptarmigan",icon=
    secondary="{{ 'Strong south föhn' if is_state('"+FOHN_OUTLOOK+"','strong_south') else 'South föhn' }} likely: {{ states('"+FOHN_DIFF+"') }} hPa more pressure in Lugano than Kloten",
    rule="On when the pressure in Lugano is at least 4 hPa above Kloten's (8 for strong), which drives south föhn, while Altdorf has no föhn yet. It often comes hours before the wind.",
    data=[(FOHN_DIFF,"Lugano − Kloten"),(FOHN_OUTLOOK,"Outlook"),("sensor.altdorf_fohn","Föhn index now")],hist=[FOHN_DIFF]),
- dict(key="gemsstock_open",tmpl="{{ states('sensor.andermatt_gemsstock_status') not in ['Closed','unknown','unavailable',''] }}",group="Mountains",name="Gemsstock open",icon="mdi:gondola",color="green",
-   secondary="{{ states('sensor.andermatt_gemsstock_lifts_open_count') }} lifts, {{ states('sensor.andermatt_gemsstock_slopes_open_km') }} km of slopes · Sedrun: {{ states('sensor.andermatt_oberalp_sedrun_status') }}",
-   rule="On when Bergfex reports Gemsstock as anything other than closed.",
-   data=[("sensor.andermatt_gemsstock_status","Gemsstock"),("sensor.andermatt_gemsstock_lifts_open_count","Lifts open"),("sensor.andermatt_oberalp_sedrun_status","Oberalp – Sedrun")],hist=[]),
+# From the Andermatt Live integration (andermatt-live/): bergfex refuses Home
+# Assistant since 17 November 2026.
+dict(key="gemsstock_open",link=SKI_LINK,tmpl="{{ is_state('binary_sensor.gemsstock_open','on') }}",group="Mountains",name="Gemsstock open",icon="mdi:gondola",color="green",
+   secondary="{{ states('sensor.gemsstock_lifts_open') }} of {{ state_attr('sensor.gemsstock_lifts_open','total') }} lifts, {{ states('sensor.gemsstock_slopes_open_length')|float(0)|round(1) }} km of slopes · Gütsch: {{ states('sensor.andermatt_oberalppass_lifts_open') }} lifts",
+   rule="On while at least one Gemsstock lift runs, according to the resort's Live Dashboard.",
+   data=[("binary_sensor.gemsstock_open","Gemsstock"),("sensor.gemsstock_lifts_open","Lifts open"),("sensor.gemsstock_slopes_open_length","Slopes open"),
+         ("sensor.andermatt_oberalppass_lifts_open","Andermatt-Oberalppass lifts open")],hist=[]),
  dict(key="snow_down_to_the_pass",link=OBERALPPASS_LINK,tmpl="{% set f = states('sensor.oberalppass_freezing_level')|float(9999) %}{{ f < 2000 }}",group="Mountains",name="Snow to the pass",icon="mdi:snowflake-melt",color="light-blue",
    secondary="Freezing level {{ "+f('sensor.oberalppass_freezing_level')+"|round(0) }} m (Oberalppass 2044 m)",
    rule="On when the forecast freezing level at Oberalppass drops below 2000 m.",
