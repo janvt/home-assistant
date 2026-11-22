@@ -65,6 +65,37 @@ def _visible(conditions: list[dict], slots: int) -> bool:
 
 
 # ── pills.py ────────────────────────────────────────────────────────────────
+# The Mobile dashboard is made in the UI, so its room views are listed here:
+# a link to one that is renamed needs this list changed too.
+MOBILE_VIEWS = {"lights", "blinds", "office", "kitchen", "hallway", "living-room", "bedroom", "guest-bedroom",
+                "bathroom", "outside", "power"}
+
+
+def _views(dashboard: str) -> set[str]:
+    """The view paths a dashboard's build.py makes."""
+    here = ROOT / "dashboards" / dashboard
+    sys.path.insert(0, str(here))
+    try:
+        spec = importlib.util.spec_from_file_location(f"links_{dashboard}", here / "build.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(here))
+    return {view["path"] for view in module.build()["views"]}
+
+
+def test_every_link_opens_a_view_that_exists() -> None:
+    """A link to a view nobody built opens an empty page on the phone, where
+    the pill's sensor would at least have shown something."""
+    views = {"dashboard-weather": _views("weather"), "dashboard-infrastructure": _views("infrastructure"),
+             "dashboard-vpn": _views("vpn"), "dashboard-mobile": MOBILE_VIEWS}
+    links = {p["key"]: p["link"] for p in build.ALERTS if p.get("link")}
+    assert len(links) >= 40
+    for key, link in links.items():
+        _, dashboard, view = link.split("/")
+        assert view in views.get(dashboard, set()), f"{key} links to {link}"
+
+
 def test_pill_keys_are_unique_and_slug_shaped() -> None:
     """The key is the entity id, `binary_sensor.pill_<key>`; `alert_pills.load`
     refuses the whole lot over one key that isn't slug-shaped or is repeated."""
