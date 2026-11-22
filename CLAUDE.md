@@ -12,6 +12,7 @@ own README with the full context.
 | `dashboards/weather/` | The Weather dashboard (earthquakes from SED too), built end to end from `locations.py` and pushed by `sync.py` (shares `dashboards/ha_client.py` and `.env` with the pills) | `dashboards/weather/README.md` |
 | `dashboards/vpn/` | The VPN usage dashboard (not in the sidebar; the VPN alert pills link to it), built by `build.py` and pushed by `sync.py` | `dashboards/vpn/README.md` |
 | `dashboards/infrastructure/` | The Infrastructure dashboard (Gotthard tunnel, from the Gotthard integration; passes nearby, from Alpine Passes), built by `build.py` and pushed by `sync.py` | `dashboards/infrastructure/README.md` |
+| `dashboards/denise/` | The VPN section of Denise's dashboard (German), built by `build.py` from the VPN dashboard's constants and pushed by `sync.py`; the rest of her dashboard is edited in the UI | `dashboards/denise/README.md` |
 | `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
 | `custom_components/alert_pills/` | The Alert Pills integration (HACS installs it from this repo, from `main`); its HA-harness tests are `tests_alert_pills/` | `dashboards/mobile-alerts/README.md` |
 | `andermatt-live/` | The Andermatt Live integration: lifts, slopes, snow and car parks of Andermatt+Sedrun+Disentis, read from the resort's beta Live Dashboard. Its own project (tests, `pytest.ini`, venv); `scripts/deploy.sh` copies it to HA over SSH, as HACS only installs `custom_components/alert_pills` from this repo | `andermatt-live/README.md` |
@@ -33,7 +34,7 @@ task test:andermatt-live:live  # Andermatt Live against the real site
 
 The root `Taskfile.yml` pulls in `streamdeck/Taskfile.yml` flat (Task >= 3.39),
 so everything runs from the repo root. Dashboards push to HA with
-`task sync:<name>` (weather, vpn, infrastructure, alert-pills, or
+`task sync:<name>` (weather, vpn, infrastructure, denise, alert-pills, or
 `all`): a dry run unless you pass `-- --apply`. They read the token from
 `dashboards/.env`.
 
