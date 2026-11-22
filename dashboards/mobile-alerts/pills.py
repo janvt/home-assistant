@@ -546,7 +546,7 @@ ALERTS=[
    secondary="Down to {{ states('sensor.altdorf_ur_lowest_temperature_tonight') }} °C in Altdorf tonight",
    rule="On when Altdorf's lowest forecast temperature between 18:00 and 08:00 is 0 °C or below.",
    data=[("sensor.altdorf_ur_lowest_temperature_tonight","Lowest tonight"),("sensor.ruuvi_outside_temperature","Outside now")],hist=[]),
- dict(key="bluebird_tomorrow",group="Forecast",name="Bluebird tomorrow",icon="mdi:weather-sunny-alert",color="indigo",
+ dict(key="bluebird_tomorrow",group="Forecast",name="Bluebird tomorrow",icon="mdi:bird",color="light-blue",
    tmpl="{{ "+f("sensor.gross_windgallen_snow_tonight",0)+" >= 20 and "+f("sensor.andermatt_sunshine_tomorrow_9_15",0)+" >= 4.5 and "+f("sensor.gross_windgallen_strongest_gust_tomorrow_9_15",99)+" < 40 }}",
    secondary="About {{ states('sensor.gross_windgallen_snow_tonight')|float(0)|round(0)|int }} cm of fresh snow tonight, {{ states('sensor.andermatt_sunshine_tomorrow_9_15') }} h of sun 9–15, gusts to {{ states('sensor.gross_windgallen_strongest_gust_tomorrow_9_15')|round(0) }} km/h",
    rule="On when at least 20 mm of snow (as water) falls tonight on Gross Windgällen, roughly 20 cm of fresh powder, Andermatt gets at least 4.5 h of sun between 09:00 and 15:00 tomorrow, and gusts on Gross Windgällen stay under 40 km/h. After midnight, 'tomorrow' means the following day.",
@@ -555,7 +555,7 @@ ALERTS=[
 # Two days out, looser than Bluebird: the snow of today, tomorrow and that night
 # together, and the sun of the sunniest of three places, as the valley often
 # stays grey while the peaks get some.
-dict(key="ptarmigan",group="Forecast",name="Ptarmigan",icon="mdi:bird",color="grey",
+dict(key="ptarmigan",group="Forecast",name="Ptarmigan",icon="mdi:turkey",color="grey",
    content="{{ (now() + timedelta(days=2)).strftime('%a') }}",
    tmpl="{{ "+f("sensor.gross_windgallen_snow_until_the_day_after_tomorrow",0)+" >= 15 and ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max >= 2 and "+f("sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15",99)+" < 40 }}",
    secondary="{{ (now() + timedelta(days=2)).strftime('%A') }} could be a bluebird: about {{ states('sensor.gross_windgallen_snow_until_the_day_after_tomorrow')|float(0)|round(0)|int }} cm of fresh snow, up to {{ ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max }} h of sun 9–15, gusts to {{ states('sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15')|round(0) }} km/h",
