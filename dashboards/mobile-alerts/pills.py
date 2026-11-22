@@ -552,6 +552,17 @@ ALERTS=[
    rule="On when at least 20 mm of snow (as water) falls tonight on Gross Windgällen, roughly 20 cm of fresh powder, Andermatt gets at least 4.5 h of sun between 09:00 and 15:00 tomorrow, and gusts on Gross Windgällen stay under 40 km/h. After midnight, 'tomorrow' means the following day.",
    data=[("sensor.gross_windgallen_snow_tonight","Snow tonight (Gross Windgällen)"),("sensor.andermatt_sunshine_tomorrow_9_15","Sun tomorrow 9–15 (Andermatt)"),
          ("sensor.gross_windgallen_strongest_gust_tomorrow_9_15","Gusts tomorrow 9–15 (Gross Windgällen)"),("sensor.oberalppass_snow_tonight","Snow tonight (Oberalppass)")],hist=[]),
+# Two days out, looser than Bluebird: the snow of today, tomorrow and that night
+# together, and the sun of the sunniest of three places, as the valley often
+# stays grey while the peaks get some.
+dict(key="ptarmigan",group="Forecast",name="Ptarmigan",icon="mdi:bird",color="light-blue",
+   content="{{ (now() + timedelta(days=2)).strftime('%a') }}",
+   tmpl="{{ "+f("sensor.gross_windgallen_snow_until_the_day_after_tomorrow",0)+" >= 15 and ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max >= 2 and "+f("sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15",99)+" < 40 }}",
+   secondary="{{ (now() + timedelta(days=2)).strftime('%A') }} could be a bluebird: about {{ states('sensor.gross_windgallen_snow_until_the_day_after_tomorrow')|float(0)|round(0)|int }} cm of fresh snow, up to {{ ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max }} h of sun 9–15, gusts to {{ states('sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15')|round(0) }} km/h",
+   rule="Looks two days ahead, looser than Bluebird. On when at least 15 mm of snow (as water) falls on Gross Windgällen from today's midnight to 08:00 the day after tomorrow, roughly 15 cm of fresh powder; the sunniest of Andermatt, Oberalppass and Gross Windgällen gets at least 2 h of sun between 09:00 and 15:00 that day; and gusts on Gross Windgällen stay under 40 km/h then.",
+   data=[("sensor.gross_windgallen_snow_until_the_day_after_tomorrow","Snow until then (Gross Windgällen)"),("sensor.andermatt_sunshine_day_after_tomorrow_9_15","Sun 9–15 (Andermatt)"),
+         ("sensor.oberalppass_sunshine_day_after_tomorrow_9_15","Sun 9–15 (Oberalppass)"),("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15","Sun 9–15 (Gross Windgällen)"),
+         ("sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15","Gusts 9–15 (Gross Windgällen)")],hist=[]),
  dict(key="snow_coming",group="Forecast",name="Snow coming",icon="mdi:weather-snowy-heavy",color="blue",
    tmpl="{{ ["+f("sensor.andermatt_snow_next_24_hours")+","+f("sensor.altdorf_ur_snow_next_24_hours")+"]|max >= 5 }}",
    secondary="Next 24 h: Andermatt {{ states('sensor.andermatt_snow_next_24_hours') }} mm, Altdorf {{ states('sensor.altdorf_ur_snow_next_24_hours') }} mm · 48 h: Andermatt {{ states('sensor.andermatt_snow_next_48_hours') }} mm",

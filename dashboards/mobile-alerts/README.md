@@ -2,7 +2,7 @@
 
 A row of small icons under the weather chips on the **Mobile** dashboard. Each
 icon is a condition worth knowing about: smoke, the fridge left open, föhn in
-Altdorf, a bluebird day tomorrow, waste collection. It only shows while that
+Altdorf, a bluebird day tomorrow, a maybe-bluebird (Ptarmigan) the day after, waste collection. It only shows while that
 condition is true. Tapping any icon opens the **Alerts** sub-page
 (`/dashboard-mobile/weather-alerts`) with a full card per active alert and,
 grouped by topic, every alert's rule and the live values it checks.
