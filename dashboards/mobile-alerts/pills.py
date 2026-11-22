@@ -555,7 +555,7 @@ ALERTS=[
 # Two days out, looser than Bluebird: the snow of today, tomorrow and that night
 # together, and the sun of the sunniest of three places, as the valley often
 # stays grey while the peaks get some.
-dict(key="ptarmigan",group="Forecast",name="Ptarmigan",icon="mdi:bird",color="light-blue",
+dict(key="ptarmigan",group="Forecast",name="Ptarmigan",icon="mdi:bird",color="grey",
    content="{{ (now() + timedelta(days=2)).strftime('%a') }}",
    tmpl="{{ "+f("sensor.gross_windgallen_snow_until_the_day_after_tomorrow",0)+" >= 15 and ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max >= 2 and "+f("sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15",99)+" < 40 }}",
    secondary="{{ (now() + timedelta(days=2)).strftime('%A') }} could be a bluebird: about {{ states('sensor.gross_windgallen_snow_until_the_day_after_tomorrow')|float(0)|round(0)|int }} cm of fresh snow, up to {{ ["+f("sensor.andermatt_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.oberalppass_sunshine_day_after_tomorrow_9_15",0)+","+f("sensor.gross_windgallen_sunshine_day_after_tomorrow_9_15",0)+"]|max }} h of sun 9–15, gusts to {{ states('sensor.gross_windgallen_strongest_gust_day_after_tomorrow_9_15')|round(0) }} km/h",
