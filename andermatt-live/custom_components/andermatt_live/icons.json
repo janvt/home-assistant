@@ -1,0 +1,38 @@
+{
+    "entity": {
+        "binary_sensor": {
+            "open": {
+                "default": "mdi:gondola"
+            },
+            "lift": {
+                "default": "mdi:gondola"
+            },
+            "slope": {
+                "default": "mdi:ski"
+            }
+        },
+        "sensor": {
+            "lifts_open": {
+                "default": "mdi:gondola"
+            },
+            "slopes_open": {
+                "default": "mdi:ski"
+            },
+            "slopes_open_length": {
+                "default": "mdi:map-marker-distance"
+            },
+            "snow_depth": {
+                "default": "mdi:snowflake"
+            },
+            "new_snow": {
+                "default": "mdi:weather-snowy-heavy"
+            },
+            "car_park": {
+                "default": "mdi:parking",
+                "state": {
+                    "full": "mdi:car-off"
+                }
+            }
+        }
+    }
+}

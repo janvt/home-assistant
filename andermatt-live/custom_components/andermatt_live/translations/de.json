@@ -1,0 +1,76 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Andermatt+Sedrun+Disentis",
+                "description": "Anlagen, Pisten, Schnee und Parkplätze aus dem {site} des Skigebiets, alle 10 Minuten aktualisiert. Jedes Teilgebiet braucht drei Anfragen pro Aktualisierung.",
+                "data": {
+                    "sectors": "Teilgebiete"
+                },
+                "data_description": {
+                    "sectors": "Jedes Teilgebiet wird ein Gerät."
+                }
+            }
+        },
+        "error": {
+            "no_sectors": "Wähle mindestens ein Teilgebiet",
+            "cannot_connect": "Das Live Dashboard konnte nicht gelesen werden"
+        },
+        "abort": {
+            "single_instance_allowed": "Andermatt Live ist schon eingerichtet. Die Teilgebiete änderst du unter Konfigurieren."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Teilgebiete",
+                "data": {
+                    "sectors": "Teilgebiete"
+                },
+                "data_description": {
+                    "sectors": "Entfernte Teilgebiete werden mit ihren Entitäten gelöscht."
+                }
+            }
+        },
+        "error": {
+            "no_sectors": "Wähle mindestens ein Teilgebiet"
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "open": {
+                "name": "Geöffnet"
+            },
+            "lift": {
+                "name": "Anlage"
+            },
+            "slope": {
+                "name": "Piste"
+            }
+        },
+        "sensor": {
+            "lifts_open": {
+                "name": "Anlagen offen"
+            },
+            "slopes_open": {
+                "name": "Pisten offen"
+            },
+            "slopes_open_length": {
+                "name": "Pisten offen (Länge)"
+            },
+            "snow_depth": {
+                "name": "Schneehöhe"
+            },
+            "new_snow": {
+                "name": "Neuschnee 24 h"
+            },
+            "car_park": {
+                "name": "Parkplatz",
+                "state": {
+                    "free": "Frei",
+                    "full": "Besetzt oder geschlossen"
+                }
+            }
+        }
+    }
+}
