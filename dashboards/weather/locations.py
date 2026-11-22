@@ -36,6 +36,9 @@ MOUNTAINS = [
     dict(title="Gross Windgällen", slug="gross_windgallen", icon="mdi:summit", elevation=3187, imis="sca1_spjp"),
     dict(title="Bristen", slug="bristen", icon="mdi:summit", elevation=3073),
     dict(title="Oberalppass", slug="oberalppass", icon="mdi:road-variant", elevation=2044),
+    # MeteoSwiss's forecast point next to the Gemsstock summit (2.7 km); its
+    # entry also has the Gütsch weather station, which this view leaves out.
+    dict(title="Pizzo Centrale", slug="pizzo_centrale", icon="mdi:ski", elevation=2999, imis="gos3_zwja"),
 ]
 
 SNOW = ["snow_height", "new_snow_1d", "air_temperature", "snow_surface_temperature",
