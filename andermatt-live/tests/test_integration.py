@@ -65,14 +65,15 @@ async def test_a_lift(hass, entry, site):
     assert closed.state == "off"
 
 
-async def test_slopes_are_off_by_default(hass, entry, site):
+async def test_a_slope(hass, entry, site):
     await setup(hass, entry)
 
-    unique_id = "gemsstock_slope_70_sonnenpiste"
-    registry_entry = er.async_get(hass).async_get(
-        entity_id(hass, "binary_sensor", unique_id)
-    )
-    assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    slope = state(hass, "binary_sensor", "gemsstock_slope_70_sonnenpiste")
+    assert slope.state == "on"
+    assert slope.attributes["difficulty"] == "red"
+    assert slope.attributes["length"] == 6400
+    closed = state(hass, "binary_sensor", "gemsstock_slope_75_lutersee")
+    assert closed.state == "off"
 
 
 async def test_car_parks(hass, entry, site):

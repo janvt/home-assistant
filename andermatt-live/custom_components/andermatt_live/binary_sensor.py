@@ -87,11 +87,7 @@ class LiftSensor(SectorEntity, BinarySensorEntity):
 
 
 class SlopeSensor(SectorEntity, BinarySensorEntity):
-    """Off by default: a sector has up to 30 slopes, and the counts on the
-    sector are what most people need."""
-
     _attr_translation_key = "slope"
-    _attr_entity_registry_enabled_default = False
 
     def __init__(
         self, coordinator: AndermattLiveCoordinator, slug: str, slope: Slope

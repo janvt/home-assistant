@@ -17,7 +17,7 @@ Sedrun, Disentis), with:
 |---|---|
 | *Open* | On while at least one of the sector's lifts runs |
 | A binary sensor per lift, e.g. *15 Gemsstock-Bahn* | Open or closed, with `number`, `kind`, `status`, `first_ride` and `last_ride` |
-| A binary sensor per slope, e.g. *70 Sonnenpiste* | Off by default (up to 30 per sector); open or closed, with `difficulty` (blue, red, black, freeride) and `length` in m |
+| A binary sensor per slope, e.g. *70 Sonnenpiste* | Open or closed, with `difficulty` (blue, red, black, freeride) and `length` in m |
 | *Lifts open*, *Slopes open* | Counts, with the `total` |
 | *Slopes open length* | In km, with the `total` |
 | *Snow depth*, *New snow 24 h* | cm, as the resort reports them |
