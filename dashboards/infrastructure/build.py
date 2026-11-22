@@ -1,7 +1,9 @@
 """The Infrastructure dashboard (`dashboard-infrastructure`): the roads and
 tunnels around us. The Gotthard view has the road tunnel; the Roads view the
 Axenstrasse and the closures of the A2 and A4, each way; the Passes view the
-alpine passes nearby; the Flights view the planes overhead, from FlightRadar24.
+alpine passes nearby; the Flights view the planes overhead, from FlightRadar24;
+the Andermatt view the lifts, slopes, snow and car parks of
+Andermatt+Sedrun+Disentis.
 
 `build()` returns the whole config, owned by the script: a
 card added in the UI is gone after the next sync.
@@ -15,6 +17,11 @@ before Airolo.
 The Passes view comes from the Alpine Passes integration
 (github.com/janvt/homeassistant-alpine-passes), which reads alpen-paesse.ch of
 IG Alpenpässe.
+
+The Andermatt view comes from the Andermatt Live integration (andermatt-live/
+in this repository), which reads the resort's beta Live Dashboard. Its lifts
+and slopes are listed by markdown tables built from each sector's device, so
+one the site adds shows up without a change here.
 """
 from __future__ import annotations
 
@@ -556,6 +563,131 @@ def flights_history_section() -> dict[str, Any]:
     ]}
 
 
+# ── Andermatt ───────────────────────────────────────────────────────────────
+# The Andermatt Live sectors: entity prefix, name, car parks (entity suffixes).
+SECTORS = {"gemsstock": ("Gemsstock", ["pp_gemsstock_nordic"]),
+           "andermatt_oberalppass": ("Andermatt-Oberalppass", ["pp_andermatt", "pp_rossstall", "pp_reuss"]),
+           "oberalppass_dieni": ("Oberalppass-Dieni", []),
+           "sedrun": ("Sedrun", []),
+           "disentis": ("Disentis", [])}
+SECTOR_SENSORS = ("lifts_open", "slopes_open", "slopes_open_length", "snow_depth", "new_snow_24_h")
+
+
+def sector_open(k: str) -> str:
+    return f"binary_sensor.{k}_open"
+
+
+def sector_sensor(k: str, kind: str) -> str:
+    return f"sensor.{k}_{kind}"
+
+
+# Every entity of a sector apart from its lifts and slopes, all on the page.
+SKI_ENTITIES = [e for k, (_, parks) in SECTORS.items()
+                for e in (sector_open(k), *(sector_sensor(k, s) for s in SECTOR_SENSORS),
+                          *(f"sensor.{k}_{p}" for p in parks))]
+DIFFICULTY = {"blue": "🔵", "red": "🔴", "black": "⚫", "freeride": "🟡"}
+
+
+def _dot(entity: str) -> str:
+    """Open, closed or unknown, as a template."""
+    return (f"{{{{ '🟢' if is_state({entity}, 'on') else '❔' if states({entity}) in ['unavailable', 'unknown'] "
+            "else '⚪' }}")
+
+
+def _members(k: str, attribute: str) -> str:
+    """The sector's lifts (attribute 'kind') or slopes ('difficulty'), in the
+    site's order, as a template loop over the device's entities."""
+    return (f"{{% for e in device_entities(device_id('{sector_open(k)}')) | select('match', 'binary_sensor\\\\.') "
+            f"if state_attr(e, '{attribute}') is not none %}}")
+
+
+def _name(entity: str) -> str:
+    """The lift's or slope's own name, without the sector's in front."""
+    return f"{{{{ state_attr({entity}, 'friendly_name').split(' ', 1)[1] }}}}"
+
+
+def lifts_table(k: str) -> str:
+    return ("| | Lift | Type | First | Last |\n|:-:|---|---|:-:|:-:|\n"
+            + _members(k, "kind")
+            + f"| {_dot('e')} | **{_name('e')}** | {{{{ state_attr(e, 'kind') }}}} "
+              "| {{ state_attr(e, 'first_ride') or '–' }} | {{ state_attr(e, 'last_ride') or '–' }} |\n"
+              "{% else %}| | No lifts listed | | | |\n{% endfor %}")
+
+
+def slopes_table(k: str) -> str:
+    colours = repr(DIFFICULTY)
+    return ("| | | Slope | Length |\n|:-:|:-:|---|--:|\n"
+            + _members(k, "difficulty")
+            + f"| {_dot('e')} | {{{{ {colours}.get(state_attr(e, 'difficulty'), '') }}}} | {_name('e')} "
+              "| {{ (state_attr(e, 'length') / 1000) | round(1) ~ ' km' if state_attr(e, 'length') else '–' }} |\n"
+              "{% else %}| | | No slopes listed | |\n{% endfor %}")
+
+
+def sectors_table() -> str:
+    """A row per sector: open, lifts and slopes open of all, km, snow."""
+    rows = ["| Sector | | Lifts | Slopes | km open | Snow | New 24 h |", "|---|:-:|:-:|:-:|--:|--:|--:|"]
+    for k, (name, _) in SECTORS.items():
+        def v(kind: str) -> str:
+            return f"states('{sector_sensor(k, kind)}')"
+
+        def total(kind: str) -> str:
+            return f"state_attr('{sector_sensor(k, kind)}', 'total')"
+
+        def count(kind: str) -> str:
+            """"3 / 4", or "–" while the sector can't be read."""
+            return (f"{{{{ {v(kind)} ~ ' / ' ~ {total(kind)} if is_number({v(kind)}) and {total(kind)} is not none "
+                    "else '–' }}")
+        rows.append(
+            f"| **{name}** | {_dot(repr(sector_open(k)))} "
+            f"| {count('lifts_open')} | {count('slopes_open')} "
+            f"| {{{{ {v('slopes_open_length')} | float(0) | round(1) if is_number({v('slopes_open_length')}) else '–' }}}} "
+            f"| {{{{ {v('snow_depth')} | float(0) | round | int ~ ' cm' if is_number({v('snow_depth')}) else '–' }}}} "
+            f"| {{{{ {v('new_snow_24_h')} | float(0) | round | int ~ ' cm' if is_number({v('new_snow_24_h')}) else '–' }}}} |")
+    return "\n".join(rows)
+
+
+def ski_overview_section() -> dict[str, Any]:
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("Andermatt+Sedrun+Disentis", "mdi:gondola"),
+        {"type": "markdown", "content": sectors_table(), "grid_options": {"columns": "full"}},
+        {"type": "markdown", "grid_options": {"columns": "full"}, "content":
+            "<small>Data: the resort's A+S+D Live Dashboard, through Andermatt Live, every 10 minutes. "
+            "🟢 open · ⚪ closed · ❔ unknown. Slopes: 🔵 blue · 🔴 red · ⚫ black · 🟡 freeride.</small>"},
+    ]}
+
+
+def sector_section(k: str) -> dict[str, Any]:
+    name, parks = SECTORS[k]
+    s = lambda kind: sector_sensor(k, kind)  # noqa: E731
+    return {"type": "grid", "cards": [
+        {"type": "heading", "heading": name, "heading_style": "title", "icon": "mdi:ski",
+         "badges": [{"type": "entity", "entity": sector_open(k), "show_state": True, "show_icon": True}]},
+        tile(s("lifts_open"), "Lifts open", 4, state_content=["state", "total"]),
+        tile(s("slopes_open"), "Slopes open", 4, state_content=["state", "total"]),
+        tile(s("slopes_open_length"), "Open", 4),
+        tile(s("snow_depth"), "Snow depth", 6),
+        tile(s("new_snow_24_h"), "New snow 24 h", 6),
+        # The car park's own name, "PP Andermatt", from the integration.
+        *({"type": "tile", "entity": f"sensor.{k}_{p}", "vertical": True, "grid_options": {"columns": 6}}
+          for p in parks),
+        heading("Lifts", "mdi:gondola", "subtitle"),
+        {"type": "markdown", "content": lifts_table(k), "grid_options": {"columns": "full"}},
+        heading("Slopes", "mdi:ski", "subtitle"),
+        {"type": "markdown", "content": slopes_table(k), "grid_options": {"columns": "full"}},
+    ]}
+
+
+def ski_history_section() -> dict[str, Any]:
+    def per_sector(kind: str) -> dict[str, str]:
+        return {sector_sensor(k, kind): name for k, (name, _) in SECTORS.items()}
+    return {"type": "grid", "column_span": 3, "cards": [
+        heading("History", "mdi:chart-timeline-variant"),
+        dict(hist(per_sector("lifts_open"), "Lifts open, last 7 days", 168), grid_options={"columns": 12}),
+        dict(hist(per_sector("slopes_open_length"), "Slopes open (km), last 7 days", 168), grid_options={"columns": 12}),
+        dict(hist(per_sector("snow_depth"), "Snow depth, last 30 days", 720), grid_options={"columns": 12}),
+    ]}
+
+
 def build() -> dict[str, Any]:
     return {"views": [
         {"title": "Gotthard", "path": "gotthard", "icon": "mdi:tunnel", "type": "sections", "max_columns": 3,
@@ -570,4 +702,6 @@ def build() -> dict[str, Any]:
         {"title": "Flights", "path": "flights", "icon": "mdi:airplane", "type": "sections", "max_columns": 3,
          "sections": [flights_now_section(), flight_card_section(), tracked_section(), most_tracked_section(),
                       airport_section(), flights_history_section()]},
+        {"title": "Andermatt", "path": "andermatt", "icon": "mdi:gondola", "type": "sections", "max_columns": 3,
+         "sections": [ski_overview_section(), *(sector_section(k) for k in SECTORS), ski_history_section()]},
     ]}

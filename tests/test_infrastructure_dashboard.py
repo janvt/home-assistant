@@ -51,9 +51,16 @@ def test_every_flight_entity_is_shown() -> None:
     assert set(build.FLIGHT_ENTITIES) <= USED, sorted(set(build.FLIGHT_ENTITIES) - USED)
 
 
-def test_only_the_gotthard_pass_and_flight_entities() -> None:
+def test_every_andermatt_entity_is_shown() -> None:
+    """Each sector's own entities; its lifts and slopes are listed by the
+    markdown tables, from the sector's device."""
+    assert len(build.SKI_ENTITIES) == 6 * len(build.SECTORS) + 4
+    assert set(build.SKI_ENTITIES) <= USED, sorted(set(build.SKI_ENTITIES) - USED)
+
+
+def test_only_the_gotthard_pass_flight_and_andermatt_entities() -> None:
     known = (set(build.ENTITIES) | set(build.PASS_ENTITIES) | {build.PASSES_LAST_UPDATE}
-             | set(build.FLIGHT_ENTITIES))
+             | set(build.FLIGHT_ENTITIES) | set(build.SKI_ENTITIES))
     assert USED <= known, sorted(USED - known)
 
 
