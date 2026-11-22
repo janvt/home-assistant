@@ -2,7 +2,7 @@
 
 The **Weather** dashboard (`/dashboard-weather`), built from the forked
 [MeteoSwiss integration](https://github.com/janvt/homeassistant-meteoswiss)
-plus SLF, Bergfex, the Andermatt webcams and the SED's earthquakes.
+plus SLF, Andermatt Live, Bergfex, the Andermatt webcams and the SED's earthquakes.
 
 | File | What |
 |------|------|
@@ -31,8 +31,11 @@ plus SLF, Bergfex, the Andermatt webcams and the SED's earthquakes.
   Blitzortung lightning and the Föhn index and outlook; Altdorf and Andermatt
   show their freezing level. Altdorf and Andermatt show Luzern's pollen, Schlieren Zürich's.
   Andermatt adds the
-  webcams, the SLF bulletin, both Bergfex ski areas, the Bergfex snow maps with
-  their colour legend, and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
+  webcams, the SLF bulletin, the lifts of Gemsstock and Andermatt-Oberalppass
+  from Andermatt Live (`andermatt-live/`: open lifts with their rides, open
+  slopes, snow), both Bergfex ski areas and the Bergfex snow maps with their
+  colour legend (hidden while bergfex refuses Home Assistant, as it has since
+  17 November 2026), and the IMIS stations Gütsch, Culmatsch and Gross Schijen.
 - **Earthquakes** (`/dashboard-weather/earthquakes`, from the Overview's
   Earthquake details button): a map of every quake the Swiss Seismological
   Service (SED) located within 150 km in the last 30 days, the latest and the

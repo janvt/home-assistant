@@ -1,0 +1,76 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "Andermatt+Sedrun+Disentis",
+                "description": "Lifts, slopes, snow and car parks from the resort's {site}, updated every 10 minutes. Each sector takes three requests per update.",
+                "data": {
+                    "sectors": "Sectors"
+                },
+                "data_description": {
+                    "sectors": "Each sector becomes a device."
+                }
+            }
+        },
+        "error": {
+            "no_sectors": "Choose at least one sector",
+            "cannot_connect": "The Live Dashboard could not be read"
+        },
+        "abort": {
+            "single_instance_allowed": "Andermatt Live is already set up. Change the sectors under Configure."
+        }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "Sectors",
+                "data": {
+                    "sectors": "Sectors"
+                },
+                "data_description": {
+                    "sectors": "Sectors taken out are removed with their entities."
+                }
+            }
+        },
+        "error": {
+            "no_sectors": "Choose at least one sector"
+        }
+    },
+    "entity": {
+        "binary_sensor": {
+            "open": {
+                "name": "Open"
+            },
+            "lift": {
+                "name": "Lift"
+            },
+            "slope": {
+                "name": "Slope"
+            }
+        },
+        "sensor": {
+            "lifts_open": {
+                "name": "Lifts open"
+            },
+            "slopes_open": {
+                "name": "Slopes open"
+            },
+            "slopes_open_length": {
+                "name": "Slopes open length"
+            },
+            "snow_depth": {
+                "name": "Snow depth"
+            },
+            "new_snow": {
+                "name": "New snow 24 h"
+            },
+            "car_park": {
+                "name": "Car park",
+                "state": {
+                    "free": "Free",
+                    "full": "Full or closed"
+                }
+            }
+        }
+    }
+}

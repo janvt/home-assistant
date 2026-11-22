@@ -180,8 +180,11 @@ def overview_section(loc: dict[str, Any]) -> dict[str, Any]:
           if loc.get("slf") else []),
         *([tile(f"sensor.slf_imis_{loc['imis'][0]}_snow_height", f"Snow {IMIS[loc['imis'][0]]['name']} (measured)",
                 icon="mdi:snowflake", tap_action=t)] if loc.get("imis") else []),
-        *[tile(f"sensor.{k}_snow_mountain", f"{n} snow", icon="mdi:snowflake", tap_action=t)
+        *[tile(f"sensor.{k}_snow_mountain", f"{n} snow", icon="mdi:snowflake", tap_action=t,
+               visibility=[available(f"sensor.{k}_status")])
           for k, n in loc.get("ski", [])],
+        *[tile(f"sensor.{k}_lifts_open", f"{n} lifts open", icon="mdi:gondola", tap_action=t)
+          for k, n in loc.get("lifts", [])],
         details_button(loc["title"], t),
     ]}
 
@@ -210,13 +213,55 @@ def snow_legend() -> str:
               "Source: GeoSphere Austria / bergfex.</small>")
 
 
+def available(entity: str) -> dict[str, Any]:
+    """A visibility condition: shown unless the entity is unavailable."""
+    return {"condition": "state", "entity": entity, "state_not": ["unavailable", "unknown"]}
+
+
+def lifts_markdown(k: str) -> str:
+    """The sector's lifts, open or closed with their rides, from the entities
+    of the sector's device, so that a lift the site adds shows up by itself."""
+    return (
+        "{% set ns = namespace(rows=[]) %}"
+        "{% for e in device_entities(device_id('binary_sensor." + k + "_open'))"
+        " | select('match', 'binary_sensor\\.') | reject('eq', 'binary_sensor." + k + "_open') %}"
+        "{% if state_attr(e, 'first_ride') is not none or state_attr(e, 'kind') %}"
+        "{% set ns.rows = ns.rows + ['| ' ~ ('🟢' if is_state(e, 'on') else '⚪') ~ ' | '"
+        " ~ state_attr(e, 'friendly_name').split(' ', 1)[1] ~ ' | ' ~ (state_attr(e, 'kind') or '') ~ ' | '"
+        " ~ (state_attr(e, 'first_ride') or '–') ~ '–' ~ (state_attr(e, 'last_ride') or '–') ~ ' |'] %}"
+        "{% endif %}{% endfor %}"
+        "| | Lift | | Rides |\n|:-:|:--|:--|:--|\n{{ ns.rows | join('\n') }}"
+    )
+
+
+def lift_sections(loc: dict[str, Any]) -> list[dict[str, Any]]:
+    """Andermatt Live: what the resort's Live Dashboard says is running."""
+    out = []
+    for k, name in loc.get("lifts", []):
+        def e(x: str) -> str:
+            return f"sensor.{k}_{x}"
+        out.append({"type": "grid", "cards": [
+            {"type": "heading", "heading": f"Lifts {name}", "icon": "mdi:gondola",
+             "badges": [{"type": "entity", "entity": f"binary_sensor.{k}_open", "show_state": True,
+                         "show_icon": True}]},
+            tile(e("lifts_open"), "Lifts open", icon="mdi:gondola", state_content=["state", "total"]),
+            tile(e("slopes_open"), "Slopes open", icon="mdi:ski", state_content=["state", "total"]),
+            tile(e("slopes_open_length"), "Slopes open", icon="mdi:map-marker-distance"),
+            tile(e("snow_depth"), "Snow depth", icon="mdi:snowflake"),
+            tile(e("new_snow_24_h"), "New snow 24 h", icon="mdi:snowflake-alert"),
+            {"type": "markdown", "grid_options": {"columns": 12}, "content": lifts_markdown(k)},
+            hist([e("lifts_open"), e("slopes_open")], "Open (48 h)"),
+            hist([e("snow_depth")], "Snow depth (30 days)", 720)]})
+    return out
+
+
 def ski_sections(loc: dict[str, Any]) -> list[dict[str, Any]]:
     out = []
     for k, name in loc.get("ski", []):
         def e(x: str) -> str:
             return f"sensor.{k}_{x}"
-        out.append({"type": "grid", "cards": [
-            {"type": "heading", "heading": f"Ski area {name}", "icon": "mdi:ski",
+        out.append({"type": "grid", "visibility": [available(e("status"))], "cards": [
+            {"type": "heading", "heading": f"Ski area {name} (bergfex)", "icon": "mdi:ski",
              "badges": [{"type": "entity", "entity": e("status"), "show_state": True, "show_icon": True}]},
             tile(e("snow_mountain"), "Snow mountain", icon="mdi:image-filter-hdr"),
             tile(e("snow_valley"), "Snow valley", icon="mdi:home-variant"),
@@ -236,7 +281,7 @@ def ski_sections(loc: dict[str, Any]) -> list[dict[str, Any]]:
         # resort, so one resort's set is enough.
         k = loc["ski"][0][0]
         days = ["today", "tomorrow", "day 3", "day 4", "day 5", "day 6"]
-        out.append({"type": "grid", "column_span": 2, "cards": [
+        out.append({"type": "grid", "column_span": 2, "visibility": [available(f"sensor.{k}_status")], "cards": [
             {"type": "heading", "heading": "Snow forecast Switzerland (bergfex)", "icon": "mdi:map"},
             {"type": "markdown", "grid_options": {"columns": 12}, "content": snow_legend()},
             cam(f"image.{k}_summary_image_48h", name="Fresh snow – next 48 h", grid_options={"columns": 12}),
@@ -405,6 +450,7 @@ def location_view(loc: dict[str, Any]) -> dict[str, Any]:
             {"type": "heading", "heading": "Webcams", "icon": "mdi:webcam"},
             *[cam(c, grid_options={"columns": 12}) for c in loc["cams"]]]}] if loc.get("cams") else []),
         *([slf_section(loc["slf"])] if loc.get("slf") else []),
+        *lift_sections(loc),
         *ski_sections(loc),
         *[imis_section(x) for x in loc.get("imis", [])],
         *([lightning_section(loc["lightning"])] if loc.get("lightning") else []),

@@ -14,6 +14,7 @@ own README with the full context.
 | `dashboards/infrastructure/` | The Infrastructure dashboard (Gotthard tunnel, from the Gotthard integration; passes nearby, from Alpine Passes), built by `build.py` and pushed by `sync.py` | `dashboards/infrastructure/README.md` |
 | `dashboards/mobile-alerts/` | Mobile dashboard alert pills: `pills.py` loaded into the integration, plus the row and Alerts sub-page, pushed by `sync.py` | `dashboards/mobile-alerts/README.md` |
 | `custom_components/alert_pills/` | The Alert Pills integration (HACS installs it from this repo, from `main`); its HA-harness tests are `tests_alert_pills/` | `dashboards/mobile-alerts/README.md` |
+| `andermatt-live/` | The Andermatt Live integration: lifts, slopes, snow and car parks of Andermatt+Sedrun+Disentis, read from the resort's beta Live Dashboard. Its own project (tests, `pytest.ini`, venv); `scripts/deploy.sh` copies it to HA over SSH, as HACS only installs `custom_components/alert_pills` from this repo | `andermatt-live/README.md` |
 | `guest-eink/` | Guest room e-ink display (ESPHome, Waveshare 7.5" BWR) plus the guest Wi-Fi rotation: `packages/guest_wifi.yaml`, `scripts/rotate_guest_wifi_password.yaml`, `automations/guest_wifi_on_guest_name_change.yaml`, and the calendar-driven stays in `automations/guest_calendar_stays.yaml` | `guest-eink/README.md` |
 | `automations/` | HA automations kept in version control | |
 | `scripts/`, `packages/` | HA scripts (scripts.yaml form) and YAML packages kept in version control | |
@@ -26,6 +27,8 @@ own README with the full context.
 task test                # whole suite (creates .venv-test/)
 task test:esphome        # ESPHome's own validator, separate venv
 task test:alert-pills    # the integration in HA's test harness, separate venv
+task test:andermatt-live # Andermatt Live, against saved pages, separate venv
+task test:andermatt-live:live  # Andermatt Live against the real site
 ```
 
 The root `Taskfile.yml` pulls in `streamdeck/Taskfile.yml` flat (Task >= 3.39),

@@ -133,6 +133,31 @@ tasks:
     cmds:
       - .venv-alert-pills/bin/python -m pytest -o asyncio_mode=auto tests_alert_pills {{.CLI_ARGS}}
 
+  # The Andermatt Live integration (andermatt-live/) is a project of its own,
+  # deployed over SSH rather than by HACS: its own venv and pytest.ini.
+  test:andermatt-live:venv:
+    desc: Create the separate venv the Andermatt Live integration tests run in
+    dir: ..
+    status:
+      - test -x .venv-andermatt-live/bin/pytest
+    cmds:
+      - uv venv --quiet --python 3.14 .venv-andermatt-live
+      - uv pip install --quiet --no-config --default-index https://pypi.org/simple --python .venv-andermatt-live/bin/python -r andermatt-live/requirements_test.txt
+
+  test:andermatt-live:
+    desc: Run the Andermatt Live integration's tests (saved pages, no network)
+    deps: [test:andermatt-live:venv]
+    dir: ../andermatt-live
+    cmds:
+      - ../.venv-andermatt-live/bin/python -m pytest {{.CLI_ARGS}}
+
+  test:andermatt-live:live:
+    desc: Check the Andermatt Live integration against the real Live Dashboard
+    deps: [test:andermatt-live:venv]
+    dir: ../andermatt-live
+    cmds:
+      - ../.venv-andermatt-live/bin/python -m pytest -p no:homeassistant -p no:socket tests_live {{.CLI_ARGS}}
+
   # ── plus (Raspberry Pi, Docker) ───────────────────────────────────────────
   plus:env:
     desc: Create decks/plus/.env from the template
