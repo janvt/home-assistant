@@ -36,14 +36,20 @@ SENSORS = (
         translation_key="lifts_open",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda s: s.lifts_open if s.lifts else None,
-        attributes_fn=lambda s: {"total": len(s.lifts)},
+        attributes_fn=lambda s: {
+            "total": len(s.lifts),
+            "preparing": s.lifts_preparing,
+        },
     ),
     SectorSensorDescription(
         key="slopes_open",
         translation_key="slopes_open",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda s: s.slopes_open if s.slopes else None,
-        attributes_fn=lambda s: {"total": len(s.slopes)},
+        attributes_fn=lambda s: {
+            "total": len(s.slopes),
+            "preparing": s.slopes_preparing,
+        },
     ),
     SectorSensorDescription(
         key="slopes_open_length",

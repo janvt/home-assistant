@@ -125,6 +125,34 @@ def strict_env(states: dict[str, str], attributes: dict[tuple[str, str], object]
     return env
 
 
+def test_a_lift_in_preparation_has_its_own_dot() -> None:
+    """The binary sensor is off for closed and in preparation alike: the dot
+    comes from the status attribute, or a lift about to open looks closed."""
+    lift = "binary_sensor.gemsstock_15_gemsstock_bahn"
+    template = build._status_dot(repr(lift))
+
+    def dot(state: str, status: str | None) -> str:
+        return strict_env({lift: state}, {(lift, "status"): status}).from_string(template).render()
+
+    assert dot("on", "open") == "🟢"
+    assert dot("off", "preparing") == "🟠"
+    assert dot("off", "closed") == "⚪"
+    assert dot("unavailable", "closed") == "❔"
+    assert dot("off", "status_7") == "❔"
+
+
+def test_the_sector_row_counts_what_is_in_preparation() -> None:
+    """"2 / 4 · 1 🟠" while a lift is in preparation, "2 / 4" otherwise."""
+    lifts = "sensor.gemsstock_lifts_open"
+
+    def gemsstock_row(preparing: int) -> str:
+        env = strict_env({lifts: "2"}, {(lifts, "total"): 4, (lifts, "preparing"): preparing})
+        return next(r for r in env.from_string(build.sectors_table()).render().splitlines() if "Gemsstock" in r)
+
+    assert "| 2 / 4 · 1 🟠 |" in gemsstock_row(1)
+    assert "| 2 / 4 |" in gemsstock_row(0)
+
+
 def test_conditions_table_renders_a_row_per_pass() -> None:
     """With the site's words, the flags, and dashes for what isn't known (a
     pass the integration lost, say): strict, as in HA."""

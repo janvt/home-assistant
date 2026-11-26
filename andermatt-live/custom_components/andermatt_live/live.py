@@ -10,7 +10,8 @@ sector (Teilgebiet), and read here.  For each sector three pages are read:
 - ``/pisten/<sector>``: every slope, open or closed, with its colour and length.
 
 Whether a lift or slope is open is read from the status class of its row
-(``status-2`` open, ``status-1`` closed) rather than from its German label.
+(``status-2`` open, ``status-1`` closed, ``status-3`` in preparation) rather
+than from its German label.
 
 Source: Andermatt-Sedrun Sport AG, https://beta.andermatt-sedrun-disentis.ch
 """
@@ -48,9 +49,12 @@ SECTORS = {
 
 OPEN = "open"
 CLOSED = "closed"
+# "Vorbereitung" on the site: being made ready, about to open.  Not open: the
+# site leaves it out of its own counts of what is open.
+PREPARING = "preparing"
 # The status classes of a row, "status-<n>".  Any other number is kept as the
 # row's status, but is not taken as open.
-STATUSES = {"1": CLOSED, "2": OPEN}
+STATUSES = {"1": CLOSED, "2": OPEN, "3": PREPARING}
 
 # A slope's colour, from the start of its German label ("Rote Piste").
 DIFFICULTIES = {
@@ -132,8 +136,16 @@ class Sector:
         return sum(lift.is_open for lift in self.lifts.values())
 
     @property
+    def lifts_preparing(self) -> int:
+        return sum(lift.status == PREPARING for lift in self.lifts.values())
+
+    @property
     def slopes_open(self) -> int:
         return sum(slope.is_open for slope in self.slopes.values())
+
+    @property
+    def slopes_preparing(self) -> int:
+        return sum(slope.status == PREPARING for slope in self.slopes.values())
 
     @property
     def slopes_open_length(self) -> int:

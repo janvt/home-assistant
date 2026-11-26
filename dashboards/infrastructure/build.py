@@ -594,6 +594,17 @@ def _dot(entity: str) -> str:
             "else '⚪' }}")
 
 
+# A lift's or slope's status attribute, as the site has it.
+STATUS_DOT = {"open": "🟢", "preparing": "🟠", "closed": "⚪"}
+
+
+def _status_dot(entity: str) -> str:
+    """Open, in preparation, closed or unknown, from the status attribute:
+    the binary sensor's off is both closed and in preparation."""
+    return (f"{{{{ '❔' if states({entity}) in ['unavailable', 'unknown'] "
+            f"else {STATUS_DOT!r}.get(state_attr({entity}, 'status'), '❔') }}}}")
+
+
 def _members(k: str, attribute: str) -> str:
     """The sector's lifts (attribute 'kind') or slopes ('difficulty'), in the
     site's order, as a template loop over the device's entities."""
@@ -609,7 +620,7 @@ def _name(entity: str) -> str:
 def lifts_table(k: str) -> str:
     return ("| | Lift | Type | First | Last |\n|:-:|---|---|:-:|:-:|\n"
             + _members(k, "kind")
-            + f"| {_dot('e')} | **{_name('e')}** | {{{{ state_attr(e, 'kind') }}}} "
+            + f"| {_status_dot('e')} | **{_name('e')}** | {{{{ state_attr(e, 'kind') }}}} "
               "| {{ state_attr(e, 'first_ride') or '–' }} | {{ state_attr(e, 'last_ride') or '–' }} |\n"
               "{% else %}| | No lifts listed | | | |\n{% endfor %}")
 
@@ -618,7 +629,7 @@ def slopes_table(k: str) -> str:
     colours = repr(DIFFICULTY)
     return ("| | | Slope | Length |\n|:-:|:-:|---|--:|\n"
             + _members(k, "difficulty")
-            + f"| {_dot('e')} | {{{{ {colours}.get(state_attr(e, 'difficulty'), '') }}}} | {_name('e')} "
+            + f"| {_status_dot('e')} | {{{{ {colours}.get(state_attr(e, 'difficulty'), '') }}}} | {_name('e')} "
               "| {{ (state_attr(e, 'length') / 1000) | round(1) ~ ' km' if state_attr(e, 'length') else '–' }} |\n"
               "{% else %}| | | No slopes listed | |\n{% endfor %}")
 
@@ -634,9 +645,11 @@ def sectors_table() -> str:
             return f"state_attr('{sector_sensor(k, kind)}', 'total')"
 
         def count(kind: str) -> str:
-            """"3 / 4", or "–" while the sector can't be read."""
-            return (f"{{{{ {v(kind)} ~ ' / ' ~ {total(kind)} if is_number({v(kind)}) and {total(kind)} is not none "
-                    "else '–' }}")
+            """"3 / 4", "3 / 4 · 1 🟠" with one in preparation, or "–" while
+            the sector can't be read."""
+            preparing = f"state_attr('{sector_sensor(k, kind)}', 'preparing')"
+            return (f"{{{{ {v(kind)} ~ ' / ' ~ {total(kind)} ~ (' · ' ~ {preparing} ~ ' 🟠' if {preparing} else '') "
+                    f"if is_number({v(kind)}) and {total(kind)} is not none else '–' }}}}")
         rows.append(
             f"| **{name}** | {_dot(repr(sector_open(k)))} "
             f"| {count('lifts_open')} | {count('slopes_open')} "
@@ -652,7 +665,7 @@ def ski_overview_section() -> dict[str, Any]:
         {"type": "markdown", "content": sectors_table(), "grid_options": {"columns": "full"}},
         {"type": "markdown", "grid_options": {"columns": "full"}, "content":
             "<small>Data: the resort's A+S+D Live Dashboard, through Andermatt Live, every 10 minutes. "
-            "🟢 open · ⚪ closed · ❔ unknown. Slopes: 🔵 blue · 🔴 red · ⚫ black · 🟡 freeride.</small>"},
+            "🟢 open · 🟠 in preparation · ⚪ closed · ❔ unknown. Slopes: 🔵 blue · 🔴 red · ⚫ black · 🟡 freeride.</small>"},
     ]}
 
 
