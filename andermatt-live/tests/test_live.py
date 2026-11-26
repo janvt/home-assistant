@@ -58,8 +58,8 @@ class TestLifts:
         assert (kids.first_ride, kids.last_ride) == (None, None)
 
     def test_a_lift_in_preparation(self):
-        """"Vorbereitung" on the site: a status of its own, not open, as the
-        site doesn't count it as open either."""
+        """In preparation ("Vorbereitung" on the site) is a status of its
+        own, not open, as the site doesn't count it as open either."""
         html = page("anlagen", "gemsstock").replace(
             "anlagen-overview-row status-2", "anlagen-overview-row status-3", 1
         )
