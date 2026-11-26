@@ -16,15 +16,17 @@ Sedrun, Disentis), with:
 | Entity | What |
 |---|---|
 | *Open* | On while at least one of the sector's lifts runs |
-| A binary sensor per lift, e.g. *15 Gemsstock-Bahn* | Open or closed, with `number`, `kind`, `status`, `first_ride` and `last_ride` |
-| A binary sensor per slope, e.g. *70 Sonnenpiste* | Open or closed, with `difficulty` (blue, red, black, freeride) and `length` in m |
-| *Lifts open*, *Slopes open* | Counts, with the `total` |
+| A binary sensor per lift, e.g. *15 Gemsstock-Bahn* | Open or closed, with `number`, `kind`, `status` (`open`, `closed` or `preparing`), `first_ride` and `last_ride` |
+| A binary sensor per slope, e.g. *70 Sonnenpiste* | Open or closed, with `status`, `difficulty` (blue, red, black, freeride) and `length` in m |
+| *Lifts open*, *Slopes open* | Counts, with the `total` and how many are `preparing` |
 | *Slopes open length* | In km, with the `total` |
 | *Snow depth*, *New snow 24 h* | cm, as the resort reports them |
 | A sensor per car park, e.g. *PP Gemsstock/Nordic* | `free` or `full` (full or closed), with the site's `text` |
 
 Whether something is open comes from the status class of its row on the site,
-not from its German label. A lift or slope the site stops listing becomes
+not from its German label. *In preparation* ("Vorbereitung", about to open) is
+a status of its own: off, like closed, as the site doesn't count it as open,
+but kept apart in `status` and in the `preparing` counts. A lift or slope the site stops listing becomes
 unavailable; one it adds appears after a reload. When the site can't be read,
 everything is unavailable rather than closed.
 

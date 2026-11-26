@@ -7,6 +7,7 @@ from custom_components.andermatt_live.live import (
     CLOSED,
     OPEN,
     PAGE_URL,
+    PREPARING,
     AndermattLiveBlockedError,
     AndermattLiveClient,
     AndermattLiveError,
@@ -56,6 +57,17 @@ class TestLifts:
         # "–" on the site: no rides that day.
         assert (kids.first_ride, kids.last_ride) == (None, None)
 
+    def test_a_lift_in_preparation(self):
+        """"Vorbereitung" on the site: a status of its own, not open, as the
+        site doesn't count it as open either."""
+        html = page("anlagen", "gemsstock").replace(
+            "anlagen-overview-row status-2", "anlagen-overview-row status-3", 1
+        )
+
+        lift = parse_lifts(html)["14_gurschen_bahn"]
+        assert lift.status == PREPARING
+        assert not lift.is_open
+
     def test_an_unknown_status_is_kept_but_not_open(self):
         html = page("anlagen", "gemsstock").replace(
             "anlagen-overview-row status-2", "anlagen-overview-row status-7", 1
@@ -89,6 +101,17 @@ class TestSlopes:
         assert slopes["70a_gurschengratli"].difficulty == "blue"
         assert slopes["74a_osterreicherloch"].difficulty == "black"
         assert slopes["72_gurschenstock_abfahrt"].difficulty == "freeride"
+
+    def test_a_slope_in_preparation(self):
+        html = page("pisten", "gemsstock").replace(
+            "anlagen-overview-row status-2", "anlagen-overview-row status-3", 1
+        )
+
+        slopes = parse_slopes(html)
+        preparing = [s for s in slopes.values() if s.status == PREPARING]
+        assert len(preparing) == 1
+        assert not preparing[0].is_open
+        assert sum(s.is_open for s in slopes.values()) == 5
 
 
 class TestStart:

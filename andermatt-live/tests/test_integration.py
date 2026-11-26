@@ -106,6 +106,32 @@ async def test_a_lift_closing(hass, entry, site, aioclient_mock):
     assert state(hass, "sensor", "gemsstock_lifts_open").state == "0"
 
 
+async def test_a_lift_in_preparation(hass, entry, site, aioclient_mock):
+    """Off, as it isn't running, but told apart from closed: in its status
+    and in the sector's count."""
+    await setup(hass, entry)
+    url = PAGE_URL.format(page="anlagen", sector="gemsstock")
+    aioclient_mock.clear_requests()
+    for sector in ("gemsstock", "andermatt-oberalppass"):
+        for name in ("start", "anlagen", "pisten"):
+            html = page(name, sector)
+            if PAGE_URL.format(page=name, sector=sector) == url:
+                html = html.replace(
+                    "anlagen-overview-row status-2", "anlagen-overview-row status-3", 1
+                )
+            aioclient_mock.get(PAGE_URL.format(page=name, sector=sector), text=html)
+
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    lift = state(hass, "binary_sensor", "gemsstock_lift_14_gurschen_bahn")
+    assert lift.state == "off"
+    assert lift.attributes["status"] == "preparing"
+    lifts = state(hass, "sensor", "gemsstock_lifts_open")
+    assert lifts.state == "2"
+    assert lifts.attributes["preparing"] == 1
+
+
 async def test_the_site_down_at_setup(hass, entry, aioclient_mock):
     aioclient_mock.get(PAGE_URL.format(page="start", sector="gemsstock"), status=503)
 

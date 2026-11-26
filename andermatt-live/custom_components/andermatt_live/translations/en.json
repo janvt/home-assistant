@@ -42,18 +42,48 @@
                 "name": "Open"
             },
             "lift": {
-                "name": "Lift"
+                "name": "Lift",
+                "state_attributes": {
+                    "status": {
+                        "name": "Status",
+                        "state": {
+                            "open": "Open",
+                            "closed": "Closed",
+                            "preparing": "In preparation"
+                        }
+                    }
+                }
             },
             "slope": {
-                "name": "Slope"
+                "name": "Slope",
+                "state_attributes": {
+                    "status": {
+                        "name": "Status",
+                        "state": {
+                            "open": "Open",
+                            "closed": "Closed",
+                            "preparing": "In preparation"
+                        }
+                    }
+                }
             }
         },
         "sensor": {
             "lifts_open": {
-                "name": "Lifts open"
+                "name": "Lifts open",
+                "state_attributes": {
+                    "preparing": {
+                        "name": "In preparation"
+                    }
+                }
             },
             "slopes_open": {
-                "name": "Slopes open"
+                "name": "Slopes open",
+                "state_attributes": {
+                    "preparing": {
+                        "name": "In preparation"
+                    }
+                }
             },
             "slopes_open_length": {
                 "name": "Slopes open length"

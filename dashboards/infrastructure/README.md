@@ -80,11 +80,12 @@ reads the resort's beta Live Dashboard every 10 minutes.
 
 - **Overview:** a row per sector (Gemsstock, Andermatt-Oberalppass,
   Oberalppass-Dieni, Sedrun, Disentis): open or not, lifts and slopes open of
-  all, km of slopes open, snow depth and new snow.
+  all (with how many are in preparation, 🟠, when any are), km of slopes
+  open, snow depth and new snow.
 - **A section per sector:** its Open badge, the counts, snow and its car parks
-  (free or full), then a table of its lifts (🟢 open, ⚪ closed, ❔ unknown,
-  with type and first and last ride) and one of its slopes (status, colour,
-  length). The tables are built from each sector's device in HA, so a lift or
+  (free or full), then a table of its lifts (🟢 open, 🟠 in preparation,
+  ⚪ closed, ❔ unknown, with type and first and last ride) and one of its
+  slopes (status, colour, length). The tables are built from each sector's device in HA, so a lift or
   slope the site adds shows up without a change here.
 - **History:** lifts open and km of slopes open per sector over 7 days, snow
   depth over 30 days.

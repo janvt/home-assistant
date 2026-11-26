@@ -42,18 +42,48 @@
                 "name": "Geöffnet"
             },
             "lift": {
-                "name": "Anlage"
+                "name": "Anlage",
+                "state_attributes": {
+                    "status": {
+                        "name": "Status",
+                        "state": {
+                            "open": "Offen",
+                            "closed": "Geschlossen",
+                            "preparing": "Vorbereitung"
+                        }
+                    }
+                }
             },
             "slope": {
-                "name": "Piste"
+                "name": "Piste",
+                "state_attributes": {
+                    "status": {
+                        "name": "Status",
+                        "state": {
+                            "open": "Offen",
+                            "closed": "Geschlossen",
+                            "preparing": "Vorbereitung"
+                        }
+                    }
+                }
             }
         },
         "sensor": {
             "lifts_open": {
-                "name": "Anlagen offen"
+                "name": "Anlagen offen",
+                "state_attributes": {
+                    "preparing": {
+                        "name": "In Vorbereitung"
+                    }
+                }
             },
             "slopes_open": {
-                "name": "Pisten offen"
+                "name": "Pisten offen",
+                "state_attributes": {
+                    "preparing": {
+                        "name": "In Vorbereitung"
+                    }
+                }
             },
             "slopes_open_length": {
                 "name": "Pisten offen (Länge)"
