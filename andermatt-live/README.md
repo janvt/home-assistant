@@ -26,9 +26,12 @@ Sedrun, Disentis), with:
 Whether something is open comes from the status class of its row on the site,
 not from its German label. *In preparation* ("Vorbereitung", about to open) is
 a status of its own: off, like closed, as the site doesn't count it as open,
-but kept apart in `status` and in the `preparing` counts. A lift or slope the site stops listing becomes
-unavailable; one it adds appears after a reload. When the site can't be read,
-everything is unavailable rather than closed.
+but kept apart in `status` and in the `preparing` counts. A lift or slope the
+site stops listing becomes unavailable; one it adds appears after a reload.
+When the site can't be read, everything is unavailable rather than closed, and
+the log says why: a lifts page without any lifts, or the site refusing the
+request (HTTP 403 or 429, or its bot check's "Please wait while your request is
+being verified" page, which comes with HTTP 200).
 
 ## Setup
 
