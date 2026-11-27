@@ -151,6 +151,27 @@ async def test_the_site_down_later(hass, entry, site, aioclient_mock):
     assert state(hass, "binary_sensor", "gemsstock_open").state == "unavailable"
 
 
+async def test_a_page_without_lifts(hass, entry, site, aioclient_mock, caplog):
+    """Unavailable, and said why in the log: before, every lift went
+    unavailable and the counts unknown without a word."""
+    await setup(hass, entry)
+    url = PAGE_URL.format(page="anlagen", sector="gemsstock")
+    aioclient_mock.clear_requests()
+    for sector in ("gemsstock", "andermatt-oberalppass"):
+        for name in ("start", "anlagen", "pisten"):
+            html = page(name, sector)
+            if PAGE_URL.format(page=name, sector=sector) == url:
+                html = html.replace("anlagen-overview-row", "x")
+            aioclient_mock.get(PAGE_URL.format(page=name, sector=sector), text=html)
+
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert state(hass, "binary_sensor", "gemsstock_open").state == "unavailable"
+    assert state(hass, "sensor", "gemsstock_lifts_open").state == "unavailable"
+    assert "gemsstock: The lifts page lists no lifts" in caplog.text
+
+
 async def test_a_sector_taken_out_loses_its_device(hass, entry, site):
     await setup(hass, entry)
 

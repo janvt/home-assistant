@@ -77,6 +77,14 @@ class TestLifts:
         assert lift.status == "status_7"
         assert not lift.is_open
 
+    def test_a_page_without_lifts_is_an_error(self):
+        """Rather than every lift of the sector gone, unavailable without a
+        word in the log: the site served such a page on 27 November 2026."""
+        html = page("anlagen", "gemsstock").replace("anlagen-overview-row", "x")
+
+        with pytest.raises(AndermattLiveError, match="no lifts"):
+            parse_lifts(html)
+
     def test_a_row_without_a_name_is_an_error(self):
         """Rather than a lift with an empty name: the page has changed."""
         html = (

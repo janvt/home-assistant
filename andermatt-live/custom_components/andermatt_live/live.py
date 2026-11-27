@@ -307,8 +307,14 @@ def _details(row: _Node) -> list[str]:
 
 
 def parse_lifts(html: str) -> dict[str, Lift]:
+    """Every sector lists its lifts all year, closed or not: a page without
+    any is not a real list (the site served one on 27 November 2026), and is
+    an error rather than every lift gone without a word."""
+    rows = _rows(_tree(html))
+    if not rows:
+        raise AndermattLiveError("The lifts page lists no lifts")
     lifts: dict[str, Lift] = {}
-    for row in _rows(_tree(html)):
+    for row in rows:
         name, kind = _title(row)
         details = _details(row)
         key = slugify(name)

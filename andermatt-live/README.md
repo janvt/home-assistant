@@ -54,3 +54,7 @@ task test:andermatt-live:live   # against the real site
 `tests/fixtures` holds pages saved from the site on 22 November 2026, when only
 Gemsstock was open. The *Andermatt Live checks* workflow runs `tests_live`
 twice a day and opens an issue (label `andermatt-live-checks`) when it fails.
+The pages it read are then kept with the run for 30 days (artifact
+`live-dashboard-pages`, named like the fixtures), as the site may look fine
+again by the time anyone looks. `ANDERMATT_LIVE_PAGES=<folder>` keeps them
+on a local run too.
