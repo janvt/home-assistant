@@ -77,6 +77,14 @@ class TestLifts:
         assert lift.status == "status_7"
         assert not lift.is_open
 
+    def test_a_page_without_lifts_is_an_error(self):
+        """Rather than every lift of the sector gone, unavailable without a
+        word in the log."""
+        html = page("anlagen", "gemsstock").replace("anlagen-overview-row", "x")
+
+        with pytest.raises(AndermattLiveError, match="no lifts"):
+            parse_lifts(html)
+
     def test_a_row_without_a_name_is_an_error(self):
         """Rather than a lift with an empty name: the page has changed."""
         html = (
@@ -171,6 +179,24 @@ async def test_a_refusal_is_not_tried_again(client, aioclient_mock):
     aioclient_mock.get(url, status=403)
 
     with pytest.raises(AndermattLiveBlockedError):
+        await client._get("start", "gemsstock")
+    assert len(aioclient_mock.mock_calls) == 1
+
+
+async def test_a_bot_check_is_a_refusal(client, aioclient_mock):
+    """Its page comes with HTTP 200 and has no lifts, snow or car parks: read,
+    it was a sector with nothing in it (27 November 2026)."""
+    url = PAGE_URL.format(page="start", sector="gemsstock")
+    aioclient_mock.get(
+        url,
+        text=(
+            "<html><head><title>One moment, please...</title></head><body>"
+            "<h1>Please wait while your request is being verified...</h1>"
+            "</body></html>"
+        ),
+    )
+
+    with pytest.raises(AndermattLiveBlockedError, match="bot check"):
         await client._get("start", "gemsstock")
     assert len(aioclient_mock.mock_calls) == 1
 

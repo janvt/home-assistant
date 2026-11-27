@@ -37,6 +37,11 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 RETRY_DELAY = 10
 # The site refusing the request, rather than failing to answer it.
 BLOCKED_STATUSES = (403, 429)
+# The site refusing it with a page of its own instead, and HTTP 200: "One
+# moment, please... Please wait while your request is being verified...", a
+# bot check put in front of every page (GitHub's runners got it on 27
+# November 2026).
+VERIFYING = "your request is being verified"
 
 # The sectors (Teilgebiete), by their slug on the site, in the site's order.
 SECTORS = {
@@ -307,8 +312,14 @@ def _details(row: _Node) -> list[str]:
 
 
 def parse_lifts(html: str) -> dict[str, Lift]:
+    """Every sector lists its lifts all year, closed or not: a page without
+    any is not a real list, and is an error rather than every lift gone
+    without a word."""
+    rows = _rows(_tree(html))
+    if not rows:
+        raise AndermattLiveError("The lifts page lists no lifts")
     lifts: dict[str, Lift] = {}
-    for row in _rows(_tree(html)):
+    for row in rows:
         name, kind = _title(row)
         details = _details(row)
         key = slugify(name)
@@ -419,7 +430,12 @@ class AndermattLiveClient:
                             f"{url} refused the request: HTTP {response.status}"
                         )
                     response.raise_for_status()
-                    return await response.text()
+                    html = await response.text()
+                    if VERIFYING in html.lower():
+                        raise AndermattLiveBlockedError(
+                            f"{url} is verifying requests (a bot check)"
+                        )
+                    return html
             except AndermattLiveBlockedError:
                 raise
             except (aiohttp.ClientError, TimeoutError) as err:

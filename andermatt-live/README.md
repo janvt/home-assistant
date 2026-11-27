@@ -26,9 +26,12 @@ Sedrun, Disentis), with:
 Whether something is open comes from the status class of its row on the site,
 not from its German label. *In preparation* ("Vorbereitung", about to open) is
 a status of its own: off, like closed, as the site doesn't count it as open,
-but kept apart in `status` and in the `preparing` counts. A lift or slope the site stops listing becomes
-unavailable; one it adds appears after a reload. When the site can't be read,
-everything is unavailable rather than closed.
+but kept apart in `status` and in the `preparing` counts. A lift or slope the
+site stops listing becomes unavailable; one it adds appears after a reload.
+When the site can't be read, everything is unavailable rather than closed, and
+the log says why: a lifts page without any lifts, or the site refusing the
+request (HTTP 403 or 429, or its bot check's "Please wait while your request is
+being verified" page, which comes with HTTP 200).
 
 ## Setup
 
@@ -54,3 +57,7 @@ task test:andermatt-live:live   # against the real site
 `tests/fixtures` holds pages saved from the site on 22 November 2026, when only
 Gemsstock was open. The *Andermatt Live checks* workflow runs `tests_live`
 twice a day and opens an issue (label `andermatt-live-checks`) when it fails.
+The pages it read are then kept with the run for 30 days (artifact
+`live-dashboard-pages`, named like the fixtures), as the site may look fine
+again by the time anyone looks. `ANDERMATT_LIVE_PAGES=<folder>` keeps them
+on a local run too.

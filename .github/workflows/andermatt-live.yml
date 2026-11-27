@@ -41,7 +41,19 @@ jobs:
         run: pip install -r requirements_test.txt
       # The Home Assistant test plugins block the network.
       - name: Run the live tests
+        env:
+          ANDERMATT_LIVE_PAGES: ${{ runner.temp }}/pages
         run: pytest -p no:homeassistant -p no:socket tests_live -v
+      # The pages the tests read, as the site served them: a failure can be
+      # gone by the time anyone looks (a bot check's page, 27 November 2026).
+      - name: Keep the pages
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-dashboard-pages
+          path: ${{ runner.temp }}/pages
+          retention-days: 30
+          if-no-files-found: ignore
       # Scheduled runs report to an issue, assigned to the owner so that it
       # notifies them: opened (or commented on) when the checks fail, closed
       # when they pass again.
