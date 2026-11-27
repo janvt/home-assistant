@@ -55,6 +55,9 @@ dashboard's Earthquakes page.
   when it's missing and never touches its value; change it on the Alerts page.
 - A few pills read a **Statistics** helper (`STATISTICS` in `pills.py`), e.g.
   Altdorf's 24-hour rain total for "muddy paths". `sync.py` creates those too.
+- **Router running hot** reads a 5-minute mean of the router's CPU temperature,
+  turns on above 85 °C and off at 82 °C (`ROUTER_HOT`). Comparing the raw
+  sensor with one limit switched the pill about 2,000 times in an evening.
 - `sync.py` can also create template and History stats helpers (`TEMPLATES`,
   `HISTORY_STATS`); none are defined at the moment.
 - A pill with `content` shows that template next to its icon in the row, e.g.
