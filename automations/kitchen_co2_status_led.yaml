@@ -1,44 +1,52 @@
 alias: Kitchen CO2 status LED
 description: >-
-  Kitchen status strip (Dig-Quad) showing the living room CO2 level:
-  under 600 ppm off, 600-800 yellow, 800-1300 orange, above 1300 red.
-  Crossings are 50 ppm stickier on the way down, so a reading hovering
-  around a threshold doesn't make the strip flicker between two colours.
+  Kitchen status strip (Dig-Quad) showing the kitchen CO2 level, as the
+  10-minute mean of the Ultimate Sensor's SCD41 (sensor.kitchen_co2_10min_mean,
+  packages/kitchen_co2.yaml): under 900 ppm off, 900-1200 yellow, 1200-1500
+  orange, above 1500 red. Crossings are 50 ppm stickier on the way down, so a
+  reading hovering around a threshold doesn't make the strip flicker between
+  two colours, and a falling crossing never turns an off strip on. Paused
+  while the house is in Sleep; leaving Sleep resyncs it.
 id: kitchen_co2_status_led
-# Two crossings can fire on the same sensor update (500 -> 900 crosses both
-# 600 and 800). Every run reads the current value rather than its trigger id,
+# The hold comes from the 10-minute mean, not from `for:` on the triggers:
+# a `for:` resets on every restart and unavailable blip, the mean rebuilds
+# itself from the recorder.
+#
+# Two crossings can fire on the same sensor update (850 -> 1250 crosses both
+# 900 and 1200). Every run reads the current value rather than its trigger id,
 # so whichever run survives the restart sets the same colour.
 mode: restart
 triggers:
   # Rising: the plain thresholds.
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    above: 600
+    entity_id: sensor.kitchen_co2_10min_mean
+    above: 900
     id: rising
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    above: 800
+    entity_id: sensor.kitchen_co2_10min_mean
+    above: 1200
     id: rising
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    above: 1300
+    entity_id: sensor.kitchen_co2_10min_mean
+    above: 1500
     id: rising
   # Falling: the same thresholds minus the deadband.
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    below: 550
+    entity_id: sensor.kitchen_co2_10min_mean
+    below: 850
     id: falling
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    below: 750
+    entity_id: sensor.kitchen_co2_10min_mean
+    below: 1150
     id: falling
   - trigger: numeric_state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    below: 1250
+    entity_id: sensor.kitchen_co2_10min_mean
+    below: 1450
     id: falling
   # numeric_state only fires on a crossing, so anything that lost the colour
   # in between needs a resync: an HA restart, a WLED reboot or a power cut on
-  # the Dig-Quad, or the sensor coming back from unavailable.
+  # the Dig-Quad, the mean coming back from unavailable, or the house leaving
+  # Sleep (the strip is left alone while it sleeps).
   - trigger: homeassistant
     event: start
     id: resync
@@ -47,20 +55,45 @@ triggers:
     from: unavailable
     id: resync
   - trigger: state
-    entity_id: sensor.ultimatesensor_scd41_co2
-    from: unavailable
+    entity_id: sensor.kitchen_co2_10min_mean
+    from:
+      - unavailable
+      - unknown
+    id: resync
+  - trigger: state
+    entity_id: input_select.house_mode
+    from: sleep
     id: resync
 conditions:
-  - condition: template
-    value_template: "{{ states('sensor.ultimatesensor_scd41_co2') | is_number }}"
+  # A number at all: unavailable and unknown fail a numeric_state condition.
+  - condition: numeric_state
+    entity_id: sensor.kitchen_co2_10min_mean
+    above: 0
+  - condition: not
+    conditions:
+      - condition: state
+        entity_id: input_select.house_mode
+        state: sleep
+  # A falling crossing only ever steps a lit strip down. If the strip is off
+  # (turned off by hand, by a scene, by "all lights off"), leave it off rather
+  # than lighting it yellow on the way down.
+  - condition: not
+    conditions:
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: falling
+          - condition: state
+            entity_id: light.kitchen_digquad
+            state: "off"
 actions:
   - variables:
-      ppm: "{{ states('sensor.ultimatesensor_scd41_co2') | float(0) }}"
+      ppm: "{{ states('sensor.kitchen_co2_10min_mean') | float(0) }}"
       # On the way down a level only ends 50 ppm below where it began.
       deadband: "{{ 50 if trigger.id == 'falling' else 0 }}"
       # 0 = off, 1 = yellow, 2 = orange, 3 = red: how many thresholds the
       # reading has reached.
-      level: "{{ [600, 800, 1300] | select('le', ppm + deadband) | list | count }}"
+      level: "{{ [900, 1200, 1500] | select('le', ppm + deadband) | list | count }}"
       # Pure RGB yellow looks green-tinged on WS281x LEDs (the green die is
       # the brightest), so yellow and orange lean red. Tune to taste.
       colours:

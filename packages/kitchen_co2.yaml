@@ -1,0 +1,24 @@
+# Kitchen CO2: a 10-minute mean of the Ultimate Sensor's SCD41 reading.
+# Lives in /config/packages/kitchen_co2.yaml. Used by automations/kitchen_co2_status_led.yaml.
+#
+# This is the hold for the status strip, in place of `for:` durations on the triggers
+# (those reset on restarts and on unavailable blips). A mean over 10 minutes swallows a
+# short stove spike, and after a restart the statistics sensor refills its buffer from
+# the recorder, so it comes back with a real value rather than starting from nothing.
+#
+# The SCD41 reports every 30 s, so 10 minutes is ~20 samples. sampling_size only caps
+# the buffer; 120 leaves room for a faster update interval before the cap, rather than
+# max_age, starts deciding the window. keep_last_sample stops the mean from going
+# unknown when the reading sits flat long enough for every sample to age out.
+
+sensor:
+  - platform: statistics
+    name: Kitchen CO2 10min mean
+    unique_id: kitchen_co2_10min_mean
+    entity_id: sensor.ultimatesensor_scd41_co2
+    state_characteristic: mean
+    max_age:
+      minutes: 10
+    sampling_size: 120
+    keep_last_sample: true
+    precision: 0
