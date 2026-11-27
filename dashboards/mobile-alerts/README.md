@@ -69,9 +69,19 @@ dashboard's Earthquakes page.
 
 Once, in HACS: ⋮ → Custom repositories → `https://github.com/janvt/home-assistant`,
 type **Integration**. Download **Alert Pills** and restart Home Assistant.
-`sync.py --apply` adds the integration itself. HACS installs from `main`, so a
-change to `custom_components/alert_pills/` reaches HA after its PR is merged:
-HACS then shows an update; install it and restart.
+`sync.py --apply` adds the integration itself.
+
+HACS installs the latest GitHub release, not `main`, so merging a PR doesn't
+make HACS offer an update. A change to `custom_components/alert_pills/`
+reaches HA once it's released: bump `version` in `manifest.json` in the PR,
+and after the merge tag and release it with the same version:
+
+```bash
+gh release create v1.0.1 --target main --generate-notes
+```
+
+HACS then shows the update; install it and restart. Changes to `pills.py` need
+no release: `sync.py` loads them into the installed integration.
 
 Before the integration, every pill was a UI template helper, with an
 `input_datetime.pill_<key>_dismissed` each and `script.pill_toggle_dismiss`.
