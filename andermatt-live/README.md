@@ -56,8 +56,52 @@ task test:andermatt-live:live   # against the real site
 
 `tests/fixtures` holds pages saved from the site on 22 November 2026, when only
 Gemsstock was open. The *Andermatt Live checks* workflow runs `tests_live`
-twice a day and opens an issue (label `andermatt-live-checks`) when it fails.
+twice a day, on the home runner, and opens an issue (label
+`andermatt-live-checks`) when it fails.
 The pages it read are then kept with the run for 30 days (artifact
 `live-dashboard-pages`, named like the fixtures), as the site may look fine
 again by the time anyone looks. `ANDERMATT_LIVE_PAGES=<folder>` keeps them
 on a local run too.
+
+## Home runner
+
+The live checks run on a GitHub Actions runner at home, in an LXC on Proxmox,
+with the label `home`. From home the Live Dashboard serves its real pages; it
+puts GitHub's own runners behind a bot check now and then ("One moment,
+please..."). Pull requests from forks still run on GitHub's runners: the
+repository is public, and their code is not to run at home.
+
+1. **Container.** A Debian 13 template (`pveam update`, then
+   `pveam available --section system | grep debian-13`), unprivileged, with
+   nesting for systemd:
+
+   ```bash
+   pct create <id> local:vztmpl/<debian-13 template> --hostname gha-runner \
+     --unprivileged 1 --features nesting=1 --cores 1 --memory 2048 --swap 512 \
+     --rootfs local-lvm:8 --net0 name=eth0,bridge=vmbr0,ip=dhcp --onboot 1
+   pct start <id>
+   ```
+
+   It needs the internet and nothing else at home: put it on its own VLAN
+   (`tag=<vlan>` on `--net0`) or firewall it to outgoing internet only.
+2. **Token.** Settings > Actions > Runners > *New self-hosted runner*, Linux:
+   copy the token from its `config.sh` line (valid for an hour, used once).
+3. **Runner.** Copy `scripts/setup-runner.sh` to the Proxmox host, then
+   `pct push <id> setup-runner.sh /root/setup-runner.sh` and `pct enter <id>`,
+   and as root in the container:
+
+   ```bash
+   read -rs RUNNER_TOKEN && export RUNNER_TOKEN
+   bash /root/setup-runner.sh
+   ```
+
+   It installs git, gh, jq and the latest runner (checked against GitHub's
+   SHA-256), registers it with the label `home` and starts it as a service,
+   on every boot too. It shows as *Idle* under Settings > Actions > Runners.
+   Running the script again only updates the container's packages; the
+   runner updates itself.
+4. **Forks.** Settings > Actions > General > *Approval for running fork pull
+   request workflows*: require approval for all external contributors.
+
+While the runner is off, the checks wait for it (a scheduled run gives up
+after 24 hours) rather than running elsewhere.
