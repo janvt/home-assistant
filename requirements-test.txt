@@ -5,6 +5,12 @@ pytest>=8
 pillow                     # the icon renderer
 pyyaml                     # ESPHome / Home Assistant config parsing
 
+# lxml (via the Stream Deck app's cairosvg) sometimes publishes a release as an
+# sdist before its wheels: pip then compiles it and fails without the libxml2
+# headers (lxml 6.2.0, 2026-11-27). Wheels only: pip picks the newest release
+# that has one.
+--only-binary lxml
+
 # The upstream Stream Deck app, from git rather than PyPI: Plus XL support is
 # not in any release. Tests that need it skip when it is absent, so this is
 # optional — but CI installs it, and so should you if you touch ext/.
