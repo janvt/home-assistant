@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       # uv's Pythons run on Debian too; setup-python's are built for Ubuntu.
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d  # v10.4.0
         with:
           enable-cache: true
           cache-dependency-glob: andermatt-live/requirements_test.txt
