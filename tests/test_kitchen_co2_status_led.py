@@ -147,3 +147,16 @@ def test_a_falling_crossing_never_lights_an_off_strip() -> None:
         ]}],
     }
     assert guard in AUTOMATION["conditions"]
+
+
+def test_the_stuffy_pill_agrees_with_the_strip() -> None:
+    """"Air is stuffy" turns on where the strip turns orange, on the same mean.
+    Move one and not the other and the phone says one thing, the kitchen another.
+    """
+    import runpy
+    pills = runpy.run_path(str(ROOT / "dashboards" / "mobile-alerts" / "pills.py"))
+    assert pills["CO2_MEAN"] == MEAN
+    assert pills["CO2_STUFFY"] == THRESHOLDS[1]
+    stuffy = next(p for p in pills["ALERTS"] if p["key"] == "air_stuffy")
+    assert MEAN in stuffy["tmpl"] and RAW not in stuffy["tmpl"]
+    assert f">= {THRESHOLDS[1]}" in stuffy["tmpl"]
