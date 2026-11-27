@@ -160,6 +160,35 @@ def test_state_objects_name_a_domain() -> None:
                 assert domain in DOMAINS, f"{p['key']} {field}: states.{domain}.… has no domain"
 
 
+@pytest.mark.parametrize(("mean", "raw", "was_on", "on"), [
+    ("84.9", "90", False, False),   # a spike the mean hasn't followed
+    ("85.1", "80", False, True),
+    ("83.0", "90", True, True),     # between the limits: stays as it was …
+    ("83.0", "90", False, False),   # … on or off
+    ("82.0", "90", True, False),
+    ("unknown", "90", False, True),     # no mean yet (after a restart): the raw sensor
+    ("unknown", "unavailable", True, False),
+])
+def test_router_hot_pill_does_not_flicker(mean: str, raw: str, was_on: bool, on: bool) -> None:
+    """One limit on the raw temperature, which jumps every few seconds, switched
+    the pill about 2,000 times in an evening (25 Nov 2026)."""
+    jinja2 = pytest.importorskip("jinja2")
+    states = {"sensor.schmatzrouter_cpu_temperature_5_min": mean, "sensor.schmatzrouter_cpu_temperature_2": raw,
+              "binary_sensor.pill_router_hot": "on" if was_on else "off"}
+
+    def to_float(value, default):
+        try:
+            return float(value)
+        except ValueError:
+            return default
+
+    env = jinja2.Environment()
+    env.filters["float"] = to_float
+    env.globals.update(states=states.__getitem__, is_state=lambda e, v: states[e] == v)
+    pill = next(p for p in build.ALERTS if p["key"] == "router_hot")
+    assert env.from_string(pill["tmpl"]).render() == str(on)
+
+
 # ── the row ─────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("slots", range(0, build.MAX_PLACES + 1))
 def test_row_draws_exactly_the_slots_in_use(slots: int) -> None:

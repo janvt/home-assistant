@@ -150,10 +150,19 @@ HISTORY_STATS=[]
 CO2_MEAN="sensor.kitchen_co2_10min_mean"
 CO2_STUFFY=1200
 RAIN_24H="sensor.altdorf_rain_24_h"
+# The router's CPU temperature jumps several degrees every few seconds, so the
+# pill reads a 5-minute mean. The raw sensor stands in while that has no value.
+ROUTER_TEMP="sensor.schmatzrouter_cpu_temperature_2"
+# HA puts the source's device (SchmatzRouter) in front of the helper's name.
+ROUTER_TEMP_5MIN="sensor.schmatzrouter_cpu_temperature_5_min"
+ROUTER_HOT=(85, 82)  # on above, off at or below: between them the pill keeps its state
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
                  characteristic="sum", max_age={"hours": 24, "minutes": 0, "seconds": 0},
-                 sampling_size=300, precision=1)]
+                 sampling_size=300, precision=1),
+            dict(entity=ROUTER_TEMP_5MIN, name="CPU temperature 5 min", source=ROUTER_TEMP,
+                 characteristic="mean", max_age={"hours": 0, "minutes": 5, "seconds": 0},
+                 sampling_size=600, precision=1)]
 SCHACHEN="sensor.schachen_burglen"
 BRUNNEN="sensor.vierwaldstattersee_brunnen_level"
 GLETSCH="sensor.rhone_gletsch_discharge"
@@ -727,11 +736,11 @@ dict(key="gemsstock_open",link=SKI_LINK,tmpl="{{ is_state('binary_sensor.gemssto
    data=[("sensor.5_storage_schmatzdata_usage","schmatzdata (NFS)"),("sensor.5_storage_local_lvm_usage","local-lvm"),("sensor.5_storage_local_usage","local")],
    hist=["sensor.5_storage_schmatzdata_usage"]),
  dict(key="router_hot",group="Maintenance",name="Router running hot",icon="mdi:thermometer-high",color="orange",
-   tmpl="{{ states('sensor.schmatzrouter_cpu_temperature_2')|float(0) > 85 }}",
-   secondary="CPU at {{ states('sensor.schmatzrouter_cpu_temperature_2')|round(0) }} °C, {{ states('sensor.schmatzrouter_cpu_utilization_2')|round(0) }} % busy",
-   rule="On when the UniFi router's CPU is above 85 °C.",
-   data=[("sensor.schmatzrouter_cpu_temperature_2","CPU temperature"),("sensor.schmatzrouter_cpu_utilization_2","CPU load"),("sensor.schmatzrouter_memory_utilization_2","Memory")],
-   hist=["sensor.schmatzrouter_cpu_temperature_2"]),
+   tmpl="{{ states('"+ROUTER_TEMP_5MIN+"')|float(states('"+ROUTER_TEMP+"')|float(0)) > (%d if is_state('binary_sensor.pill_router_hot','on') else %d) }}" % (ROUTER_HOT[1], ROUTER_HOT[0]),
+   secondary="CPU at {{ states('"+ROUTER_TEMP+"')|round(0) }} °C, 5-minute mean {{ states('"+ROUTER_TEMP_5MIN+"')|float(states('"+ROUTER_TEMP+"')|float(0))|round(0)|int }} °C, {{ states('sensor.schmatzrouter_cpu_utilization_2')|round(0) }} % busy",
+   rule="On when the UniFi router's CPU averages above %d °C over 5 minutes, until that falls to %d °C." % ROUTER_HOT,
+   data=[(ROUTER_TEMP_5MIN,"CPU, 5-minute mean"),(ROUTER_TEMP,"CPU temperature"),("sensor.schmatzrouter_cpu_utilization_2","CPU load"),("sensor.schmatzrouter_memory_utilization_2","Memory")],
+   hist=[ROUTER_TEMP_5MIN]),
  dict(key="router_restarted",group="Maintenance",name="Router restarted",icon="mdi:router-network",color="blue-grey",
    tmpl="{{ states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] and now() - as_datetime(states('sensor.schmatzrouter_uptime_2')) < timedelta(hours=1) }}",
    secondary="Up since {{ (states('sensor.schmatzrouter_uptime_2')|as_datetime|as_local).strftime('%H:%M') if states('sensor.schmatzrouter_uptime_2') not in ['unknown','unavailable'] }}",
