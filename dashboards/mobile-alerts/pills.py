@@ -144,6 +144,11 @@ NUMBERS=[dict(entity=REUSS_LIMIT, name="Reuss Seedorf dog walk limit", min=50, m
 # None at the moment.
 TEMPLATES=[]
 HISTORY_STATS=[]
+# The kitchen CO2 strip's 10-minute mean (packages/kitchen_co2.yaml) and the
+# level where the strip turns orange: "Air is stuffy" shares both, so the pill
+# and the strip agree on when the air is bad.
+CO2_MEAN="sensor.kitchen_co2_10min_mean"
+CO2_STUFFY=1200
 RAIN_24H="sensor.altdorf_rain_24_h"
 # Statistics helpers the pills read; sync.py creates them when missing.
 STATISTICS=[dict(entity=RAIN_24H, name="Altdorf rain 24 h", source="sensor.altdorf_10_minute_rain",
@@ -482,11 +487,11 @@ ALERTS=[
    data=[("sensor.backup_last_successful_automatic_backup","Last successful"),("sensor.backup_last_attempted_automatic_backup","Last attempted"),
          ("sensor.backup_next_scheduled_automatic_backup","Next scheduled"),("sensor.backup_backup_manager_state","Backup manager")],hist=[]),
  dict(key="air_stuffy",link=MOBILE_LINK.format("kitchen"),group="Home",name="Air is stuffy",icon="mdi:molecule-co2",color="orange",
-   tmpl="{{ "+f("sensor.ultimatesensor_scd41_co2",0)+" > 1200 or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
-   secondary="CO₂ {{ states('sensor.ultimatesensor_scd41_co2')|round(0) }} ppm · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
-   rule="On when CO₂ is above 1200 ppm or the VOC index above 250.",
-   data=[("sensor.ultimatesensor_scd41_co2","CO₂"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
-   hist=["sensor.ultimatesensor_scd41_co2"]),
+   tmpl="{{ "+f(CO2_MEAN,0)+" >= "+str(CO2_STUFFY)+" or "+f("sensor.ultimatesensor_voc_index",0)+" > 250 }}",
+   secondary="CO₂ {{ states('"+CO2_MEAN+"')|round(0) }} ppm (10 min mean) · VOC index {{ states('sensor.ultimatesensor_voc_index')|round(0) }} · open a window",
+   rule="On when the 10-minute mean of CO₂ is "+str(CO2_STUFFY)+" ppm or more (where the kitchen strip turns orange) or the VOC index above 250.",
+   data=[(CO2_MEAN,"CO₂, 10 min mean"),("sensor.ultimatesensor_scd41_co2","CO₂ now"),("sensor.ultimatesensor_voc_index","VOC index"),("sensor.ultimatesensor_nox_index","NOx index"),("sensor.ultimatesensor_pm_2_5mm_weight_concentration","PM2.5")],
+   hist=[CO2_MEAN,"sensor.ultimatesensor_scd41_co2"]),
  # --- forecast
  dict(key="reuss_high",link=RIVERS_LINK,group="Rivers",name="Reuss too high for the dog walk",icon="mdi:dog-side",color="blue",
    tmpl="{{ states('"+REUSS+"_discharge') not in ['unknown','unavailable'] and states('"+REUSS+"_discharge')|float(0) >= states('"+REUSS_LIMIT+"')|float(9999) }}",
